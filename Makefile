@@ -1,3 +1,7 @@
+.PHONY: test
+test:
+	go test ./...
+
 .PHONY: run
-run: main.go
-	go run $<
+run:
+	go run main.go
