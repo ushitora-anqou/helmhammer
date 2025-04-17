@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	ECall = iota
+	EAdd = iota
+	ECall
 	EFalse
 	EFunction
 	EID
@@ -40,6 +41,8 @@ type Expr struct {
 	Map            map[*Expr]*Expr
 	FunctionParams []string
 	FunctionBody   *Expr
+	BinOpLHS       *Expr
+	BinOpRHS       *Expr
 }
 
 func (e *Expr) precedence() int {
@@ -66,12 +69,15 @@ func (e *Expr) precedence() int {
 	case EIndexList:
 		return -1
 
+	case EAdd:
+		return -2
+
 	case EFunction:
 		fallthrough
 	case EIf:
 		fallthrough
 	case ELocal:
-		return -2
+		return -3
 	}
 	panic("invalid kind")
 }
@@ -90,6 +96,13 @@ func wrapParen(b *strings.Builder, base, e *Expr) {
 
 func (e *Expr) String() string {
 	switch e.Kind {
+	case EAdd:
+		b := strings.Builder{}
+		wrapParen(&b, e, e.BinOpLHS)
+		b.WriteString(" + ")
+		wrapParen(&b, e, e.BinOpRHS)
+		return b.String()
+
 	case ECall:
 		b := strings.Builder{}
 		wrapParen(&b, e, e.CallFunc)
@@ -208,4 +221,14 @@ func (e *Expr) String() string {
 type LocalBind struct {
 	Name string
 	Body *Expr
+}
+
+func (e *Expr) StringWithPrologue() string {
+	return fmt.Sprintf(`
+local helmhammer0 = {
+	field(receiver, fieldName, args):
+		receiver[fieldName],
+};
+%s
+`, e.String())
 }

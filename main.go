@@ -10,7 +10,7 @@ import (
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
 )
 
-var file1 = `{{ if . }}1{{ else }}0{{ end }}`
+var file1 = `{{ if .a }}1{{ else }}0{{ end }}`
 var file2 = `world`
 
 var tpls = map[string]struct {
@@ -48,7 +48,7 @@ func doMain() error {
 		},
 	}
 
-	print(out.String())
+	print(out.StringWithPrologue())
 
 	return nil
 }

@@ -39,6 +39,11 @@ func TestCompile(t *testing.T) {
 			tpl:  `{{ if . }}1{{ else }}0{{ end }}`,
 			data: true,
 		},
+		{
+			name: "if .a",
+			tpl:  `{{ if .a }}1{{ else }}0{{ end }}`,
+			data: map[string]any{"a": false},
+		},
 	}
 
 	for _, tt := range tests {
@@ -63,7 +68,10 @@ func TestCompile(t *testing.T) {
 
 			vm := gojsonnet.MakeVM()
 			vm.StringOutput = true
-			got, err := vm.EvaluateAnonymousSnippet("file.jsonnet", jsonnetExpr.String())
+			got, err := vm.EvaluateAnonymousSnippet(
+				"file.jsonnet",
+				jsonnetExpr.StringWithPrologue(),
+			)
 			got = strings.Trim(got, "\n")
 			assert.Equal(t, expected, got)
 		})
@@ -74,14 +82,26 @@ func TestCompile(t *testing.T) {
 
 func convertDataToJsonnetExpr(data any) *jsonnet.Expr {
 	switch v := data.(type) {
+	case nil:
+		return &jsonnet.Expr{Kind: jsonnet.ENull}
 	case bool:
 		kind := jsonnet.EFalse
 		if v {
 			kind = jsonnet.ETrue
 		}
 		return &jsonnet.Expr{Kind: kind}
-	case nil:
-		return &jsonnet.Expr{Kind: jsonnet.ENull}
+	case map[string]any:
+		exprMap := map[*jsonnet.Expr]*jsonnet.Expr{}
+		for k, v1 := range v {
+			exprMap[&jsonnet.Expr{
+				Kind:          jsonnet.EStringLiteral,
+				StringLiteral: k,
+			}] = convertDataToJsonnetExpr(v1)
+		}
+		return &jsonnet.Expr{
+			Kind: jsonnet.EMap,
+			Map:  exprMap,
+		}
 	}
 	panic("not implemented")
 }

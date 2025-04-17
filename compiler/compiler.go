@@ -25,11 +25,18 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 				{
 					Name: "helmhammer",
 					Body: &jsonnet.Expr{
-						Kind: jsonnet.EMap,
-						Map: map[*jsonnet.Expr]*jsonnet.Expr{
-							{Kind: jsonnet.EStringLiteral, StringLiteral: "dot"}: {
-								Kind:   jsonnet.EID,
-								IDName: "values",
+						Kind: jsonnet.EAdd,
+						BinOpLHS: &jsonnet.Expr{
+							Kind:   jsonnet.EID,
+							IDName: "helmhammer0",
+						},
+						BinOpRHS: &jsonnet.Expr{
+							Kind: jsonnet.EMap,
+							Map: map[*jsonnet.Expr]*jsonnet.Expr{
+								{Kind: jsonnet.EStringLiteral, StringLiteral: "dot"}: {
+									Kind:   jsonnet.EID,
+									IDName: "values",
+								},
 							},
 						},
 					},
@@ -197,13 +204,20 @@ func compileArg(arg parse.Node) (*jsonnet.Expr, error) {
 }
 
 func compileField(node *parse.FieldNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
-	receiver := &jsonnet.Expr{
-		Kind:          jsonnet.EIndexList,
-		IndexListHead: compileDot(),
-		IndexListTail: node.Ident,
+	receiver := compileDot()
+	if len(node.Ident) >= 2 {
+		receiver = &jsonnet.Expr{
+			Kind:          jsonnet.EIndexList,
+			IndexListHead: receiver,
+			IndexListTail: node.Ident[0 : len(node.Ident)-2],
+		}
 	}
+
 	compiledArgs := []*jsonnet.Expr{}
-	for _, arg := range args {
+	for i, arg := range args {
+		if i == 0 {
+			continue
+		}
 		compiledArg, err := compileArg(arg)
 		if err != nil {
 			return nil, err
@@ -214,9 +228,26 @@ func compileField(node *parse.FieldNode, args []parse.Node, final *jsonnet.Expr)
 		compiledArgs = append(compiledArgs, final)
 	}
 	return &jsonnet.Expr{
-		Kind:     jsonnet.ECall,
-		CallFunc: receiver,
-		CallArgs: compiledArgs,
+		Kind: jsonnet.ECall,
+		CallFunc: &jsonnet.Expr{
+			Kind: jsonnet.EIndexList,
+			IndexListHead: &jsonnet.Expr{
+				Kind:   jsonnet.EID,
+				IDName: "helmhammer",
+			},
+			IndexListTail: []string{"field"},
+		},
+		CallArgs: []*jsonnet.Expr{
+			receiver,
+			{
+				Kind:          jsonnet.EStringLiteral,
+				StringLiteral: node.Ident[len(node.Ident)-1],
+			},
+			{
+				Kind: jsonnet.EList,
+				List: compiledArgs,
+			},
+		},
 	}, nil
 }
 
