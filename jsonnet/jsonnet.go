@@ -227,7 +227,9 @@ func (e *Expr) StringWithPrologue() string {
 	return fmt.Sprintf(`
 local helmhammer0 = {
 	field(receiver, fieldName, args):
-		receiver[fieldName],
+		if std.isObject(receiver) then receiver[fieldName]
+		else if std.isFunction(receiver) then receiver(args)
+		else error "helmhammer0.field: invalid receiver",
 };
 %s
 `, e.String())
