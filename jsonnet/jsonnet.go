@@ -11,6 +11,7 @@ const (
 	EAdd = iota
 	ECall
 	EFalse
+	EFloatLiteral
 	EFunction
 	EID
 	EIf
@@ -44,6 +45,7 @@ type Expr struct {
 	FunctionBody   *Expr
 	BinOpLHS       *Expr
 	BinOpRHS       *Expr
+	FloatLiteral   float64
 }
 
 func (e *Expr) precedence() int {
@@ -61,6 +63,8 @@ func (e *Expr) precedence() int {
 	case ENull:
 		fallthrough
 	case EStringLiteral:
+		fallthrough
+	case EFloatLiteral:
 		fallthrough
 	case ETrue:
 		return 0
@@ -119,6 +123,9 @@ func (e *Expr) String() string {
 
 	case EFalse:
 		return "false"
+
+	case EFloatLiteral:
+		return fmt.Sprintf("%f", e.FloatLiteral)
 
 	case EFunction:
 		b := strings.Builder{}
@@ -231,6 +238,9 @@ local helmhammer0 = {
 		if std.isObject(receiver) then receiver[fieldName]
 		else if std.isFunction(receiver) then receiver(args)
 		else error "helmhammer0.field: invalid receiver",
+
+	join(ary):
+		std.join("", std.map(std.toString, ary)),
 };
 %s
 `, e.String())
@@ -249,6 +259,12 @@ func ConvertDataToJsonnetExpr(data any) *Expr {
 			kind = ETrue
 		}
 		return &Expr{Kind: kind}
+
+	case reflect.Int:
+		return &Expr{Kind: EIntLiteral, IntLiteral: int(v.Int())}
+
+	case reflect.Float64:
+		return &Expr{Kind: EFloatLiteral, FloatLiteral: v.Float()}
 
 	case reflect.String:
 		return &Expr{Kind: EStringLiteral, StringLiteral: v.String()}

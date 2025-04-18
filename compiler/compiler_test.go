@@ -13,6 +13,17 @@ import (
 )
 
 func TestCompileValidTemplates(t *testing.T) {
+	tVal := map[string]any{
+		"X": "x",
+		"U": map[string]string{
+			"V": "v",
+		},
+		"MSI": map[string]int{
+			"one": 1,
+			"two": 2,
+		},
+	}
+
 	tests := []struct {
 		name string
 		tpl  string
@@ -55,12 +66,42 @@ func TestCompileValidTemplates(t *testing.T) {
 		{
 			name: ".U.V",
 			tpl:  "-{{.U.V}}-",
-			data: map[string]map[string]string{"U": {"V": "v"}},
+			data: tVal,
 		},
 		{
 			name: ".X",
 			tpl:  "-{{.X}}-",
-			data: map[string]string{"X": "x"},
+			data: tVal,
+		},
+		{
+			name: "map .one",
+			tpl:  "{{.MSI.one}}",
+			data: tVal,
+		},
+		{
+			name: "map .two",
+			tpl:  "{{.MSI.two}}",
+			data: tVal,
+		},
+		{
+			name: "dot int",
+			tpl:  "<{{.}}>",
+			data: 13,
+		},
+		{
+			name: "dot float",
+			tpl:  "<{{.}}>",
+			data: 15.1,
+		},
+		{
+			name: "dot bool",
+			tpl:  "<{{.}}>",
+			data: true,
+		},
+		{
+			name: "dot string",
+			tpl:  "<{{.}}>",
+			data: "hello",
 		},
 	}
 
@@ -80,6 +121,7 @@ func TestCompileValidTemplates(t *testing.T) {
 			}
 
 			sb := strings.Builder{}
+			tpl.Option("missingkey=zero")
 			err = tpl.ExecuteTemplate(&sb, "file", tt.data)
 			require.NoError(t, err)
 			expected := sb.String()

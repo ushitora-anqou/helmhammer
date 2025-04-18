@@ -92,11 +92,10 @@ func compileNode(node parse.Node) (*jsonnet.Expr, error) {
 			Kind: jsonnet.ECall,
 			CallFunc: &jsonnet.Expr{
 				Kind:          jsonnet.EIndexList,
-				IndexListHead: &jsonnet.Expr{Kind: jsonnet.EID, IDName: "std"},
+				IndexListHead: &jsonnet.Expr{Kind: jsonnet.EID, IDName: "helmhammer"},
 				IndexListTail: []string{"join"},
 			},
 			CallArgs: []*jsonnet.Expr{
-				{Kind: jsonnet.EStringLiteral, StringLiteral: ""},
 				{Kind: jsonnet.EList, List: list},
 			},
 		}, nil
