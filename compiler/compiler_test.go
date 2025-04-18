@@ -44,6 +44,11 @@ func TestCompile(t *testing.T) {
 			tpl:  `{{ if .a }}1{{ else }}0{{ end }}`,
 			data: map[string]any{"a": false},
 		},
+		{
+			name: "if .a.b",
+			tpl:  `{{ if .a.b }}1{{ else }}0{{ end }}`,
+			data: map[string]map[string]any{"a": {"b": false}},
+		},
 	}
 
 	for _, tt := range tests {
@@ -57,7 +62,7 @@ func TestCompile(t *testing.T) {
 				Kind:     jsonnet.ECall,
 				CallFunc: jsonnetExpr,
 				CallArgs: []*jsonnet.Expr{
-					convertDataToJsonnetExpr(tt.data),
+					jsonnet.ConvertDataToJsonnetExpr(tt.data),
 				},
 			}
 
@@ -78,30 +83,4 @@ func TestCompile(t *testing.T) {
 	}
 
 	assert.Equal(t, 123, 123)
-}
-
-func convertDataToJsonnetExpr(data any) *jsonnet.Expr {
-	switch v := data.(type) {
-	case nil:
-		return &jsonnet.Expr{Kind: jsonnet.ENull}
-	case bool:
-		kind := jsonnet.EFalse
-		if v {
-			kind = jsonnet.ETrue
-		}
-		return &jsonnet.Expr{Kind: kind}
-	case map[string]any:
-		exprMap := map[*jsonnet.Expr]*jsonnet.Expr{}
-		for k, v1 := range v {
-			exprMap[&jsonnet.Expr{
-				Kind:          jsonnet.EStringLiteral,
-				StringLiteral: k,
-			}] = convertDataToJsonnetExpr(v1)
-		}
-		return &jsonnet.Expr{
-			Kind: jsonnet.EMap,
-			Map:  exprMap,
-		}
-	}
-	panic("not implemented")
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
 )
 
-var file1 = `{{ if .a }}1{{ else }}0{{ end }}`
+var file1 = `{{ if .a.b }}1{{ else }}0{{ end }}`
 var file2 = `world`
 
 var tpls = map[string]struct {
@@ -44,7 +44,9 @@ func doMain() error {
 		Kind:     jsonnet.ECall,
 		CallFunc: out,
 		CallArgs: []*jsonnet.Expr{
-			{Kind: jsonnet.ETrue},
+			jsonnet.ConvertDataToJsonnetExpr(
+				map[string]map[string]bool{"a": {"b": true}},
+			),
 		},
 	}
 

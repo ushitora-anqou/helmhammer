@@ -2,6 +2,7 @@ package jsonnet
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -233,4 +234,35 @@ local helmhammer0 = {
 };
 %s
 `, e.String())
+}
+
+func ConvertDataToJsonnetExpr(data any) *Expr {
+	if data == nil {
+		return &Expr{Kind: ENull}
+	}
+
+	v := reflect.ValueOf(data)
+	switch v.Kind() {
+	case reflect.Bool:
+		kind := EFalse
+		if v.Bool() {
+			kind = ETrue
+		}
+		return &Expr{Kind: kind}
+
+	case reflect.Map:
+		exprMap := map[*Expr]*Expr{}
+		iter := v.MapRange()
+		for iter.Next() {
+			exprMap[&Expr{
+				Kind:          EStringLiteral,
+				StringLiteral: iter.Key().Interface().(string),
+			}] = ConvertDataToJsonnetExpr(iter.Value().Interface())
+		}
+		return &Expr{
+			Kind: EMap,
+			Map:  exprMap,
+		}
+	}
+	panic("not implemented")
 }

@@ -209,7 +209,7 @@ func compileField(node *parse.FieldNode, args []parse.Node, final *jsonnet.Expr)
 		receiver = &jsonnet.Expr{
 			Kind:          jsonnet.EIndexList,
 			IndexListHead: receiver,
-			IndexListTail: node.Ident[0 : len(node.Ident)-2],
+			IndexListTail: node.Ident[0 : len(node.Ident)-1],
 		}
 	}
 
