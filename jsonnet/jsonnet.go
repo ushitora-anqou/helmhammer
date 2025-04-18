@@ -250,6 +250,9 @@ func ConvertDataToJsonnetExpr(data any) *Expr {
 		}
 		return &Expr{Kind: kind}
 
+	case reflect.String:
+		return &Expr{Kind: EStringLiteral, StringLiteral: v.String()}
+
 	case reflect.Map:
 		exprMap := map[*Expr]*Expr{}
 		iter := v.MapRange()

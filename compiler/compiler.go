@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 	"text/template/parse"
 
@@ -52,6 +53,8 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 func compileNode(node parse.Node) (*jsonnet.Expr, error) {
 	switch node := node.(type) {
 	case *parse.ActionNode:
+		return compilePipeline(node.Pipe)
+
 	case *parse.BreakNode:
 	case *parse.CommentNode:
 	case *parse.ContinueNode:
@@ -109,7 +112,7 @@ func compileNode(node parse.Node) (*jsonnet.Expr, error) {
 
 	case *parse.WithNode:
 	}
-	return nil, fmt.Errorf("unknown node: %s", node)
+	return nil, fmt.Errorf("unknown node: %v", reflect.ValueOf(node).Type())
 }
 
 func compilePipeline(pipe *parse.PipeNode) (*jsonnet.Expr, error) {

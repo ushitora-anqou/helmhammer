@@ -12,20 +12,12 @@ import (
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
 )
 
-func TestCompile(t *testing.T) {
+func TestCompileValidTemplates(t *testing.T) {
 	tests := []struct {
 		name string
 		tpl  string
 		data any
 	}{
-		{
-			name: "empty",
-			tpl:  ``,
-		},
-		{
-			name: "simple string without mustaches",
-			tpl:  `hello`,
-		},
 		{
 			name: "if simple true",
 			tpl:  `hel{{ if true }}lo2{{ else }}lo3{{ end }}`,
@@ -48,6 +40,27 @@ func TestCompile(t *testing.T) {
 			name: "if .a.b",
 			tpl:  `{{ if .a.b }}1{{ else }}0{{ end }}`,
 			data: map[string]map[string]any{"a": {"b": false}},
+		},
+
+		{
+			name: "empty",
+			tpl:  "",
+			data: nil,
+		},
+		{
+			name: "text",
+			tpl:  "some text",
+			data: nil,
+		},
+		{
+			name: ".U.V",
+			tpl:  "-{{.U.V}}-",
+			data: map[string]map[string]string{"U": {"V": "v"}},
+		},
+		{
+			name: ".X",
+			tpl:  "-{{.X}}-",
+			data: map[string]string{"X": "x"},
 		},
 	}
 
