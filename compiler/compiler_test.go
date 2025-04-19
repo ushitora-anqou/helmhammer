@@ -13,17 +13,17 @@ import (
 )
 
 func TestCompileValidTemplates(t *testing.T) {
-	//tVal := map[string]any{
-	//	"I": 17,
-	//	"X": "x",
-	//	"U": map[string]string{
-	//		"V": "v",
-	//	},
-	//	"MSI": map[string]int{
-	//		"one": 1,
-	//		"two": 2,
-	//	},
-	//}
+	tVal := map[string]any{
+		"I": 17,
+		"X": "x",
+		"U": map[string]string{
+			"V": "v",
+		},
+		"MSI": map[string]int{
+			"one": 1,
+			"two": 2,
+		},
+	}
 
 	tests := []struct {
 		name string
@@ -32,8 +32,8 @@ func TestCompileValidTemplates(t *testing.T) {
 	}{
 		{"empty", "", nil},
 		{"text", "some text", nil},
-		//{".U.V", "-{{.U.V}}-", tVal},
-		//{".X", "-{{.X}}-", tVal},
+		{".U.V", "-{{.U.V}}-", tVal},
+		{".X", "-{{.X}}-", tVal},
 		//{"map .one", "{{.MSI.one}}", tVal},
 		//{"map .two", "{{.MSI.two}}", tVal},
 		//{"dot int", "<{{.}}>", 13},
