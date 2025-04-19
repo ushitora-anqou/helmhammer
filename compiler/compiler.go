@@ -11,8 +11,41 @@ import (
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
 )
 
+type env struct {
+	vars map[string]*variable
+}
+
+func (e *env) addVariable(name, compiledName string) {
+	e.vars[name] = &variable{compiledName: compiledName}
+}
+
+func (e *env) getVariableCompiledName(name string) (string, bool) {
+	v, ok := e.vars[name]
+	if !ok {
+		return "", false
+	}
+	return v.compiledName, true
+}
+
+type variable struct {
+	compiledName string
+}
+
+var nextGenID = 0
+
+func genid() string {
+	nextGenID++
+	return fmt.Sprintf("var%d", nextGenID-1)
+}
+
 func Compile(node parse.Node) (*jsonnet.Expr, error) {
-	e, err := compileNode(node)
+	env := &env{
+		vars: map[string]*variable{},
+	}
+	env.addVariable("$", genid())
+	dollar, _ := env.getVariableCompiledName("$")
+
+	e, err := compileNode(env, node)
 	if err != nil {
 		return nil, err
 	}
@@ -42,6 +75,10 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 						},
 					},
 				},
+				{
+					Name: dollar,
+					Body: compileDot(),
+				},
 			},
 			LocalBody: e,
 		},
@@ -50,25 +87,25 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 	return e, nil
 }
 
-func compileNode(node parse.Node) (*jsonnet.Expr, error) {
+func compileNode(env *env, node parse.Node) (*jsonnet.Expr, error) {
 	switch node := node.(type) {
 	case *parse.ActionNode:
-		return compilePipeline(node.Pipe)
+		return compilePipeline(env, node.Pipe)
 
 	case *parse.BreakNode:
 	case *parse.CommentNode:
 	case *parse.ContinueNode:
 
 	case *parse.IfNode:
-		pipe, err := compilePipeline(node.Pipe)
+		pipe, err := compilePipeline(env, node.Pipe)
 		if err != nil {
 			return nil, err
 		}
-		list, err := compileNode(node.List)
+		list, err := compileNode(env, node.List)
 		if err != nil {
 			return nil, err
 		}
-		elseList, err := compileNode(node.ElseList)
+		elseList, err := compileNode(env, node.ElseList)
 		if err != nil {
 			return nil, err
 		}
@@ -82,7 +119,7 @@ func compileNode(node parse.Node) (*jsonnet.Expr, error) {
 	case *parse.ListNode:
 		list := []*jsonnet.Expr{}
 		for _, node := range node.Nodes {
-			e, err := compileNode(node)
+			e, err := compileNode(env, node)
 			if err != nil {
 				return nil, err
 			}
@@ -114,7 +151,7 @@ func compileNode(node parse.Node) (*jsonnet.Expr, error) {
 	return nil, fmt.Errorf("unknown node: %v", reflect.ValueOf(node).Type())
 }
 
-func compilePipeline(pipe *parse.PipeNode) (*jsonnet.Expr, error) {
+func compilePipeline(env *env, pipe *parse.PipeNode) (*jsonnet.Expr, error) {
 	if pipe == nil {
 		return nil, errors.New("pipe is nil")
 	}
@@ -122,7 +159,7 @@ func compilePipeline(pipe *parse.PipeNode) (*jsonnet.Expr, error) {
 	var expr *jsonnet.Expr
 	for _, cmd := range pipe.Cmds {
 		var err error
-		expr, err = compileCommand(cmd, expr)
+		expr, err = compileCommand(env, cmd, expr)
 		if err != nil {
 			return nil, err
 		}
@@ -139,15 +176,28 @@ func compilePipeline(pipe *parse.PipeNode) (*jsonnet.Expr, error) {
 	return expr, nil
 }
 
-func compileCommand(cmd *parse.CommandNode, final *jsonnet.Expr) (*jsonnet.Expr, error) {
+func compileCommand(env *env, cmd *parse.CommandNode, final *jsonnet.Expr) (*jsonnet.Expr, error) {
 	switch node := cmd.Args[0].(type) {
 	case *parse.FieldNode:
-		return compileField(node, cmd.Args, final)
+		return compileField(compileDot(), node.Ident, cmd.Args, final)
 
 	case *parse.ChainNode:
 	case *parse.IdentifierNode:
 	case *parse.PipeNode:
+
 	case *parse.VariableNode:
+		var_, ok := env.getVariableCompiledName(node.Ident[0])
+		if !ok {
+			return nil, fmt.Errorf("undefined variable: %s", node.Ident[0])
+		}
+		receiver := &jsonnet.Expr{
+			Kind:   jsonnet.EID,
+			IDName: var_,
+		}
+		if len(node.Ident) == 1 {
+			return receiver, nil
+		}
+		return compileField(receiver, node.Ident[1:], cmd.Args, final)
 
 	case *parse.BoolNode:
 		return compileBool(node)
@@ -164,7 +214,7 @@ func compileCommand(cmd *parse.CommandNode, final *jsonnet.Expr) (*jsonnet.Expr,
 	case *parse.StringNode:
 		return compileString(node)
 	}
-	return nil, errors.New("invalid command")
+	return nil, fmt.Errorf("unknown command: %v", reflect.ValueOf(cmd.Args[0]).Type())
 }
 
 func isRuneInt(s string) bool {
@@ -185,7 +235,7 @@ func compileArg(arg parse.Node) (*jsonnet.Expr, error) {
 		return compileNil(), nil
 
 	case *parse.FieldNode:
-		return compileField(node, []parse.Node{arg}, nil)
+		return compileField(compileDot(), node.Ident, []parse.Node{arg}, nil)
 
 	case *parse.VariableNode:
 	case *parse.PipeNode:
@@ -205,13 +255,17 @@ func compileArg(arg parse.Node) (*jsonnet.Expr, error) {
 	return nil, nil
 }
 
-func compileField(node *parse.FieldNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
-	receiver := compileDot()
-	if len(node.Ident) >= 2 {
+func compileField(
+	receiver *jsonnet.Expr,
+	ident []string,
+	args []parse.Node,
+	final *jsonnet.Expr,
+) (*jsonnet.Expr, error) {
+	if len(ident) >= 2 {
 		receiver = &jsonnet.Expr{
 			Kind:          jsonnet.EIndexList,
 			IndexListHead: receiver,
-			IndexListTail: node.Ident[0 : len(node.Ident)-1],
+			IndexListTail: ident[0 : len(ident)-1],
 		}
 	}
 
@@ -243,7 +297,7 @@ func compileField(node *parse.FieldNode, args []parse.Node, final *jsonnet.Expr)
 			receiver,
 			{
 				Kind:          jsonnet.EStringLiteral,
-				StringLiteral: node.Ident[len(node.Ident)-1],
+				StringLiteral: ident[len(ident)-1],
 			},
 			{
 				Kind: jsonnet.EList,

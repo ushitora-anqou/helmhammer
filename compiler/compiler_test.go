@@ -14,6 +14,7 @@ import (
 
 func TestCompileValidTemplates(t *testing.T) {
 	tVal := map[string]any{
+		"I": 17,
 		"X": "x",
 		"U": map[string]string{
 			"V": "v",
@@ -102,6 +103,16 @@ func TestCompileValidTemplates(t *testing.T) {
 			name: "dot string",
 			tpl:  "<{{.}}>",
 			data: "hello",
+		},
+		{
+			name: "$ int",
+			tpl:  "{{$}}",
+			data: 123,
+		},
+		{
+			name: "$.I",
+			tpl:  "{{$.I}}",
+			data: tVal,
 		},
 	}
 
