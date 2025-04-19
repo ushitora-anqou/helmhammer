@@ -114,6 +114,11 @@ func TestCompileValidTemplates(t *testing.T) {
 			tpl:  "{{$.I}}",
 			data: tVal,
 		},
+		{
+			name: "$.U.V",
+			tpl:  "{{$.U.V}}",
+			data: tVal,
+		},
 	}
 
 	for _, tt := range tests {
