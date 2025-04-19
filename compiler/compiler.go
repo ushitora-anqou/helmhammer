@@ -105,13 +105,6 @@ type state struct {
 	body *jsonnet.Expr
 }
 
-func newSimpleState(name, preStateName string, v *jsonnet.Expr) *state {
-	return &state{
-		name: name,
-		body: stateValue(v, compileIDDotKeys(preStateName, "vs")),
-	}
-}
-
 func (s *state) toLocal(body *jsonnet.Expr) *jsonnet.Expr {
 	// local [s.name] = [s.body]; [body]
 	return &jsonnet.Expr{
@@ -123,23 +116,6 @@ func (s *state) toLocal(body *jsonnet.Expr) *jsonnet.Expr {
 			},
 		},
 		LocalBody: body,
-	}
-}
-
-// get [id].[key0].[key1]. ... .[keyn-1].
-// if len(keys) == 0 then return [id].
-func compileIDDotKeys(id string, keys ...string) *jsonnet.Expr {
-	head := &jsonnet.Expr{
-		Kind:   jsonnet.EID,
-		IDName: id,
-	}
-	if len(keys) == 0 {
-		return head
-	}
-	return &jsonnet.Expr{
-		Kind:          jsonnet.EIndexList,
-		IndexListHead: head,
-		IndexListTail: keys,
 	}
 }
 
@@ -220,17 +196,12 @@ func withscope(
 
 	// local [nestedPostState.name] = [nestedPostState.body];
 	// { v: [nestedPostState.v], vs: [preStateName].vs + [assignedVars] }
-	expr := *nestedPostState.toLocal(stateValue(
-		compileIDDotKeys(nestedPostState.name, "v"),
-		&jsonnet.Expr{
-			Kind:     jsonnet.EAdd,
-			BinOpLHS: compileIDDotKeys(preStateName, "vs"),
-			BinOpRHS: &jsonnet.Expr{
-				Kind: jsonnet.EMap,
-				Map:  assignedVars,
-			},
-		},
-	))
+	expr := *nestedPostState.toLocal(
+		stateValue(
+			compileIDDotKeys(nestedPostState.name, "v"),
+			compileAddMap(compileIDDotKeys(preStateName, "vs"), assignedVars),
+		),
+	)
 
 	return &state{name: generateStateName(), body: &expr}, nil
 }
@@ -430,14 +401,7 @@ func compilePipeline(scope *scope, preStateName string, pipe *parse.PipeNode) (*
 		}] = expr
 	}
 
-	vsExpr := &jsonnet.Expr{
-		Kind:     jsonnet.EAdd,
-		BinOpLHS: compileIDDotKeys(preStateName, "vs"),
-		BinOpRHS: &jsonnet.Expr{
-			Kind: jsonnet.EMap,
-			Map:  assignments,
-		},
-	}
+	vsExpr := compileAddMap(compileIDDotKeys(preStateName, "vs"), assignments)
 
 	return expr, vsExpr, nil
 }
@@ -615,5 +579,36 @@ func compileDot() *jsonnet.Expr {
 func compileNil() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind: jsonnet.ENull,
+	}
+}
+
+// get [id].[key0].[key1]. ... .[keyn-1].
+// if len(keys) == 0 then return [id].
+func compileIDDotKeys(id string, keys ...string) *jsonnet.Expr {
+	head := &jsonnet.Expr{
+		Kind:   jsonnet.EID,
+		IDName: id,
+	}
+	if len(keys) == 0 {
+		return head
+	}
+	return &jsonnet.Expr{
+		Kind:          jsonnet.EIndexList,
+		IndexListHead: head,
+		IndexListTail: keys,
+	}
+}
+
+func compileAddMap(lhs *jsonnet.Expr, rhs map[*jsonnet.Expr]*jsonnet.Expr) *jsonnet.Expr {
+	if len(rhs) == 0 {
+		return lhs
+	}
+	return &jsonnet.Expr{
+		Kind:     jsonnet.EAdd,
+		BinOpLHS: lhs,
+		BinOpRHS: &jsonnet.Expr{
+			Kind: jsonnet.EMap,
+			Map:  rhs,
+		},
 	}
 }
