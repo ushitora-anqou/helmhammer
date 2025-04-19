@@ -157,8 +157,9 @@ func (e *Expr) String() string {
 		b := strings.Builder{}
 		wrapParen(&b, e, e.IndexListHead)
 		for _, elm := range e.IndexListTail {
-			b.WriteString(".")
-			b.WriteString(elm)
+			b.WriteString("[\"")
+			b.WriteString(elm) // FIXME escape
+			b.WriteString("\"]")
 		}
 		return b.String()
 

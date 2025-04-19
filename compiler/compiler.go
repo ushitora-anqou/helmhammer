@@ -420,7 +420,7 @@ func compileCommand(scope *scope, preStateName string, cmd *parse.CommandNode, f
 		if !ok {
 			return nil, fmt.Errorf("variable not found: %s", node.Ident[0])
 		}
-		receiver := compileIDDotKeys(preStateName, "v", node.Ident[0])
+		receiver := compileIDDotKeys(preStateName, "vs", node.Ident[0])
 		if len(node.Ident) == 1 {
 			return receiver, nil
 		}
