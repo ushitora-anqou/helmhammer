@@ -10,7 +10,7 @@ import (
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
 )
 
-var file1 = `{{$}}`
+var file1 = `some text`
 var file2 = `world`
 
 var tpls = map[string]struct {

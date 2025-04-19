@@ -199,8 +199,17 @@ func (e *Expr) String() string {
 		for k, v := range e.Map {
 			cnt++
 			switch k.Kind {
+			case EID:
+				b.WriteString(k.IDName) // FIXME: escape
+				b.WriteString(": ")
+				b.WriteString(v.String())
+				if cnt != len(e.Map) {
+					b.WriteString(", ")
+				}
 			case EStringLiteral:
+				b.WriteString("\"")
 				b.WriteString(k.StringLiteral) // FIXME: escape
+				b.WriteString("\"")
 				b.WriteString(": ")
 				b.WriteString(v.String())
 				if cnt != len(e.Map) {
@@ -284,4 +293,12 @@ func ConvertDataToJsonnetExpr(data any) *Expr {
 		}
 	}
 	panic("not implemented")
+}
+
+var emptyString = &Expr{
+	Kind: EStringLiteral,
+}
+
+func EmptyString() *Expr {
+	return emptyString
 }
