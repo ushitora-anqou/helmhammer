@@ -124,6 +124,8 @@ type scope struct {
 	variables map[string]*variable
 }
 
+type scopeT = scope
+
 type variable struct {
 	defined bool
 }
@@ -165,16 +167,16 @@ func (sc *scope) getVariable(name string) (*variable, bool) {
 	return sc.parent.getVariable(name)
 }
 
-func withscope(
+func withScope(
 	parent *scope,
 	preStateName stateName,
-	nested func(scope *scope, preStateName string) (*state, error),
+	nested func(scope *scope) (*state, error),
 ) (*state, error) {
 	env := &scope{
 		parent:    parent,
 		variables: make(map[string]*variable),
 	}
-	nestedPostState, err := nested(env, preStateName)
+	nestedPostState, err := nested(env)
 	if err != nil {
 		return nil, err
 	}
@@ -189,9 +191,9 @@ func withscope(
 		}
 		// { ..., NAME: sX.vs.NAME, ... }
 		assignedVars[&jsonnet.Expr{
-			Kind:   jsonnet.EID,
-			IDName: name,
-		}] = compileIDDotKeys(preStateName, "vs", name)
+			Kind:          jsonnet.EStringLiteral,
+			StringLiteral: name,
+		}] = compileIDDotKeys(nestedPostState.name, "vs", name)
 	}
 
 	// local [nestedPostState.name] = [nestedPostState.body];
@@ -208,14 +210,14 @@ func withscope(
 
 func Compile(node parse.Node) (*jsonnet.Expr, error) {
 	initialStateName := generateStateName()
-	postState, err := withscope(
+	postState, err := withScope(
 		nil,
 		initialStateName,
-		func(scope *scope, preStateName string) (*state, error) {
+		func(scope *scope) (*state, error) {
 			if err := scope.defineVariable("$"); err != nil {
 				return nil, err
 			}
-			return compileNode(scope, preStateName, node)
+			return compileNode(scope, initialStateName, node)
 		},
 	)
 	if err != nil {
@@ -289,36 +291,65 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			body: stateValue(jsonnet.EmptyString(), vsExpr),
 		}, nil
 
-	//	case *parse.BreakNode:
-	//	case *parse.CommentNode:
-	//	case *parse.ContinueNode:
-	//
-	//	case *parse.IfNode:
-	//		pipe, err := compilePipeline(env, node.Pipe)
-	//		if err != nil {
-	//			return nil, err
-	//		}
-	//		list, err := withscopedEnv(env, func(env *envType) (*jsonnet.Expr, error) {
-	//			return compileNode(env, node.List)
-	//		})
-	//		if err != nil {
-	//			return nil, err
-	//		}
-	//		elseList := jsonnet.EmptyString()
-	//		if node.ElseList != nil {
-	//			elseList, err = withscopedEnv(env, func(env *envType) (*jsonnet.Expr, error) {
-	//				return compileNode(env, node.ElseList)
-	//			})
-	//			if err != nil {
-	//				return nil, err
-	//			}
-	//		}
-	//		return &jsonnet.Expr{
-	//			Kind:   jsonnet.EIf,
-	//			IfCond: pipe,
-	//			IfThen: list,
-	//			IfElse: elseList,
-	//		}, nil
+	case *parse.BreakNode:
+	case *parse.CommentNode:
+	case *parse.ContinueNode:
+
+	case *parse.IfNode:
+		vExpr, vsExpr, err := compilePipeline(scope, preStateName, node.Pipe)
+		if err != nil {
+			return nil, err
+		}
+		nestedPreState := &state{
+			name: generateStateName(),
+			body: stateValue(vExpr, vsExpr),
+		}
+
+		nestedPostStateThen, err := withScope(
+			scope,
+			nestedPreState.name,
+			func(scope *scopeT) (*state, error) {
+				return compileNode(scope, nestedPreState.name, node.List)
+			},
+		)
+
+		var nestedPostStateElse *state
+		if node.ElseList == nil {
+			nestedPostStateElse = &state{
+				name: generateStateName(),
+				body: &jsonnet.Expr{
+					Kind:   jsonnet.EID,
+					IDName: nestedPreState.name,
+				},
+			}
+		} else {
+			nestedPostStateElse, err = withScope(
+				scope,
+				nestedPreState.name,
+				func(scope *scopeT) (*state, error) {
+					return compileNode(scope, nestedPreState.name, node.ElseList)
+				},
+			)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return &state{
+			name: postStateName,
+			body: nestedPreState.toLocal(
+				&jsonnet.Expr{
+					Kind:   jsonnet.EIf,
+					IfCond: compileIDDotKeys(nestedPreState.name, "v"),
+					IfThen: nestedPostStateThen.toLocal(
+						compileIDDotKeys(nestedPostStateThen.name),
+					),
+					IfElse: nestedPostStateElse.toLocal(
+						compileIDDotKeys(nestedPostStateElse.name),
+					),
+				},
+			),
+		}, nil
 
 	case *parse.ListNode:
 		states := []*state{}
@@ -345,15 +376,15 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 					{Kind: jsonnet.EList, List: varsToBeJoined},
 				},
 			},
-			compileIDDotKeys(stateName),
+			compileIDDotKeys(stateName, "vs"),
 		)
 		for i := len(states) - 1; i >= 0; i-- {
 			body = states[i].toLocal(body)
 		}
 		return &state{name: postStateName, body: body}, nil
 
-	//	case *parse.RangeNode:
-	//	case *parse.TemplateNode:
+	case *parse.RangeNode:
+	case *parse.TemplateNode:
 
 	case *parse.TextNode:
 		return &state{

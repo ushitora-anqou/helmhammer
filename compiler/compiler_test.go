@@ -45,7 +45,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"$.U.V", "{{$.U.V}}", tVal},
 		{"declare in action", "{{$x := $.U.V}}{{$x}}", tVal},
 		{"simple assignment", "{{$x := 2}}{{$x = 3}}{{$x}}", tVal},
-		//{"nested assignment", "{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{$x}}", tVal},
+		{"nested assignment", "{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{$x}}", tVal},
 		//{"nested assignment changes the last declaration", "{{$x := 1}}{{if true}}{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{end}}{{$x}}", tVal},
 
 		//{
