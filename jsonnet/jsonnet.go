@@ -15,6 +15,7 @@ const (
 	EFunction
 	EID
 	EIf
+	EIndex
 	EIndexList
 	EIntLiteral
 	EList
@@ -70,6 +71,8 @@ func (e *Expr) precedence() int {
 		return 0
 
 	case ECall:
+		fallthrough
+	case EIndex:
 		fallthrough
 	case EIndexList:
 		return -1
@@ -151,6 +154,14 @@ func (e *Expr) String() string {
 		wrapParen(&b, e, e.IfThen)
 		b.WriteString(" else ")
 		wrapParen(&b, e, e.IfElse)
+		return b.String()
+
+	case EIndex:
+		b := strings.Builder{}
+		wrapParen(&b, e, e.BinOpLHS)
+		b.WriteString("[")
+		b.WriteString(e.BinOpRHS.String())
+		b.WriteString("]")
 		return b.String()
 
 	case EIndexList:

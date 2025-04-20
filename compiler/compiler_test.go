@@ -2,7 +2,6 @@ package compiler_test
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 	"strings"
 	"testing"
@@ -37,6 +36,28 @@ func (t T) Method0Jsonnet() *jsonnet.Expr {
 		FunctionBody: &jsonnet.Expr{
 			Kind:          jsonnet.EStringLiteral,
 			StringLiteral: "M0",
+		},
+	}
+}
+
+func (t T) Method1(a int) int {
+	return a
+}
+
+func (t T) Method1Jsonnet() *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind:           jsonnet.EFunction,
+		FunctionParams: []string{"args"},
+		FunctionBody: &jsonnet.Expr{
+			Kind: jsonnet.EIndex,
+			BinOpLHS: &jsonnet.Expr{
+				Kind:   jsonnet.EID,
+				IDName: "args",
+			},
+			BinOpRHS: &jsonnet.Expr{
+				Kind:       jsonnet.EIntLiteral,
+				IntLiteral: 0,
+			},
 		},
 	}
 }
@@ -144,6 +165,8 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"nested assignment changes the last declaration", "{{$x := 1}}{{if true}}{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{end}}{{$x}}", tVal},
 		{"parenthesized non-function with no args", "{{(1)}}", nil},
 		{".Method0", "-{{.Method0}}-", tVal},
+		{".Method1(1234)", "-{{.Method1 1234}}-", tVal},
+		{".Method1(.I)", "-{{.Method1 .I}}-", tVal},
 
 		{
 			name: "if simple true",
@@ -183,7 +206,7 @@ func TestCompileValidTemplates(t *testing.T) {
 				CallArgs: []*jsonnet.Expr{convertIntoJsonnet(tt.data)},
 			}
 
-			log.Printf("%s", jsonnetExpr.StringWithPrologue())
+			//log.Printf("%s", jsonnetExpr.StringWithPrologue())
 
 			sb := strings.Builder{}
 			tpl.Option("missingkey=zero")
