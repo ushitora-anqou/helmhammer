@@ -113,7 +113,7 @@ func convertIntoJsonnet(data any) *jsonnet.Expr {
 }
 
 func TestCompileValidTemplates(t *testing.T) {
-	tVal := T{
+	tVal := &T{
 		I:   17,
 		X:   "x",
 		U:   &U{V: "v"},
