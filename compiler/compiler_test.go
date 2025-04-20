@@ -224,6 +224,4 @@ func TestCompileValidTemplates(t *testing.T) {
 			assert.Equal(t, expected, got)
 		})
 	}
-
-	assert.Equal(t, 123, 123)
 }
