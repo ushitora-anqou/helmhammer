@@ -48,29 +48,29 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"nested assignment", "{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{$x}}", tVal},
 		{"nested assignment changes the last declaration", "{{$x := 1}}{{if true}}{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{end}}{{$x}}", tVal},
 
-		//{
-		//	name: "if simple true",
-		//	tpl:  `hel{{ if true }}lo2{{ else }}lo3{{ end }}`,
-		//},
-		//{
-		//	name: "if simple false",
-		//	tpl:  `hel{{ if false }}lo2{{ else }}lo3{{ end }}`,
-		//},
-		//{
-		//	name: "if .",
-		//	tpl:  `{{ if . }}1{{ else }}0{{ end }}`,
-		//	data: true,
-		//},
-		//{
-		//	name: "if .a",
-		//	tpl:  `{{ if .a }}1{{ else }}0{{ end }}`,
-		//	data: map[string]any{"a": false},
-		//},
-		//{
-		//	name: "if .a.b",
-		//	tpl:  `{{ if .a.b }}1{{ else }}0{{ end }}`,
-		//	data: map[string]map[string]any{"a": {"b": false}},
-		//},
+		{
+			name: "if simple true",
+			tpl:  `hel{{ if true }}lo2{{ else }}lo3{{ end }}`,
+		},
+		{
+			name: "if simple false",
+			tpl:  `hel{{ if false }}lo2{{ else }}lo3{{ end }}`,
+		},
+		{
+			name: "if .",
+			tpl:  `{{ if . }}1{{ else }}0{{ end }}`,
+			data: true,
+		},
+		{
+			name: "if .a",
+			tpl:  `{{ if .a }}1{{ else }}0{{ end }}`,
+			data: map[string]any{"a": false},
+		},
+		{
+			name: "if .a.b",
+			tpl:  `{{ if .a.b }}1{{ else }}0{{ end }}`,
+			data: map[string]map[string]any{"a": {"b": false}},
+		},
 	}
 
 	for _, tt := range tests {
