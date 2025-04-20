@@ -303,3 +303,35 @@ var emptyString = &Expr{
 func EmptyString() *Expr {
 	return emptyString
 }
+
+// get [id].[key0].[key1]. ... .[keyn-1].
+// if len(keys) == 0 then return [id].
+func Index(id string, keys ...string) *Expr {
+	head := &Expr{
+		Kind:   EID,
+		IDName: id,
+	}
+	if len(keys) == 0 {
+		return head
+	}
+	return &Expr{
+		Kind:          EIndexList,
+		IndexListHead: head,
+		IndexListTail: keys,
+	}
+}
+
+// get [lhs] + [rhs], where rhs is a map.
+func AddMap(lhs *Expr, rhs map[*Expr]*Expr) *Expr {
+	if len(rhs) == 0 {
+		return lhs
+	}
+	return &Expr{
+		Kind:     EAdd,
+		BinOpLHS: lhs,
+		BinOpRHS: &Expr{
+			Kind: EMap,
+			Map:  rhs,
+		},
+	}
+}

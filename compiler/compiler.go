@@ -17,27 +17,16 @@ func genid() int {
 	return nextGenID
 }
 
-type stateName = string
-
-func generateStateName() stateName {
-	return fmt.Sprintf("state%d", genid())
-}
-
-func stateValue(v *jsonnet.Expr, vs *jsonnet.Expr) *jsonnet.Expr {
-	return &jsonnet.Expr{
-		Kind: jsonnet.EMap,
-		Map: map[*jsonnet.Expr]*jsonnet.Expr{
-			{Kind: jsonnet.EID, IDName: "v"}:  v,
-			{Kind: jsonnet.EID, IDName: "vs"}: vs,
-		},
-	}
-}
-
+// state is output of execution of a text/template's Node.
+// It has a printed value (`v`) and a variable map (name |-> value) after its execution.
+//
+// `state` is compiled to a piece of code like the following:
+//
+//	local [name] = [body]
+//
+// where [body] is a map like `{v: ..., vs: ...}`.
 type state struct {
 	name stateName
-
-	// body should be a value of a map like { v: ..., vs: ... }.
-	// v shoule be the printed value, and vs should be the variable map.
 	body *jsonnet.Expr
 }
 
@@ -52,6 +41,27 @@ func (s *state) toLocal(body *jsonnet.Expr) *jsonnet.Expr {
 			},
 		},
 		LocalBody: body,
+	}
+}
+
+type stateName = string
+
+const (
+	stateV  = "v"
+	stateVS = "vs"
+)
+
+func generateStateName() stateName {
+	return fmt.Sprintf("s%d", genid())
+}
+
+func stateBody(v *jsonnet.Expr, vs *jsonnet.Expr) *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind: jsonnet.EMap,
+		Map: map[*jsonnet.Expr]*jsonnet.Expr{
+			{Kind: jsonnet.EID, IDName: stateV}:  v,
+			{Kind: jsonnet.EID, IDName: stateVS}: vs,
+		},
 	}
 }
 
@@ -129,15 +139,15 @@ func withScope(
 		assignedVars[&jsonnet.Expr{
 			Kind:          jsonnet.EStringLiteral,
 			StringLiteral: name,
-		}] = compileIDDotKeys(nestedPostState.name, "vs", name)
+		}] = jsonnet.Index(nestedPostState.name, stateVS, name)
 	}
 
 	// local [nestedPostState.name] = [nestedPostState.body];
 	// { v: [nestedPostState.v], vs: [preStateName].vs + [assignedVars] }
 	expr := *nestedPostState.toLocal(
-		stateValue(
-			compileIDDotKeys(nestedPostState.name, "v"),
-			compileAddMap(compileIDDotKeys(preStateName, "vs"), assignedVars),
+		stateBody(
+			jsonnet.Index(nestedPostState.name, stateV),
+			jsonnet.AddMap(jsonnet.Index(preStateName, stateVS), assignedVars),
 		),
 	)
 
@@ -187,7 +197,7 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 				},
 				{
 					Name: initialStateName,
-					Body: stateValue(
+					Body: stateBody(
 						jsonnet.EmptyString(),
 						&jsonnet.Expr{
 							Kind: jsonnet.EMap,
@@ -201,7 +211,7 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 			LocalBody: &jsonnet.Expr{
 				Kind:          jsonnet.EIndexList,
 				IndexListHead: postState.body,
-				IndexListTail: []string{"v"},
+				IndexListTail: []string{stateV},
 			},
 		},
 	}, nil
@@ -219,12 +229,12 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 		if len(node.Pipe.Decl) == 0 {
 			return &state{
 				name: postStateName,
-				body: stateValue(vExpr, vsExpr),
+				body: stateBody(vExpr, vsExpr),
 			}, nil
 		}
 		return &state{
 			name: postStateName,
-			body: stateValue(jsonnet.EmptyString(), vsExpr),
+			body: stateBody(jsonnet.EmptyString(), vsExpr),
 		}, nil
 
 	case *parse.BreakNode:
@@ -238,7 +248,7 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 		}
 		nestedPreState := &state{
 			name: generateStateName(),
-			body: stateValue(vExpr, vsExpr),
+			body: stateBody(vExpr, vsExpr),
 		}
 
 		nestedPostStateThen, err := withScope(
@@ -276,7 +286,7 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			body: nestedPreState.toLocal(
 				&jsonnet.Expr{
 					Kind:   jsonnet.EIf,
-					IfCond: compileIDDotKeys(nestedPreState.name, "v"),
+					IfCond: jsonnet.Index(nestedPreState.name, stateV),
 					IfThen: nestedPostStateThen.body,
 					IfElse: nestedPostStateElse.body,
 				},
@@ -293,10 +303,10 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 				return nil, err
 			}
 			states = append(states, newState)
-			varsToBeJoined = append(varsToBeJoined, compileIDDotKeys(newState.name, "v"))
+			varsToBeJoined = append(varsToBeJoined, jsonnet.Index(newState.name, stateV))
 			stateName = newState.name
 		}
-		body := stateValue(
+		body := stateBody(
 			&jsonnet.Expr{
 				Kind: jsonnet.ECall,
 				CallFunc: &jsonnet.Expr{
@@ -308,7 +318,7 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 					{Kind: jsonnet.EList, List: varsToBeJoined},
 				},
 			},
-			compileIDDotKeys(stateName, "vs"),
+			jsonnet.Index(stateName, stateVS),
 		)
 		for i := len(states) - 1; i >= 0; i-- {
 			body = states[i].toLocal(body)
@@ -321,12 +331,12 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 	case *parse.TextNode:
 		return &state{
 			name: postStateName,
-			body: stateValue(
+			body: stateBody(
 				&jsonnet.Expr{
 					Kind:          jsonnet.EStringLiteral,
 					StringLiteral: string(node.Text),
 				},
-				compileIDDotKeys(preStateName, "vs"),
+				jsonnet.Index(preStateName, stateVS),
 			),
 		}, nil
 
@@ -362,7 +372,7 @@ func compilePipeline(scope *scope, preStateName string, pipe *parse.PipeNode) (*
 		}] = expr
 	}
 
-	vsExpr := compileAddMap(compileIDDotKeys(preStateName, "vs"), assignments)
+	vsExpr := jsonnet.AddMap(jsonnet.Index(preStateName, stateVS), assignments)
 
 	return expr, vsExpr, nil
 }
@@ -381,7 +391,7 @@ func compileCommand(scope *scope, preStateName string, cmd *parse.CommandNode, f
 		if !ok {
 			return nil, fmt.Errorf("variable not found: %s", node.Ident[0])
 		}
-		receiver := compileIDDotKeys(preStateName, "vs", node.Ident[0])
+		receiver := jsonnet.Index(preStateName, stateVS, node.Ident[0])
 		if len(node.Ident) == 1 {
 			return receiver, nil
 		}
@@ -540,36 +550,5 @@ func compileDot() *jsonnet.Expr {
 func compileNil() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind: jsonnet.ENull,
-	}
-}
-
-// get [id].[key0].[key1]. ... .[keyn-1].
-// if len(keys) == 0 then return [id].
-func compileIDDotKeys(id string, keys ...string) *jsonnet.Expr {
-	head := &jsonnet.Expr{
-		Kind:   jsonnet.EID,
-		IDName: id,
-	}
-	if len(keys) == 0 {
-		return head
-	}
-	return &jsonnet.Expr{
-		Kind:          jsonnet.EIndexList,
-		IndexListHead: head,
-		IndexListTail: keys,
-	}
-}
-
-func compileAddMap(lhs *jsonnet.Expr, rhs map[*jsonnet.Expr]*jsonnet.Expr) *jsonnet.Expr {
-	if len(rhs) == 0 {
-		return lhs
-	}
-	return &jsonnet.Expr{
-		Kind:     jsonnet.EAdd,
-		BinOpLHS: lhs,
-		BinOpRHS: &jsonnet.Expr{
-			Kind: jsonnet.EMap,
-			Map:  rhs,
-		},
 	}
 }
