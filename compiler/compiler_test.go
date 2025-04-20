@@ -47,6 +47,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"simple assignment", "{{$x := 2}}{{$x = 3}}{{$x}}", tVal},
 		{"nested assignment", "{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{$x}}", tVal},
 		{"nested assignment changes the last declaration", "{{$x := 1}}{{if true}}{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{end}}{{$x}}", tVal},
+		{"parenthesized non-function with no args", "{{(1)}}", nil},
 
 		{
 			name: "if simple true",

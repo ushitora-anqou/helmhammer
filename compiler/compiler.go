@@ -384,7 +384,16 @@ func compileCommand(scope *scope, preStateName string, cmd *parse.CommandNode, f
 
 	case *parse.ChainNode:
 	case *parse.IdentifierNode:
+
 	case *parse.PipeNode:
+		if len(node.Decl) != 0 {
+			return nil, fmt.Errorf("unimplemented: parenthesized pipeline with declarations")
+		}
+		vExpr, _, err := compilePipeline(scope, preStateName, node)
+		if err != nil {
+			return nil, err
+		}
+		return vExpr, nil
 
 	case *parse.VariableNode:
 		_, ok := scope.getVariable(node.Ident[0])
