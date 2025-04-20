@@ -245,9 +245,8 @@ func (e *Expr) StringWithPrologue() string {
 	return fmt.Sprintf(`
 local helmhammer0 = {
 	field(receiver, fieldName, args):
-		if std.isObject(receiver) then receiver[fieldName]
-		else if std.isFunction(receiver) then receiver(args)
-		else error "helmhammer0.field: invalid receiver",
+		if std.isFunction(receiver[fieldName]) then receiver[fieldName](args)
+		else receiver[fieldName],
 
 	join(ary):
 		std.join("", std.map(std.toString, ary)),
@@ -259,6 +258,11 @@ local helmhammer0 = {
 func ConvertDataToJsonnetExpr(data any) *Expr {
 	if data == nil {
 		return &Expr{Kind: ENull}
+	}
+
+	switch d := data.(type) {
+	case *Expr:
+		return d
 	}
 
 	v := reflect.ValueOf(data)

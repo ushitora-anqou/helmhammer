@@ -1,6 +1,9 @@
 package compiler_test
 
 import (
+	"fmt"
+	"log"
+	"reflect"
 	"strings"
 	"testing"
 	"text/template"
@@ -12,17 +15,109 @@ import (
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
 )
 
+type U struct {
+	V string
+}
+
+type T struct {
+	I   int
+	X   string
+	U   *U
+	MSI map[string]int
+}
+
+func (t T) Method0() string {
+	return "M0"
+}
+
+func (t T) Method0Jsonnet() *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind:           jsonnet.EFunction,
+		FunctionParams: []string{"args"},
+		FunctionBody: &jsonnet.Expr{
+			Kind:          jsonnet.EStringLiteral,
+			StringLiteral: "M0",
+		},
+	}
+}
+
+func convertIntoJsonnet(data any) *jsonnet.Expr {
+	if data == nil {
+		return &jsonnet.Expr{Kind: jsonnet.ENull}
+	}
+
+	v := reflect.ValueOf(data)
+	switch v.Kind() {
+	case reflect.Bool:
+		kind := jsonnet.EFalse
+		if v.Bool() {
+			kind = jsonnet.ETrue
+		}
+		return &jsonnet.Expr{Kind: kind}
+
+	case reflect.Int:
+		return &jsonnet.Expr{Kind: jsonnet.EIntLiteral, IntLiteral: int(v.Int())}
+
+	case reflect.Float64:
+		return &jsonnet.Expr{Kind: jsonnet.EFloatLiteral, FloatLiteral: v.Float()}
+
+	case reflect.String:
+		return &jsonnet.Expr{Kind: jsonnet.EStringLiteral, StringLiteral: v.String()}
+
+	case reflect.Map:
+		exprMap := map[*jsonnet.Expr]*jsonnet.Expr{}
+		iter := v.MapRange()
+		for iter.Next() {
+			exprMap[&jsonnet.Expr{
+				Kind:          jsonnet.EStringLiteral,
+				StringLiteral: iter.Key().Interface().(string),
+			}] = convertIntoJsonnet(iter.Value().Interface())
+		}
+		return &jsonnet.Expr{
+			Kind: jsonnet.EMap,
+			Map:  exprMap,
+		}
+
+	case reflect.Struct:
+		exprMap := map[*jsonnet.Expr]*jsonnet.Expr{}
+		ty := v.Type()
+		for i := range ty.NumField() {
+			field := ty.Field(i)
+			exprMap[&jsonnet.Expr{
+				Kind:          jsonnet.EStringLiteral,
+				StringLiteral: field.Name,
+			}] = convertIntoJsonnet(v.FieldByIndex(field.Index).Interface())
+		}
+		for i := range ty.NumMethod() {
+			mthd := ty.Method(i)
+			mthdJsonnet := v.MethodByName(mthd.Name + "Jsonnet")
+			if !mthdJsonnet.IsValid() || mthdJsonnet.IsZero() {
+				continue
+			}
+			ret := v.MethodByName(mthd.Name + "Jsonnet").Call([]reflect.Value{})
+			exprMap[&jsonnet.Expr{
+				Kind:          jsonnet.EStringLiteral,
+				StringLiteral: mthd.Name,
+			}] = ret[0].Interface().(*jsonnet.Expr)
+		}
+		return &jsonnet.Expr{
+			Kind: jsonnet.EMap,
+			Map:  exprMap,
+		}
+
+	case reflect.Pointer:
+		return convertIntoJsonnet(reflect.Indirect(v).Interface())
+	}
+
+	panic(fmt.Sprintf("not implemented: %v", data))
+}
+
 func TestCompileValidTemplates(t *testing.T) {
-	tVal := map[string]any{
-		"I": 17,
-		"X": "x",
-		"U": map[string]string{
-			"V": "v",
-		},
-		"MSI": map[string]int{
-			"one": 1,
-			"two": 2,
-		},
+	tVal := T{
+		I:   17,
+		X:   "x",
+		U:   &U{V: "v"},
+		MSI: map[string]int{"one": 1, "two": 2},
 	}
 
 	tests := []struct {
@@ -48,6 +143,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"nested assignment", "{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{$x}}", tVal},
 		{"nested assignment changes the last declaration", "{{$x := 1}}{{if true}}{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{end}}{{$x}}", tVal},
 		{"parenthesized non-function with no args", "{{(1)}}", nil},
+		{".Method0", "-{{.Method0}}-", tVal},
 
 		{
 			name: "if simple true",
@@ -84,10 +180,10 @@ func TestCompileValidTemplates(t *testing.T) {
 			jsonnetExpr = &jsonnet.Expr{
 				Kind:     jsonnet.ECall,
 				CallFunc: jsonnetExpr,
-				CallArgs: []*jsonnet.Expr{
-					jsonnet.ConvertDataToJsonnetExpr(tt.data),
-				},
+				CallArgs: []*jsonnet.Expr{convertIntoJsonnet(tt.data)},
 			}
+
+			log.Printf("%s", jsonnetExpr.StringWithPrologue())
 
 			sb := strings.Builder{}
 			tpl.Option("missingkey=zero")
