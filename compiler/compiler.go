@@ -258,6 +258,9 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 				return compileNode(scope, nestedPreState.name, node.List)
 			},
 		)
+		if err != nil {
+			return nil, err
+		}
 
 		var nestedPostStateElse *state
 		if node.ElseList == nil {
@@ -286,7 +289,7 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			body: nestedPreState.toLocal(
 				&jsonnet.Expr{
 					Kind:   jsonnet.EIf,
-					IfCond: jsonnet.Index(nestedPreState.name, stateV),
+					IfCond: jsonnet.CallIsTrue(jsonnet.Index(nestedPreState.name, stateV)),
 					IfThen: nestedPostStateThen.body,
 					IfElse: nestedPostStateElse.body,
 				},
@@ -380,7 +383,7 @@ func compilePipeline(scope *scope, preStateName string, pipe *parse.PipeNode) (*
 func compileCommand(scope *scope, preStateName string, cmd *parse.CommandNode, final *jsonnet.Expr) (*jsonnet.Expr, error) {
 	switch node := cmd.Args[0].(type) {
 	case *parse.FieldNode:
-		return compileField(compileDot(), node.Ident, cmd.Args, final)
+		return compileField(scope, preStateName, compileDot(), node.Ident, cmd.Args, final)
 
 	case *parse.ChainNode:
 	case *parse.IdentifierNode:
@@ -396,15 +399,7 @@ func compileCommand(scope *scope, preStateName string, cmd *parse.CommandNode, f
 		return vExpr, nil
 
 	case *parse.VariableNode:
-		_, ok := scope.getVariable(node.Ident[0])
-		if !ok {
-			return nil, fmt.Errorf("variable not found: %s", node.Ident[0])
-		}
-		receiver := jsonnet.Index(preStateName, stateVS, node.Ident[0])
-		if len(node.Ident) == 1 {
-			return receiver, nil
-		}
-		return compileField(receiver, node.Ident[1:], cmd.Args, final)
+		return compileVariable(scope, preStateName, node, cmd.Args, final)
 
 	case *parse.BoolNode:
 		return compileBool(node)
@@ -433,7 +428,7 @@ func isHexInt(s string) bool {
 		!strings.ContainsAny(s, "pP")
 }
 
-func compileArg(arg parse.Node) (*jsonnet.Expr, error) {
+func compileArg(scope *scopeT, preStateName string, arg parse.Node) (*jsonnet.Expr, error) {
 	switch node := arg.(type) {
 	case *parse.DotNode:
 		return compileDot(), nil
@@ -442,9 +437,11 @@ func compileArg(arg parse.Node) (*jsonnet.Expr, error) {
 		return compileNil(), nil
 
 	case *parse.FieldNode:
-		return compileField(compileDot(), node.Ident, []parse.Node{arg}, nil)
+		return compileField(scope, preStateName, compileDot(), node.Ident, []parse.Node{arg}, nil)
 
 	case *parse.VariableNode:
+		return compileVariable(scope, preStateName, node, nil, nil)
+
 	case *parse.PipeNode:
 	case *parse.IdentifierNode:
 	case *parse.ChainNode:
@@ -459,10 +456,12 @@ func compileArg(arg parse.Node) (*jsonnet.Expr, error) {
 		return compileString(node)
 	}
 
-	return nil, nil
+	return nil, fmt.Errorf("compile Arg: not implemented: %v", arg)
 }
 
 func compileField(
+	scope *scopeT,
+	preStateName string,
 	receiver *jsonnet.Expr,
 	ident []string,
 	args []parse.Node,
@@ -481,7 +480,7 @@ func compileField(
 		if i == 0 {
 			continue
 		}
-		compiledArg, err := compileArg(arg)
+		compiledArg, err := compileArg(scope, preStateName, arg)
 		if err != nil {
 			return nil, err
 		}
@@ -512,6 +511,18 @@ func compileField(
 			},
 		},
 	}, nil
+}
+
+func compileVariable(scope *scopeT, preStateName string, node *parse.VariableNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
+	_, ok := scope.getVariable(node.Ident[0])
+	if !ok {
+		return nil, fmt.Errorf("variable not found: %s", node.Ident[0])
+	}
+	receiver := jsonnet.Index(preStateName, stateVS, node.Ident[0])
+	if len(node.Ident) == 1 {
+		return receiver, nil
+	}
+	return compileField(scope, preStateName, receiver, node.Ident[1:], args, final)
 }
 
 func compileBool(node *parse.BoolNode) (*jsonnet.Expr, error) {

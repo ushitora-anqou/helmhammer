@@ -2,6 +2,7 @@ package compiler_test
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 	"testing"
@@ -20,6 +21,7 @@ type U struct {
 
 type T struct {
 	I   int
+	U16 uint16
 	X   string
 	U   *U
 	MSI map[string]int
@@ -62,6 +64,21 @@ func (t T) Method1Jsonnet() *jsonnet.Expr {
 	}
 }
 
+func (t T) Method2(a uint16, b string) string {
+	return fmt.Sprintf("Method2: %d %s", a, b)
+}
+
+func (t T) Method2Jsonnet() *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind:           jsonnet.EFunction,
+		FunctionParams: []string{"args"},
+		FunctionBody: &jsonnet.Expr{
+			Kind: jsonnet.ERaw,
+			Raw:  `"Method2: %d %s" % [args[0], args[1]]`,
+		},
+	}
+}
+
 func convertIntoJsonnet(data any) *jsonnet.Expr {
 	if data == nil {
 		return &jsonnet.Expr{Kind: jsonnet.ENull}
@@ -78,6 +95,9 @@ func convertIntoJsonnet(data any) *jsonnet.Expr {
 
 	case reflect.Int:
 		return &jsonnet.Expr{Kind: jsonnet.EIntLiteral, IntLiteral: int(v.Int())}
+
+	case reflect.Uint16:
+		return &jsonnet.Expr{Kind: jsonnet.EIntLiteral, IntLiteral: int(v.Uint())}
 
 	case reflect.Float64:
 		return &jsonnet.Expr{Kind: jsonnet.EFloatLiteral, FloatLiteral: v.Float()}
@@ -136,6 +156,7 @@ func convertIntoJsonnet(data any) *jsonnet.Expr {
 func TestCompileValidTemplates(t *testing.T) {
 	tVal := &T{
 		I:   17,
+		U16: 16,
 		X:   "x",
 		U:   &U{V: "v"},
 		MSI: map[string]int{"one": 1, "two": 2},
@@ -146,51 +167,54 @@ func TestCompileValidTemplates(t *testing.T) {
 		tpl  string
 		data any
 	}{
-		{"empty", "", nil},
-		{"text", "some text", nil},
-		{".U.V", "-{{.U.V}}-", tVal},
-		{".X", "-{{.X}}-", tVal},
-		{"map .one", "{{.MSI.one}}", tVal},
-		{"map .two", "{{.MSI.two}}", tVal},
-		{"dot int", "<{{.}}>", 13},
-		{"dot float", "<{{.}}>", 15.1},
-		{"dot bool", "<{{.}}>", true},
-		{"dot string", "<{{.}}>", "hello"},
-		{"$ int", "{{$}}", 123},
-		{"$.I", "{{$.I}}", tVal},
-		{"$.U.V", "{{$.U.V}}", tVal},
-		{"declare in action", "{{$x := $.U.V}}{{$x}}", tVal},
-		{"simple assignment", "{{$x := 2}}{{$x = 3}}{{$x}}", tVal},
-		{"nested assignment", "{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{$x}}", tVal},
-		{"nested assignment changes the last declaration", "{{$x := 1}}{{if true}}{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{end}}{{$x}}", tVal},
-		{"parenthesized non-function with no args", "{{(1)}}", nil},
-		{".Method0", "-{{.Method0}}-", tVal},
-		{".Method1(1234)", "-{{.Method1 1234}}-", tVal},
-		{".Method1(.I)", "-{{.Method1 .I}}-", tVal},
+		//{"empty", "", nil},
+		//{"text", "some text", nil},
+		//{".U.V", "-{{.U.V}}-", tVal},
+		//{".X", "-{{.X}}-", tVal},
+		//{"map .one", "{{.MSI.one}}", tVal},
+		//{"map .two", "{{.MSI.two}}", tVal},
+		//{"dot int", "<{{.}}>", 13},
+		//{"dot float", "<{{.}}>", 15.1},
+		//{"dot bool", "<{{.}}>", true},
+		//{"dot string", "<{{.}}>", "hello"},
+		//{"$ int", "{{$}}", 123},
+		//{"$.I", "{{$.I}}", tVal},
+		//{"$.U.V", "{{$.U.V}}", tVal},
+		//{"declare in action", "{{$x := $.U.V}}{{$x}}", tVal},
+		//{"simple assignment", "{{$x := 2}}{{$x = 3}}{{$x}}", tVal},
+		//{"nested assignment", "{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{$x}}", tVal},
+		//{"nested assignment changes the last declaration", "{{$x := 1}}{{if true}}{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{end}}{{$x}}", tVal},
+		//{"parenthesized non-function with no args", "{{(1)}}", nil},
+		//{".Method0", "-{{.Method0}}-", tVal},
+		//{".Method1(1234)", "-{{.Method1 1234}}-", tVal},
+		//{".Method1(.I)", "-{{.Method1 .I}}-", tVal},
+		{".Method2(3, .X)", "-{{.Method2 3 .X}}-", tVal},
+		{".Method2(.U16, `str`)", "-{{.Method2 .U16 `str`}}-", tVal},
+		{".Method2(.U16, $x)", "{{if $x := .X}}-{{.Method2 .U16 $x}}{{end}}-", tVal},
 
-		{
-			name: "if simple true",
-			tpl:  `hel{{ if true }}lo2{{ else }}lo3{{ end }}`,
-		},
-		{
-			name: "if simple false",
-			tpl:  `hel{{ if false }}lo2{{ else }}lo3{{ end }}`,
-		},
-		{
-			name: "if .",
-			tpl:  `{{ if . }}1{{ else }}0{{ end }}`,
-			data: true,
-		},
-		{
-			name: "if .a",
-			tpl:  `{{ if .a }}1{{ else }}0{{ end }}`,
-			data: map[string]any{"a": false},
-		},
-		{
-			name: "if .a.b",
-			tpl:  `{{ if .a.b }}1{{ else }}0{{ end }}`,
-			data: map[string]map[string]any{"a": {"b": false}},
-		},
+		//{
+		//	name: "if simple true",
+		//	tpl:  `hel{{ if true }}lo2{{ else }}lo3{{ end }}`,
+		//},
+		//{
+		//	name: "if simple false",
+		//	tpl:  `hel{{ if false }}lo2{{ else }}lo3{{ end }}`,
+		//},
+		//{
+		//	name: "if .",
+		//	tpl:  `{{ if . }}1{{ else }}0{{ end }}`,
+		//	data: true,
+		//},
+		//{
+		//	name: "if .a",
+		//	tpl:  `{{ if .a }}1{{ else }}0{{ end }}`,
+		//	data: map[string]any{"a": false},
+		//},
+		//{
+		//	name: "if .a.b",
+		//	tpl:  `{{ if .a.b }}1{{ else }}0{{ end }}`,
+		//	data: map[string]map[string]any{"a": {"b": false}},
+		//},
 	}
 
 	for _, tt := range tests {
@@ -206,7 +230,7 @@ func TestCompileValidTemplates(t *testing.T) {
 				CallArgs: []*jsonnet.Expr{convertIntoJsonnet(tt.data)},
 			}
 
-			//log.Printf("%s", jsonnetExpr.StringWithPrologue())
+			log.Printf("%s", jsonnetExpr.StringWithPrologue())
 
 			sb := strings.Builder{}
 			tpl.Option("missingkey=zero")

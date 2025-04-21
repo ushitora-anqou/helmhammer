@@ -22,6 +22,7 @@ const (
 	ELocal
 	EMap
 	ENull
+	ERaw
 	EStringLiteral
 	ETrue
 )
@@ -47,10 +48,13 @@ type Expr struct {
 	BinOpLHS       *Expr
 	BinOpRHS       *Expr
 	FloatLiteral   float64
+	Raw            string
 }
 
 func (e *Expr) precedence() int {
 	switch e.Kind {
+	case ERaw:
+		fallthrough
 	case EFalse:
 		fallthrough
 	case EID:
@@ -237,6 +241,9 @@ func (e *Expr) String() string {
 	case ENull:
 		return "null"
 
+	case ERaw:
+		return e.Raw
+
 	case EStringLiteral:
 		return fmt.Sprintf("\"%s\"", e.StringLiteral) // FIXME: escape
 
@@ -261,6 +268,13 @@ local helmhammer0 = {
 
 	join(ary):
 		std.join("", std.map(std.toString, ary)),
+
+	isTrue(v):
+		if std.isArray(v) || std.isObject(v) || std.isString(v) then std.length(v) > 0
+		else if std.isBool(v) then v
+		else if std.isFunction(v) then v != null
+		else if std.isNumber(v) then v != 0
+		else true,
 };
 %s
 `, e.String())
@@ -348,5 +362,13 @@ func AddMap(lhs *Expr, rhs map[*Expr]*Expr) *Expr {
 			Kind: EMap,
 			Map:  rhs,
 		},
+	}
+}
+
+func CallIsTrue(v *Expr) *Expr {
+	return &Expr{
+		Kind:     ECall,
+		CallFunc: Index("helmhammer", "isTrue"),
+		CallArgs: []*Expr{v},
 	}
 }
