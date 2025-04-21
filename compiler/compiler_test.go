@@ -2,7 +2,6 @@ package compiler_test
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 	"strings"
 	"testing"
@@ -75,6 +74,24 @@ func (t T) Method2Jsonnet() *jsonnet.Expr {
 		FunctionBody: &jsonnet.Expr{
 			Kind: jsonnet.ERaw,
 			Raw:  `"Method2: %d %s" % [args[0], args[1]]`,
+		},
+	}
+}
+
+func (t T) Method3(v any) string {
+	return fmt.Sprintf("Method3: %v", v)
+}
+
+func (t T) Method3Jsonnet() *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind:           jsonnet.EFunction,
+		FunctionParams: []string{"args"},
+		FunctionBody: &jsonnet.Expr{
+			Kind: jsonnet.ERaw,
+			Raw: `"Method3: %s" % [(
+				if args[0] == null then "<nil>"
+				else error "not implemented"
+			)]`,
 		},
 	}
 }
@@ -191,6 +208,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		{".Method2(3, .X)", "-{{.Method2 3 .X}}-", tVal},
 		{".Method2(.U16, `str`)", "-{{.Method2 .U16 `str`}}-", tVal},
 		{".Method2(.U16, $x)", "{{if $x := .X}}-{{.Method2 .U16 $x}}{{end}}-", tVal},
+		{".Method3(nil constant)", "-{{.Method3 nil}}-", tVal},
 
 		{
 			name: "if simple true",
@@ -230,7 +248,7 @@ func TestCompileValidTemplates(t *testing.T) {
 				CallArgs: []*jsonnet.Expr{convertIntoJsonnet(tt.data)},
 			}
 
-			log.Printf("%s", jsonnetExpr.StringWithPrologue())
+			//log.Printf("%s", jsonnetExpr.StringWithPrologue())
 
 			sb := strings.Builder{}
 			tpl.Option("missingkey=zero")
