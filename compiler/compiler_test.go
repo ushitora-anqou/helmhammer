@@ -179,6 +179,8 @@ func TestCompileValidTemplates(t *testing.T) {
 		MSI: map[string]int{"one": 1, "two": 2},
 	}
 
+	// The following test table comes from Go compiler's test code:
+	// 	https://cs.opensource.google/go/go/+/refs/tags/go1.24.2:src/text/template/exec_test.go
 	tests := []struct {
 		name string
 		tpl  string
@@ -209,6 +211,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		{".Method2(.U16, `str`)", "-{{.Method2 .U16 `str`}}-", tVal},
 		{".Method2(.U16, $x)", "{{if $x := .X}}-{{.Method2 .U16 $x}}{{end}}-", tVal},
 		{".Method3(nil constant)", "-{{.Method3 nil}}-", tVal},
+		{"method on var", "{{if $x := .}}-{{$x.Method2 .U16 $x.X}}{{end}}-", tVal},
 
 		{
 			name: "if simple true",
