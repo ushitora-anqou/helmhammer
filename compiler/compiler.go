@@ -310,17 +310,7 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			stateName = newState.name
 		}
 		body := stateBody(
-			&jsonnet.Expr{
-				Kind: jsonnet.ECall,
-				CallFunc: &jsonnet.Expr{
-					Kind:          jsonnet.EIndexList,
-					IndexListHead: &jsonnet.Expr{Kind: jsonnet.EID, IDName: "helmhammer"},
-					IndexListTail: []string{"join"},
-				},
-				CallArgs: []*jsonnet.Expr{
-					{Kind: jsonnet.EList, List: varsToBeJoined},
-				},
-			},
+			jsonnet.CallJoin(varsToBeJoined),
 			jsonnet.Index(stateName, stateVS),
 		)
 		for i := len(states) - 1; i >= 0; i-- {
@@ -557,14 +547,7 @@ func compileString(node *parse.StringNode) (*jsonnet.Expr, error) {
 }
 
 func compileDot() *jsonnet.Expr {
-	return &jsonnet.Expr{
-		Kind: jsonnet.EIndexList,
-		IndexListHead: &jsonnet.Expr{
-			Kind:   jsonnet.EID,
-			IDName: "helmhammer",
-		},
-		IndexListTail: []string{"dot"},
-	}
+	return jsonnet.Dot()
 }
 
 func compileNil() *jsonnet.Expr {

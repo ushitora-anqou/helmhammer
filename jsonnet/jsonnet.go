@@ -372,3 +372,28 @@ func CallIsTrue(v *Expr) *Expr {
 		CallArgs: []*Expr{v},
 	}
 }
+
+func CallJoin(list []*Expr) *Expr {
+	return &Expr{
+		Kind: ECall,
+		CallFunc: &Expr{
+			Kind:          EIndexList,
+			IndexListHead: &Expr{Kind: EID, IDName: "helmhammer"},
+			IndexListTail: []string{"join"},
+		},
+		CallArgs: []*Expr{
+			{Kind: EList, List: list},
+		},
+	}
+}
+
+func Dot() *Expr {
+	return &Expr{
+		Kind: EIndexList,
+		IndexListHead: &Expr{
+			Kind:   EID,
+			IDName: "helmhammer",
+		},
+		IndexListTail: []string{"dot"},
+	}
+}
