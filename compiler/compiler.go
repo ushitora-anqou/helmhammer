@@ -226,7 +226,6 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 		}, nil
 
 	case *parse.BreakNode:
-	case *parse.CommentNode:
 	case *parse.ContinueNode:
 
 	case *parse.IfNode:
@@ -364,8 +363,6 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			),
 		}, nil
 
-	case *parse.TemplateNode:
-
 	case *parse.TextNode:
 		return &state{
 			name: postStateName,
@@ -378,6 +375,8 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			),
 		}, nil
 
+	case *parse.CommentNode:
+	case *parse.TemplateNode:
 	case *parse.WithNode:
 	}
 	return nil, fmt.Errorf("unknown node: %v", reflect.ValueOf(node).Type())
