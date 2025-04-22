@@ -28,6 +28,8 @@ type T struct {
 	SI       []int
 	SIEmpty  []int
 	SB       []bool
+	Empty0   any
+	Empty3   any
 }
 
 func (t T) Method0() string {
@@ -117,13 +119,14 @@ func (t T) MAddJsonnet() *jsonnet.Expr {
 
 func TestCompileValidTemplates(t *testing.T) {
 	tVal := &T{
-		I:   17,
-		U16: 16,
-		X:   "x",
-		U:   &U{V: "v"},
-		MSI: map[string]int{"one": 1, "two": 2, "three": 3},
-		SI:  []int{3, 4, 5},
-		SB:  []bool{true, false},
+		I:      17,
+		U16:    16,
+		X:      "x",
+		U:      &U{V: "v"},
+		MSI:    map[string]int{"one": 1, "two": 2, "three": 3},
+		SI:     []int{3, 4, 5},
+		SB:     []bool{true, false},
+		Empty3: []int{7, 8},
 	}
 
 	// The following test table comes from Go compiler's test code:
@@ -195,10 +198,10 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"range []int method", "{{range .SI | .MAdd .I}}-{{.}}-{{end}}", tVal},
 		{"range map", "{{range .MSI}}-{{.}}-{{end}}", tVal},
 		{"range empty map no else", "{{range .MSIEmpty}}-{{.}}-{{end}}", tVal},
-		//{"range map else", "{{range .MSI}}-{{.}}-{{else}}EMPTY{{end}}", "-1--3--2-", tVal, true},
-		//{"range empty map else", "{{range .MSIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
-		//{"range empty interface", "{{range .Empty3}}-{{.}}-{{else}}EMPTY{{end}}", "-7--8-", tVal, true},
-		//{"range empty nil", "{{range .Empty0}}-{{.}}-{{end}}", "", tVal, true},
+		{"range map else", "{{range .MSI}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
+		{"range empty map else", "{{range .MSIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
+		{"range empty interface", "{{range .Empty3}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
+		{"range empty nil", "{{range .Empty0}}-{{.}}-{{end}}", tVal},
 		//{"range $x SI", "{{range $x := .SI}}<{{$x}}>{{end}}", "<3><4><5>", tVal, true},
 		//{"range $x $y SI", "{{range $x, $y := .SI}}<{{$x}}={{$y}}>{{end}}", "<0=3><1=4><2=5>", tVal, true},
 		//{"range $x MSIone", "{{range $x := .MSIone}}<{{$x}}>{{end}}", "<1>", tVal, true},
