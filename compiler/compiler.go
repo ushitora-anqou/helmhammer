@@ -316,6 +316,9 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			scope,
 			nestedPreStateName,
 			func(scope *scopeT) (*state, error) {
+				for _, variable := range node.Pipe.Decl {
+					scope.defineVariable(variable.Ident[0])
+				}
 				return compileNode(scope, nestedPreStateName, node.List)
 			},
 		)
@@ -342,6 +345,50 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			}
 		}
 
+		nestedPreStateName0 := generateStateName()
+		assignments := map[*jsonnet.Expr]*jsonnet.Expr{}
+		switch len(node.Pipe.Decl) {
+		case 0:
+		// do nothing
+		case 1:
+			assignments[&jsonnet.Expr{
+				Kind:          jsonnet.EStringLiteral,
+				StringLiteral: node.Pipe.Decl[0].Ident[0],
+			}] = &jsonnet.Expr{
+				Kind:   jsonnet.EID,
+				IDName: "dot",
+			}
+		case 2:
+			assignments[&jsonnet.Expr{
+				Kind:          jsonnet.EStringLiteral,
+				StringLiteral: node.Pipe.Decl[0].Ident[0],
+			}] = &jsonnet.Expr{
+				Kind:   jsonnet.EID,
+				IDName: "i",
+			}
+			assignments[&jsonnet.Expr{
+				Kind:          jsonnet.EStringLiteral,
+				StringLiteral: node.Pipe.Decl[1].Ident[0],
+			}] = &jsonnet.Expr{
+				Kind:   jsonnet.EID,
+				IDName: "dot",
+			}
+		default:
+			return nil, fmt.Errorf("compileNode: not implemented: len(node.Pipe.Decl) > 2")
+		}
+		nestedPreStateValue := &jsonnet.Expr{Kind: jsonnet.EID, IDName: nestedPreStateName0}
+		if len(assignments) > 0 {
+			nestedPreStateValue = jsonnet.AddMap(
+				nestedPreStateValue,
+				map[*jsonnet.Expr]*jsonnet.Expr{
+					{Kind: jsonnet.EStringLiteral, StringLiteral: stateVS}: {
+						Kind: jsonnet.EMap,
+						Map:  assignments,
+					},
+				},
+			)
+		}
+
 		return &state{
 			name: postStateName,
 			body: jsonnet.CallRange(
@@ -352,8 +399,14 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 				vExpr,
 				&jsonnet.Expr{
 					Kind:           jsonnet.EFunction,
-					FunctionParams: []string{nestedPreStateName, "i", "dot"},
-					FunctionBody:   nestedPostStateThen.body,
+					FunctionParams: []string{nestedPreStateName0, "i", "dot"},
+					FunctionBody: &jsonnet.Expr{
+						Kind: jsonnet.ELocal,
+						LocalBinds: []*jsonnet.LocalBind{
+							{Name: nestedPreStateName, Body: nestedPreStateValue},
+						},
+						LocalBody: nestedPostStateThen.body,
+					},
 				},
 				&jsonnet.Expr{
 					Kind:           jsonnet.EFunction,
