@@ -177,22 +177,10 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 			Kind: jsonnet.ELocal,
 			LocalBinds: []*jsonnet.LocalBind{
 				{
-					Name: "helmhammer",
+					Name: "dot",
 					Body: &jsonnet.Expr{
-						Kind: jsonnet.EAdd,
-						BinOpLHS: &jsonnet.Expr{
-							Kind:   jsonnet.EID,
-							IDName: "helmhammer0",
-						},
-						BinOpRHS: &jsonnet.Expr{
-							Kind: jsonnet.EMap,
-							Map: map[*jsonnet.Expr]*jsonnet.Expr{
-								{Kind: jsonnet.EStringLiteral, StringLiteral: "dot"}: {
-									Kind:   jsonnet.EID,
-									IDName: "values",
-								},
-							},
-						},
+						Kind:   jsonnet.EID,
+						IDName: "values",
 					},
 				},
 				{
@@ -319,6 +307,37 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 		return &state{name: postStateName, body: body}, nil
 
 	case *parse.RangeNode:
+		vExpr, err := compilePipelineWithoutDecls(scope, preStateName, node.Pipe)
+		if err != nil {
+			return nil, err
+		}
+		nestedPreStateName := generateStateName()
+		nestedPostState, err := withScope(
+			scope,
+			nestedPreStateName,
+			func(scope *scopeT) (*state, error) {
+				return compileNode(scope, nestedPreStateName, node.List)
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		return &state{
+			name: postStateName,
+			body: jsonnet.CallRange(
+				&jsonnet.Expr{
+					Kind:   jsonnet.EID,
+					IDName: preStateName,
+				},
+				vExpr,
+				&jsonnet.Expr{
+					Kind:           jsonnet.EFunction,
+					FunctionParams: []string{nestedPreStateName, "i", "dot"},
+					FunctionBody:   nestedPostState.body,
+				},
+			),
+		}, nil
+
 	case *parse.TemplateNode:
 
 	case *parse.TextNode:
@@ -338,9 +357,9 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 	return nil, fmt.Errorf("unknown node: %v", reflect.ValueOf(node).Type())
 }
 
-func compilePipeline(scope *scope, preStateName string, pipe *parse.PipeNode) (*jsonnet.Expr, *jsonnet.Expr, error) {
+func compilePipelineWithoutDecls(scope *scope, preStateName string, pipe *parse.PipeNode) (*jsonnet.Expr, error) {
 	if pipe == nil {
-		return nil, nil, errors.New("pipe is nil")
+		return nil, errors.New("pipe is nil")
 	}
 
 	var expr *jsonnet.Expr
@@ -348,8 +367,17 @@ func compilePipeline(scope *scope, preStateName string, pipe *parse.PipeNode) (*
 		var err error
 		expr, err = compileCommand(scope, preStateName, cmd, expr)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
+	}
+
+	return expr, nil
+}
+
+func compilePipeline(scope *scope, preStateName string, pipe *parse.PipeNode) (*jsonnet.Expr, *jsonnet.Expr, error) {
+	expr, err := compilePipelineWithoutDecls(scope, preStateName, pipe)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	assignments := map[*jsonnet.Expr]*jsonnet.Expr{}
@@ -547,7 +575,10 @@ func compileString(node *parse.StringNode) (*jsonnet.Expr, error) {
 }
 
 func compileDot() *jsonnet.Expr {
-	return jsonnet.Dot()
+	return &jsonnet.Expr{
+		Kind:   jsonnet.EID,
+		IDName: "dot",
+	}
 }
 
 func compileNil() *jsonnet.Expr {

@@ -2,7 +2,6 @@ package jsonnet
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 )
@@ -261,7 +260,7 @@ type LocalBind struct {
 
 func (e *Expr) StringWithPrologue() string {
 	return fmt.Sprintf(`
-local helmhammer0 = {
+local helmhammer = {
 	field(receiver, fieldName, args):
 		if std.isFunction(receiver[fieldName]) then receiver[fieldName](args)
 		else receiver[fieldName],
@@ -275,54 +274,29 @@ local helmhammer0 = {
 		else if std.isFunction(v) then v != null
 		else if std.isNumber(v) then v != 0
 		else true,
+
+	range(state, values, f):
+		if std.isArray(values) then
+			std.foldl(
+				function(acc, value)
+					local postState = f(acc.state, acc.i, value);
+					{
+						i: acc.i + 1,
+						state: {
+							v: acc.state.v + postState.v,
+							vs: postState.vs,
+						},
+					},
+				values,
+				{
+					i: 0,
+					state: state,
+				},
+			).state
+		else error "range: not implemented"
 };
 %s
 `, e.String())
-}
-
-func ConvertDataToJsonnetExpr(data any) *Expr {
-	if data == nil {
-		return &Expr{Kind: ENull}
-	}
-
-	switch d := data.(type) {
-	case *Expr:
-		return d
-	}
-
-	v := reflect.ValueOf(data)
-	switch v.Kind() {
-	case reflect.Bool:
-		kind := EFalse
-		if v.Bool() {
-			kind = ETrue
-		}
-		return &Expr{Kind: kind}
-
-	case reflect.Int:
-		return &Expr{Kind: EIntLiteral, IntLiteral: int(v.Int())}
-
-	case reflect.Float64:
-		return &Expr{Kind: EFloatLiteral, FloatLiteral: v.Float()}
-
-	case reflect.String:
-		return &Expr{Kind: EStringLiteral, StringLiteral: v.String()}
-
-	case reflect.Map:
-		exprMap := map[*Expr]*Expr{}
-		iter := v.MapRange()
-		for iter.Next() {
-			exprMap[&Expr{
-				Kind:          EStringLiteral,
-				StringLiteral: iter.Key().Interface().(string),
-			}] = ConvertDataToJsonnetExpr(iter.Value().Interface())
-		}
-		return &Expr{
-			Kind: EMap,
-			Map:  exprMap,
-		}
-	}
-	panic("not implemented")
 }
 
 var emptyString = &Expr{
@@ -387,13 +361,14 @@ func CallJoin(list []*Expr) *Expr {
 	}
 }
 
-func Dot() *Expr {
+func CallRange(args ...*Expr) *Expr {
 	return &Expr{
-		Kind: EIndexList,
-		IndexListHead: &Expr{
-			Kind:   EID,
-			IDName: "helmhammer",
+		Kind: ECall,
+		CallFunc: &Expr{
+			Kind:          EIndexList,
+			IndexListHead: &Expr{Kind: EID, IDName: "helmhammer"},
+			IndexListTail: []string{"range"},
 		},
-		IndexListTail: []string{"dot"},
+		CallArgs: args,
 	}
 }

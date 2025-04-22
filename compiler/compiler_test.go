@@ -24,6 +24,7 @@ type T struct {
 	X   string
 	U   *U
 	MSI map[string]int
+	SI  []int
 }
 
 func (t T) Method0() string {
@@ -141,6 +142,9 @@ func convertIntoJsonnet(data any) *jsonnet.Expr {
 		ty := v.Type()
 		for i := range ty.NumField() {
 			field := ty.Field(i)
+			if !field.IsExported() {
+				continue
+			}
 			exprMap[&jsonnet.Expr{
 				Kind:          jsonnet.EStringLiteral,
 				StringLiteral: field.Name,
@@ -165,6 +169,16 @@ func convertIntoJsonnet(data any) *jsonnet.Expr {
 
 	case reflect.Pointer:
 		return convertIntoJsonnet(reflect.Indirect(v).Interface())
+
+	case reflect.Slice:
+		list := []*jsonnet.Expr{}
+		for i := range v.Len() {
+			list = append(list, convertIntoJsonnet(v.Index(i).Interface()))
+		}
+		return &jsonnet.Expr{
+			Kind: jsonnet.EList,
+			List: list,
+		}
 	}
 
 	panic(fmt.Sprintf("not implemented: %v", data))
@@ -177,6 +191,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		X:   "x",
 		U:   &U{V: "v"},
 		MSI: map[string]int{"one": 1, "two": 2},
+		SI:  []int{3, 4, 5},
 	}
 
 	// The following test table comes from Go compiler's test code:
@@ -212,6 +227,54 @@ func TestCompileValidTemplates(t *testing.T) {
 		{".Method2(.U16, $x)", "{{if $x := .X}}-{{.Method2 .U16 $x}}{{end}}-", tVal},
 		{".Method3(nil constant)", "-{{.Method3 nil}}-", tVal},
 		{"method on var", "{{if $x := .}}-{{$x.Method2 .U16 $x.X}}{{end}}-", tVal},
+
+		// Range.
+		{"range []int", "{{range .SI}}-{{.}}-{{end}}", tVal},
+		//{"range empty no else", "{{range .SIEmpty}}-{{.}}-{{end}}", "", tVal, true},
+		//{"range []int else", "{{range .SI}}-{{.}}-{{else}}EMPTY{{end}}", "-3--4--5-", tVal, true},
+		//{"range empty else", "{{range .SIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+		//{"range []int break else", "{{range .SI}}-{{.}}-{{break}}NOTREACHED{{else}}EMPTY{{end}}", "-3-", tVal, true},
+		//{"range []int continue else", "{{range .SI}}-{{.}}-{{continue}}NOTREACHED{{else}}EMPTY{{end}}", "-3--4--5-", tVal, true},
+		//{"range []bool", "{{range .SB}}-{{.}}-{{end}}", "-true--false-", tVal, true},
+		//{"range []int method", "{{range .SI | .MAdd .I}}-{{.}}-{{end}}", "-20--21--22-", tVal, true},
+		//{"range map", "{{range .MSI}}-{{.}}-{{end}}", "-1--3--2-", tVal, true},
+		//{"range empty map no else", "{{range .MSIEmpty}}-{{.}}-{{end}}", "", tVal, true},
+		//{"range map else", "{{range .MSI}}-{{.}}-{{else}}EMPTY{{end}}", "-1--3--2-", tVal, true},
+		//{"range empty map else", "{{range .MSIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+		//{"range empty interface", "{{range .Empty3}}-{{.}}-{{else}}EMPTY{{end}}", "-7--8-", tVal, true},
+		//{"range empty nil", "{{range .Empty0}}-{{.}}-{{end}}", "", tVal, true},
+		//{"range $x SI", "{{range $x := .SI}}<{{$x}}>{{end}}", "<3><4><5>", tVal, true},
+		//{"range $x $y SI", "{{range $x, $y := .SI}}<{{$x}}={{$y}}>{{end}}", "<0=3><1=4><2=5>", tVal, true},
+		//{"range $x MSIone", "{{range $x := .MSIone}}<{{$x}}>{{end}}", "<1>", tVal, true},
+		//{"range $x $y MSIone", "{{range $x, $y := .MSIone}}<{{$x}}={{$y}}>{{end}}", "<one=1>", tVal, true},
+		//{"range $x PSI", "{{range $x := .PSI}}<{{$x}}>{{end}}", "<21><22><23>", tVal, true},
+		//{"declare in range", "{{range $x := .PSI}}<{{$foo:=$x}}{{$x}}>{{end}}", "<21><22><23>", tVal, true},
+		//{"range count", `{{range $i, $x := count 5}}[{{$i}}]{{$x}}{{end}}`, "[0]a[1]b[2]c[3]d[4]e", tVal, true},
+		//{"range nil count", `{{range $i, $x := count 0}}{{else}}empty{{end}}`, "empty", tVal, true},
+		//{"range iter.Seq[int]", `{{range $i := .}}{{$i}}{{end}}`, "01", fVal1(2), true},
+		//{"i = range iter.Seq[int]", `{{$i := 0}}{{range $i = .}}{{$i}}{{end}}`, "01", fVal1(2), true},
+		//{"range iter.Seq[int] over two var", `{{range $i, $c := .}}{{$c}}{{end}}`, "", fVal1(2), false},
+		//{"i, c := range iter.Seq2[int,int]", `{{range $i, $c := .}}{{$i}}{{$c}}{{end}}`, "0112", fVal2(2), true},
+		//{"i, c = range iter.Seq2[int,int]", `{{$i := 0}}{{$c := 0}}{{range $i, $c = .}}{{$i}}{{$c}}{{end}}`, "0112", fVal2(2), true},
+		//{"i = range iter.Seq2[int,int]", `{{$i := 0}}{{range $i = .}}{{$i}}{{end}}`, "01", fVal2(2), true},
+		//{"i := range iter.Seq2[int,int]", `{{range $i := .}}{{$i}}{{end}}`, "01", fVal2(2), true},
+		//{"i,c,x range iter.Seq2[int,int]", `{{$i := 0}}{{$c := 0}}{{$x := 0}}{{range $i, $c = .}}{{$i}}{{$c}}{{end}}`, "0112", fVal2(2), true},
+		//{"i,x range iter.Seq[int]", `{{$i := 0}}{{$x := 0}}{{range $i = .}}{{$i}}{{end}}`, "01", fVal1(2), true},
+		//{"range iter.Seq[int] else", `{{range $i := .}}{{$i}}{{else}}empty{{end}}`, "empty", fVal1(0), true},
+		//{"range iter.Seq2[int,int] else", `{{range $i := .}}{{$i}}{{else}}empty{{end}}`, "empty", fVal2(0), true},
+		//{"range int8", rangeTestInt, rangeTestData[int8](), int8(5), true},
+		//{"range int16", rangeTestInt, rangeTestData[int16](), int16(5), true},
+		//{"range int32", rangeTestInt, rangeTestData[int32](), int32(5), true},
+		//{"range int64", rangeTestInt, rangeTestData[int64](), int64(5), true},
+		//{"range int", rangeTestInt, rangeTestData[int](), int(5), true},
+		//{"range uint8", rangeTestInt, rangeTestData[uint8](), uint8(5), true},
+		//{"range uint16", rangeTestInt, rangeTestData[uint16](), uint16(5), true},
+		//{"range uint32", rangeTestInt, rangeTestData[uint32](), uint32(5), true},
+		//{"range uint64", rangeTestInt, rangeTestData[uint64](), uint64(5), true},
+		//{"range uint", rangeTestInt, rangeTestData[uint](), uint(5), true},
+		//{"range uintptr", rangeTestInt, rangeTestData[uintptr](), uintptr(5), true},
+		//{"range uintptr(0)", `{{range $v := .}}{{print $v}}{{else}}empty{{end}}`, "empty", uintptr(0), true},
+		//{"range 5", `{{range $v := 5}}{{printf "%T%d" $v $v}}{{end}}`, rangeTestData[int](), nil, true},
 
 		{
 			name: "if simple true",
