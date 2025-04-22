@@ -26,6 +26,7 @@ type T struct {
 	MSI     map[string]int
 	SI      []int
 	SIEmpty []int
+	SB      []bool
 }
 
 func (t T) Method0() string {
@@ -106,6 +107,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		U:   &U{V: "v"},
 		MSI: map[string]int{"one": 1, "two": 2},
 		SI:  []int{3, 4, 5},
+		SB:  []bool{true, false},
 	}
 
 	// The following test table comes from Go compiler's test code:
@@ -173,7 +175,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"range empty else", "{{range .SIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
 		//{"range []int break else", "{{range .SI}}-{{.}}-{{break}}NOTREACHED{{else}}EMPTY{{end}}", tVal},
 		//{"range []int continue else", "{{range .SI}}-{{.}}-{{continue}}NOTREACHED{{else}}EMPTY{{end}}", "-3--4--5-", tVal, true},
-		//{"range []bool", "{{range .SB}}-{{.}}-{{end}}", "-true--false-", tVal, true},
+		{"range []bool", "{{range .SB}}-{{.}}-{{end}}", tVal},
 		//{"range []int method", "{{range .SI | .MAdd .I}}-{{.}}-{{end}}", "-20--21--22-", tVal, true},
 		//{"range map", "{{range .MSI}}-{{.}}-{{end}}", "-1--3--2-", tVal, true},
 		//{"range empty map no else", "{{range .MSIEmpty}}-{{.}}-{{end}}", "", tVal, true},
