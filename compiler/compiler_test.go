@@ -3,7 +3,6 @@ package compiler_test
 import (
 	"fmt"
 	"log"
-	"reflect"
 	"strings"
 	"testing"
 	"text/template"
@@ -97,103 +96,6 @@ func (t T) Method3Jsonnet() *jsonnet.Expr {
 			)]`,
 		},
 	}
-}
-
-func convertIntoJsonnet(data any) *jsonnet.Expr {
-	v := reflect.ValueOf(data)
-
-	if !v.IsValid() {
-		return &jsonnet.Expr{Kind: jsonnet.ENull}
-	}
-
-	switch v.Kind() {
-	case reflect.Bool:
-		kind := jsonnet.EFalse
-		if v.Bool() {
-			kind = jsonnet.ETrue
-		}
-		return &jsonnet.Expr{Kind: kind}
-
-	case reflect.Int:
-		return &jsonnet.Expr{Kind: jsonnet.EIntLiteral, IntLiteral: int(v.Int())}
-
-	case reflect.Uint16:
-		return &jsonnet.Expr{Kind: jsonnet.EIntLiteral, IntLiteral: int(v.Uint())}
-
-	case reflect.Float64:
-		return &jsonnet.Expr{Kind: jsonnet.EFloatLiteral, FloatLiteral: v.Float()}
-
-	case reflect.String:
-		return &jsonnet.Expr{Kind: jsonnet.EStringLiteral, StringLiteral: v.String()}
-
-	case reflect.Map:
-		if v.IsNil() {
-			return &jsonnet.Expr{Kind: jsonnet.ENull}
-		}
-		exprMap := map[*jsonnet.Expr]*jsonnet.Expr{}
-		iter := v.MapRange()
-		for iter.Next() {
-			exprMap[&jsonnet.Expr{
-				Kind:          jsonnet.EStringLiteral,
-				StringLiteral: iter.Key().Interface().(string),
-			}] = convertIntoJsonnet(iter.Value().Interface())
-		}
-		return &jsonnet.Expr{
-			Kind: jsonnet.EMap,
-			Map:  exprMap,
-		}
-
-	case reflect.Struct:
-		exprMap := map[*jsonnet.Expr]*jsonnet.Expr{}
-		ty := v.Type()
-		for i := range ty.NumField() {
-			field := ty.Field(i)
-			if !field.IsExported() {
-				continue
-			}
-			exprMap[&jsonnet.Expr{
-				Kind:          jsonnet.EStringLiteral,
-				StringLiteral: field.Name,
-			}] = convertIntoJsonnet(v.FieldByIndex(field.Index).Interface())
-		}
-		for i := range ty.NumMethod() {
-			mthd := ty.Method(i)
-			mthdJsonnet := v.MethodByName(mthd.Name + "Jsonnet")
-			if !mthdJsonnet.IsValid() || mthdJsonnet.IsZero() {
-				continue
-			}
-			ret := v.MethodByName(mthd.Name + "Jsonnet").Call([]reflect.Value{})
-			exprMap[&jsonnet.Expr{
-				Kind:          jsonnet.EStringLiteral,
-				StringLiteral: mthd.Name,
-			}] = ret[0].Interface().(*jsonnet.Expr)
-		}
-		return &jsonnet.Expr{
-			Kind: jsonnet.EMap,
-			Map:  exprMap,
-		}
-
-	case reflect.Pointer:
-		if v.IsNil() {
-			return &jsonnet.Expr{Kind: jsonnet.ENull}
-		}
-		return convertIntoJsonnet(reflect.Indirect(v).Interface())
-
-	case reflect.Slice:
-		if v.IsNil() {
-			return &jsonnet.Expr{Kind: jsonnet.ENull}
-		}
-		list := []*jsonnet.Expr{}
-		for i := range v.Len() {
-			list = append(list, convertIntoJsonnet(v.Index(i).Interface()))
-		}
-		return &jsonnet.Expr{
-			Kind: jsonnet.EList,
-			List: list,
-		}
-	}
-
-	panic(fmt.Sprintf("not implemented: %v", data))
 }
 
 func TestCompileValidTemplates(t *testing.T) {
@@ -323,7 +225,7 @@ func TestCompileValidTemplates(t *testing.T) {
 			jsonnetExpr = &jsonnet.Expr{
 				Kind:     jsonnet.ECall,
 				CallFunc: jsonnetExpr,
-				CallArgs: []*jsonnet.Expr{convertIntoJsonnet(tt.data)},
+				CallArgs: []*jsonnet.Expr{jsonnet.ConvertIntoJsonnet(tt.data)},
 			}
 
 			log.Printf("%s", jsonnetExpr.StringWithPrologue())

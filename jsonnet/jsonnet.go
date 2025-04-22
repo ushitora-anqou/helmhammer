@@ -2,6 +2,7 @@ package jsonnet
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -372,4 +373,101 @@ func CallRange(args ...*Expr) *Expr {
 		},
 		CallArgs: args,
 	}
+}
+
+func ConvertIntoJsonnet(data any) *Expr {
+	v := reflect.ValueOf(data)
+
+	if !v.IsValid() {
+		return &Expr{Kind: ENull}
+	}
+
+	switch v.Kind() {
+	case reflect.Bool:
+		kind := EFalse
+		if v.Bool() {
+			kind = ETrue
+		}
+		return &Expr{Kind: kind}
+
+	case reflect.Int:
+		return &Expr{Kind: EIntLiteral, IntLiteral: int(v.Int())}
+
+	case reflect.Uint16:
+		return &Expr{Kind: EIntLiteral, IntLiteral: int(v.Uint())}
+
+	case reflect.Float64:
+		return &Expr{Kind: EFloatLiteral, FloatLiteral: v.Float()}
+
+	case reflect.String:
+		return &Expr{Kind: EStringLiteral, StringLiteral: v.String()}
+
+	case reflect.Map:
+		if v.IsNil() {
+			return &Expr{Kind: ENull}
+		}
+		exprMap := map[*Expr]*Expr{}
+		iter := v.MapRange()
+		for iter.Next() {
+			exprMap[&Expr{
+				Kind:          EStringLiteral,
+				StringLiteral: iter.Key().Interface().(string),
+			}] = ConvertIntoJsonnet(iter.Value().Interface())
+		}
+		return &Expr{
+			Kind: EMap,
+			Map:  exprMap,
+		}
+
+	case reflect.Struct:
+		exprMap := map[*Expr]*Expr{}
+		ty := v.Type()
+		for i := range ty.NumField() {
+			field := ty.Field(i)
+			if !field.IsExported() {
+				continue
+			}
+			exprMap[&Expr{
+				Kind:          EStringLiteral,
+				StringLiteral: field.Name,
+			}] = ConvertIntoJsonnet(v.FieldByIndex(field.Index).Interface())
+		}
+		for i := range ty.NumMethod() {
+			mthd := ty.Method(i)
+			mthdJsonnet := v.MethodByName(mthd.Name + "Jsonnet")
+			if !mthdJsonnet.IsValid() || mthdJsonnet.IsZero() {
+				continue
+			}
+			ret := v.MethodByName(mthd.Name + "Jsonnet").Call([]reflect.Value{})
+			exprMap[&Expr{
+				Kind:          EStringLiteral,
+				StringLiteral: mthd.Name,
+			}] = ret[0].Interface().(*Expr)
+		}
+		return &Expr{
+			Kind: EMap,
+			Map:  exprMap,
+		}
+
+	case reflect.Pointer:
+		if v.IsNil() {
+			return &Expr{Kind: ENull}
+		}
+		return ConvertIntoJsonnet(reflect.Indirect(v).Interface())
+
+	case reflect.Slice:
+		if v.IsNil() {
+			return &Expr{Kind: ENull}
+		}
+		list := []*Expr{}
+		for i := range v.Len() {
+			list = append(list, ConvertIntoJsonnet(v.Index(i).Interface()))
+		}
+		return &Expr{
+			Kind: EList,
+			List: list,
+		}
+	}
+
+	panic(fmt.Sprintf("not implemented: %v", data))
 }
