@@ -297,6 +297,25 @@ local helmhammer = {
 						state: state,
 					},
 				).state
+		else if std.isObject(values) then
+			if std.length(values) == 0 then felse(state)
+			else
+				std.foldl(
+					function(acc, kv)
+						local postState = fthen(acc.state, acc.i, kv.value);
+						{
+							i: acc.i + 1,
+							state: {
+								v: acc.state.v + postState.v,
+								vs: postState.vs,
+							},
+						},
+					std.objectKeysValues(values),
+					{
+						i: 0,
+						state: state,
+					},
+				).state
 		else error "range: not implemented"
 };
 %s

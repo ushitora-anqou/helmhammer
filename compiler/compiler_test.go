@@ -19,14 +19,15 @@ type U struct {
 }
 
 type T struct {
-	I       int
-	U16     uint16
-	X       string
-	U       *U
-	MSI     map[string]int
-	SI      []int
-	SIEmpty []int
-	SB      []bool
+	I        int
+	U16      uint16
+	X        string
+	U        *U
+	MSI      map[string]int
+	MSIEmpty map[string]int
+	SI       []int
+	SIEmpty  []int
+	SB       []bool
 }
 
 func (t T) Method0() string {
@@ -120,7 +121,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		U16: 16,
 		X:   "x",
 		U:   &U{V: "v"},
-		MSI: map[string]int{"one": 1, "two": 2},
+		MSI: map[string]int{"one": 1, "two": 2, "three": 3},
 		SI:  []int{3, 4, 5},
 		SB:  []bool{true, false},
 	}
@@ -192,8 +193,8 @@ func TestCompileValidTemplates(t *testing.T) {
 		//{"range []int continue else", "{{range .SI}}-{{.}}-{{continue}}NOTREACHED{{else}}EMPTY{{end}}", "-3--4--5-", tVal, true},
 		{"range []bool", "{{range .SB}}-{{.}}-{{end}}", tVal},
 		{"range []int method", "{{range .SI | .MAdd .I}}-{{.}}-{{end}}", tVal},
-		//{"range map", "{{range .MSI}}-{{.}}-{{end}}", "-1--3--2-", tVal, true},
-		//{"range empty map no else", "{{range .MSIEmpty}}-{{.}}-{{end}}", "", tVal, true},
+		{"range map", "{{range .MSI}}-{{.}}-{{end}}", tVal},
+		{"range empty map no else", "{{range .MSIEmpty}}-{{.}}-{{end}}", tVal},
 		//{"range map else", "{{range .MSI}}-{{.}}-{{else}}EMPTY{{end}}", "-1--3--2-", tVal, true},
 		//{"range empty map else", "{{range .MSIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
 		//{"range empty interface", "{{range .Empty3}}-{{.}}-{{else}}EMPTY{{end}}", "-7--8-", tVal, true},
