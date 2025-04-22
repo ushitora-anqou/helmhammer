@@ -302,7 +302,7 @@ local helmhammer = {
 			else
 				std.foldl(
 					function(acc, kv)
-						local postState = fthen(acc.state, acc.i, kv.value);
+						local postState = fthen(acc.state, kv.key, kv.value);
 						{
 							i: acc.i + 1,
 							state: {

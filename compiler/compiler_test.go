@@ -25,6 +25,7 @@ type T struct {
 	U        *U
 	MSI      map[string]int
 	MSIEmpty map[string]int
+	MSIone   map[string]int
 	SI       []int
 	SIEmpty  []int
 	SB       []bool
@@ -124,6 +125,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		X:      "x",
 		U:      &U{V: "v"},
 		MSI:    map[string]int{"one": 1, "two": 2, "three": 3},
+		MSIone: map[string]int{"one": 1},
 		SI:     []int{3, 4, 5},
 		SB:     []bool{true, false},
 		Empty3: []int{7, 8},
@@ -203,9 +205,9 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"range empty interface", "{{range .Empty3}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
 		{"range empty nil", "{{range .Empty0}}-{{.}}-{{end}}", tVal},
 		{"range $x SI", "{{range $x := .SI}}<{{$x}}>{{end}}", tVal},
-		//{"range $x $y SI", "{{range $x, $y := .SI}}<{{$x}}={{$y}}>{{end}}", "<0=3><1=4><2=5>", tVal, true},
-		//{"range $x MSIone", "{{range $x := .MSIone}}<{{$x}}>{{end}}", "<1>", tVal, true},
-		//{"range $x $y MSIone", "{{range $x, $y := .MSIone}}<{{$x}}={{$y}}>{{end}}", "<one=1>", tVal, true},
+		{"range $x $y SI", "{{range $x, $y := .SI}}<{{$x}}={{$y}}>{{end}}", tVal},
+		{"range $x MSIone", "{{range $x := .MSIone}}<{{$x}}>{{end}}", tVal},
+		{"range $x $y MSIone", "{{range $x, $y := .MSIone}}<{{$x}}={{$y}}>{{end}}", tVal},
 		//{"range $x PSI", "{{range $x := .PSI}}<{{$x}}>{{end}}", "<21><22><23>", tVal, true},
 		//{"declare in range", "{{range $x := .PSI}}<{{$foo:=$x}}{{$x}}>{{end}}", "<21><22><23>", tVal, true},
 		//{"range count", `{{range $i, $x := count 5}}[{{$i}}]{{$x}}{{end}}`, "[0]a[1]b[2]c[3]d[4]e", tVal, true},
