@@ -115,6 +115,30 @@ func TestCompileValidTemplates(t *testing.T) {
 		tpl  string
 		data any
 	}{
+		{
+			name: "if simple true",
+			tpl:  `hel{{ if true }}lo2{{ else }}lo3{{ end }}`,
+		},
+		{
+			name: "if simple false",
+			tpl:  `hel{{ if false }}lo2{{ else }}lo3{{ end }}`,
+		},
+		{
+			name: "if .",
+			tpl:  `{{ if . }}1{{ else }}0{{ end }}`,
+			data: true,
+		},
+		{
+			name: "if .a",
+			tpl:  `{{ if .a }}1{{ else }}0{{ end }}`,
+			data: map[string]any{"a": false},
+		},
+		{
+			name: "if .a.b",
+			tpl:  `{{ if .a.b }}1{{ else }}0{{ end }}`,
+			data: map[string]map[string]any{"a": {"b": false}},
+		},
+
 		{"empty", "", nil},
 		{"text", "some text", nil},
 		{".U.V", "-{{.U.V}}-", tVal},
@@ -145,8 +169,8 @@ func TestCompileValidTemplates(t *testing.T) {
 		// Range.
 		{"range []int", "{{range .SI}}-{{.}}-{{end}}", tVal},
 		{"range empty no else", "{{range .SIEmpty}}-{{.}}-{{end}}", tVal},
-		//{"range []int else", "{{range .SI}}-{{.}}-{{else}}EMPTY{{end}}", "-3--4--5-", tVal, true},
-		//{"range empty else", "{{range .SIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+		{"range []int else", "{{range .SI}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
+		{"range empty else", "{{range .SIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
 		//{"range []int break else", "{{range .SI}}-{{.}}-{{break}}NOTREACHED{{else}}EMPTY{{end}}", "-3-", tVal, true},
 		//{"range []int continue else", "{{range .SI}}-{{.}}-{{continue}}NOTREACHED{{else}}EMPTY{{end}}", "-3--4--5-", tVal, true},
 		//{"range []bool", "{{range .SB}}-{{.}}-{{end}}", "-true--false-", tVal, true},
@@ -189,30 +213,6 @@ func TestCompileValidTemplates(t *testing.T) {
 		//{"range uintptr", rangeTestInt, rangeTestData[uintptr](), uintptr(5), true},
 		//{"range uintptr(0)", `{{range $v := .}}{{print $v}}{{else}}empty{{end}}`, "empty", uintptr(0), true},
 		//{"range 5", `{{range $v := 5}}{{printf "%T%d" $v $v}}{{end}}`, rangeTestData[int](), nil, true},
-
-		{
-			name: "if simple true",
-			tpl:  `hel{{ if true }}lo2{{ else }}lo3{{ end }}`,
-		},
-		{
-			name: "if simple false",
-			tpl:  `hel{{ if false }}lo2{{ else }}lo3{{ end }}`,
-		},
-		{
-			name: "if .",
-			tpl:  `{{ if . }}1{{ else }}0{{ end }}`,
-			data: true,
-		},
-		{
-			name: "if .a",
-			tpl:  `{{ if .a }}1{{ else }}0{{ end }}`,
-			data: map[string]any{"a": false},
-		},
-		{
-			name: "if .a.b",
-			tpl:  `{{ if .a.b }}1{{ else }}0{{ end }}`,
-			data: map[string]map[string]any{"a": {"b": false}},
-		},
 	}
 
 	for _, tt := range tests {

@@ -312,7 +312,8 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			return nil, err
 		}
 		nestedPreStateName := generateStateName()
-		nestedPostState, err := withScope(
+
+		nestedPostStateThen, err := withScope(
 			scope,
 			nestedPreStateName,
 			func(scope *scopeT) (*state, error) {
@@ -322,6 +323,26 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 		if err != nil {
 			return nil, err
 		}
+
+		var nestedPostStateElse *state
+		if node.ElseList == nil {
+			nestedPostStateElse = &state{
+				name: generateStateName(),
+				body: jsonnet.Index(nestedPreStateName),
+			}
+		} else {
+			nestedPostStateElse, err = withScope(
+				scope,
+				nestedPreStateName,
+				func(scope *scopeT) (*state, error) {
+					return compileNode(scope, nestedPreStateName, node.ElseList)
+				},
+			)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		return &state{
 			name: postStateName,
 			body: jsonnet.CallRange(
@@ -333,7 +354,12 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 				&jsonnet.Expr{
 					Kind:           jsonnet.EFunction,
 					FunctionParams: []string{nestedPreStateName, "i", "dot"},
-					FunctionBody:   nestedPostState.body,
+					FunctionBody:   nestedPostStateThen.body,
+				},
+				&jsonnet.Expr{
+					Kind:           jsonnet.EFunction,
+					FunctionParams: []string{nestedPreStateName},
+					FunctionBody:   nestedPostStateElse.body,
 				},
 			),
 		}, nil

@@ -276,25 +276,27 @@ local helmhammer = {
 		else if std.isNumber(v) then v != 0
 		else true,
 
-	range(state, values, f):
-		if values == null then state
+	range(state, values, fthen, felse):
+		if values == null then felse(state)
 		else if std.isArray(values) then
-			std.foldl(
-				function(acc, value)
-					local postState = f(acc.state, acc.i, value);
-					{
-						i: acc.i + 1,
-						state: {
-							v: acc.state.v + postState.v,
-							vs: postState.vs,
+			if std.length(values) == 0 then felse(state)
+			else
+				std.foldl(
+					function(acc, value)
+						local postState = fthen(acc.state, acc.i, value);
+						{
+							i: acc.i + 1,
+							state: {
+								v: acc.state.v + postState.v,
+								vs: postState.vs,
+							},
 						},
+					values,
+					{
+						i: 0,
+						state: state,
 					},
-				values,
-				{
-					i: 0,
-					state: state,
-				},
-			).state
+				).state
 		else error "range: not implemented"
 };
 %s
@@ -470,4 +472,11 @@ func ConvertIntoJsonnet(data any) *Expr {
 	}
 
 	panic(fmt.Sprintf("not implemented: %v", data))
+}
+
+func IdentityFunction() *Expr {
+	return &Expr{
+		Kind: ERaw,
+		Raw:  `function(x) x`,
+	}
 }
