@@ -99,6 +99,21 @@ func (t T) Method3Jsonnet() *jsonnet.Expr {
 	}
 }
 
+func (t T) MAdd(a int, b []int) []int {
+	v := make([]int, len(b))
+	for i, x := range b {
+		v[i] = x + a
+	}
+	return v
+}
+
+func (t T) MAddJsonnet() *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind: jsonnet.ERaw,
+		Raw:  `function(args) std.map(function(x) x + args[0], args[1])`,
+	}
+}
+
 func TestCompileValidTemplates(t *testing.T) {
 	tVal := &T{
 		I:   17,
@@ -176,7 +191,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		//{"range []int break else", "{{range .SI}}-{{.}}-{{break}}NOTREACHED{{else}}EMPTY{{end}}", tVal},
 		//{"range []int continue else", "{{range .SI}}-{{.}}-{{continue}}NOTREACHED{{else}}EMPTY{{end}}", "-3--4--5-", tVal, true},
 		{"range []bool", "{{range .SB}}-{{.}}-{{end}}", tVal},
-		//{"range []int method", "{{range .SI | .MAdd .I}}-{{.}}-{{end}}", "-20--21--22-", tVal, true},
+		{"range []int method", "{{range .SI | .MAdd .I}}-{{.}}-{{end}}", tVal},
 		//{"range map", "{{range .MSI}}-{{.}}-{{end}}", "-1--3--2-", tVal, true},
 		//{"range empty map no else", "{{range .MSIEmpty}}-{{.}}-{{end}}", "", tVal, true},
 		//{"range map else", "{{range .MSI}}-{{.}}-{{else}}EMPTY{{end}}", "-1--3--2-", tVal, true},
