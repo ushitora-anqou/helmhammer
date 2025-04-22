@@ -2,6 +2,7 @@ package compiler_test
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 	"testing"
@@ -19,12 +20,13 @@ type U struct {
 }
 
 type T struct {
-	I   int
-	U16 uint16
-	X   string
-	U   *U
-	MSI map[string]int
-	SI  []int
+	I       int
+	U16     uint16
+	X       string
+	U       *U
+	MSI     map[string]int
+	SI      []int
+	SIEmpty []int
 }
 
 func (t T) Method0() string {
@@ -98,11 +100,12 @@ func (t T) Method3Jsonnet() *jsonnet.Expr {
 }
 
 func convertIntoJsonnet(data any) *jsonnet.Expr {
-	if data == nil {
+	v := reflect.ValueOf(data)
+
+	if !v.IsValid() {
 		return &jsonnet.Expr{Kind: jsonnet.ENull}
 	}
 
-	v := reflect.ValueOf(data)
 	switch v.Kind() {
 	case reflect.Bool:
 		kind := jsonnet.EFalse
@@ -124,6 +127,9 @@ func convertIntoJsonnet(data any) *jsonnet.Expr {
 		return &jsonnet.Expr{Kind: jsonnet.EStringLiteral, StringLiteral: v.String()}
 
 	case reflect.Map:
+		if v.IsNil() {
+			return &jsonnet.Expr{Kind: jsonnet.ENull}
+		}
 		exprMap := map[*jsonnet.Expr]*jsonnet.Expr{}
 		iter := v.MapRange()
 		for iter.Next() {
@@ -168,9 +174,15 @@ func convertIntoJsonnet(data any) *jsonnet.Expr {
 		}
 
 	case reflect.Pointer:
+		if v.IsNil() {
+			return &jsonnet.Expr{Kind: jsonnet.ENull}
+		}
 		return convertIntoJsonnet(reflect.Indirect(v).Interface())
 
 	case reflect.Slice:
+		if v.IsNil() {
+			return &jsonnet.Expr{Kind: jsonnet.ENull}
+		}
 		list := []*jsonnet.Expr{}
 		for i := range v.Len() {
 			list = append(list, convertIntoJsonnet(v.Index(i).Interface()))
@@ -230,7 +242,7 @@ func TestCompileValidTemplates(t *testing.T) {
 
 		// Range.
 		{"range []int", "{{range .SI}}-{{.}}-{{end}}", tVal},
-		//{"range empty no else", "{{range .SIEmpty}}-{{.}}-{{end}}", "", tVal, true},
+		{"range empty no else", "{{range .SIEmpty}}-{{.}}-{{end}}", tVal},
 		//{"range []int else", "{{range .SI}}-{{.}}-{{else}}EMPTY{{end}}", "-3--4--5-", tVal, true},
 		//{"range empty else", "{{range .SIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
 		//{"range []int break else", "{{range .SI}}-{{.}}-{{break}}NOTREACHED{{else}}EMPTY{{end}}", "-3-", tVal, true},
@@ -314,7 +326,7 @@ func TestCompileValidTemplates(t *testing.T) {
 				CallArgs: []*jsonnet.Expr{convertIntoJsonnet(tt.data)},
 			}
 
-			//log.Printf("%s", jsonnetExpr.StringWithPrologue())
+			log.Printf("%s", jsonnetExpr.StringWithPrologue())
 
 			sb := strings.Builder{}
 			tpl.Option("missingkey=zero")
@@ -328,6 +340,7 @@ func TestCompileValidTemplates(t *testing.T) {
 				"file.jsonnet",
 				jsonnetExpr.StringWithPrologue(),
 			)
+			require.NoError(t, err)
 			got = strings.Trim(got, "\n")
 			assert.Equal(t, expected, got)
 		})

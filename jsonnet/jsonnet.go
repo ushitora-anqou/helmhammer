@@ -276,7 +276,8 @@ local helmhammer = {
 		else true,
 
 	range(state, values, f):
-		if std.isArray(values) then
+		if values == null then state
+		else if std.isArray(values) then
 			std.foldl(
 				function(acc, value)
 					local postState = f(acc.state, acc.i, value);
