@@ -266,7 +266,6 @@ func TestCompileValidTemplates(t *testing.T) {
 		// If.
 		{"if true", "{{if true}}TRUE{{end}}", tVal},
 		{"if false", "{{if false}}TRUE{{else}}FALSE{{end}}", tVal},
-		//{"if on typed nil interface value", "{{if .NonEmptyInterfaceTypedNil}}TRUE{{ end }}", tVal},
 		{"if 1", "{{if 1}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		{"if 0", "{{if 0}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		{"if 1.5", "{{if 1.5}}NON-ZERO{{else}}ZERO{{end}}", tVal},
@@ -277,8 +276,6 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"if slice", "{{if .SI}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if emptymap", "{{if .MSIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if map", "{{if .MSI}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
-		//{"if map unset", "{{if .MXI.none}}NON-ZERO{{else}}ZERO{{end}}", tVal},
-		//{"if map not unset", "{{if not .MXI.none}}ZERO{{else}}NON-ZERO{{end}}", tVal},
 		//{"if $x with $y int", "{{if $x := true}}{{with $y := .I}}{{$x}},{{$y}}{{end}}{{end}}", tVal},
 		//{"if $x with $x int", "{{if $x := true}}{{with $x := .I}}{{$x}},{{end}}{{$x}}{{end}}", tVal},
 		{"if else if", "{{if false}}FALSE{{else if true}}TRUE{{end}}", tVal},
