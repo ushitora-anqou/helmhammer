@@ -268,7 +268,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		//{"if on typed nil interface value", "{{if .NonEmptyInterfaceTypedNil}}TRUE{{ end }}", tVal},
 		{"if 1", "{{if 1}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		{"if 0", "{{if 0}}NON-ZERO{{else}}ZERO{{end}}", tVal},
-		//{"if 1.5", "{{if 1.5}}NON-ZERO{{else}}ZERO{{end}}", tVal},
+		{"if 1.5", "{{if 1.5}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		//{"if 0.0", "{{if .FloatZero}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		//{"if 1.5i", "{{if 1.5i}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		//{"if 0.0i", "{{if .ComplexZero}}NON-ZERO{{else}}ZERO{{end}}", tVal},

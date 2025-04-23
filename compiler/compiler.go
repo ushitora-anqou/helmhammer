@@ -680,7 +680,7 @@ func compileNumber(node *parse.NumberNode) (*jsonnet.Expr, error) {
 	case node.IsFloat &&
 		!isHexInt(node.Text) && !isRuneInt(node.Text) &&
 		strings.ContainsAny(node.Text, ".eEpP"):
-		return nil, errors.New("float is not implemented")
+		return &jsonnet.Expr{Kind: jsonnet.EFloatLiteral, FloatLiteral: node.Float64}, nil
 	case node.IsInt:
 		n := int(node.Int64)
 		if int64(n) != node.Int64 {
