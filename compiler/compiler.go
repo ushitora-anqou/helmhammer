@@ -394,7 +394,7 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			return nil, fmt.Errorf("compileNode: not implemented: len(node.Pipe.Decl) > 2")
 		}
 		nestedPreStateName0 := generateStateName()
-		nestedPreStateValue := jsonnet.Index(nestedPreStateName0, stateVS)
+		nestedPreStateValue := jsonnet.Index(nestedPreStateName0)
 		if len(assignments) > 0 {
 			nestedPreStateValue = &jsonnet.Expr{
 				Kind: jsonnet.EMap,

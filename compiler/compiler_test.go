@@ -18,6 +18,20 @@ type U struct {
 	V string
 }
 
+func (u U) TrueFalse(b bool) string {
+	if b {
+		return "true"
+	}
+	return ""
+}
+
+func (u U) TrueFalseJsonnet() *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind: jsonnet.ERaw,
+		Raw:  `function(args) if args[0] then "true" else ""`,
+	}
+}
+
 type T struct {
 	I        int
 	U16      uint16
@@ -32,6 +46,7 @@ type T struct {
 	Empty0   any
 	Empty3   any
 	PSI      *[]int
+	True     bool
 }
 
 func (t T) Method0() string {
@@ -138,6 +153,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		SB:     []bool{true, false},
 		Empty3: []int{7, 8},
 		PSI:    newIntSlice(21, 22, 23),
+		True:   true,
 	}
 
 	// The following test table comes from Go compiler's test code:
@@ -189,14 +205,6 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"nested assignment", "{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{$x}}", tVal},
 		{"nested assignment changes the last declaration", "{{$x := 1}}{{if true}}{{$x := 2}}{{if true}}{{$x = 3}}{{end}}{{end}}{{$x}}", tVal},
 		{"parenthesized non-function with no args", "{{(1)}}", nil},
-		{".Method0", "-{{.Method0}}-", tVal},
-		{".Method1(1234)", "-{{.Method1 1234}}-", tVal},
-		{".Method1(.I)", "-{{.Method1 .I}}-", tVal},
-		{".Method2(3, .X)", "-{{.Method2 3 .X}}-", tVal},
-		{".Method2(.U16, `str`)", "-{{.Method2 .U16 `str`}}-", tVal},
-		{".Method2(.U16, $x)", "{{if $x := .X}}-{{.Method2 .U16 $x}}{{end}}-", tVal},
-		{".Method3(nil constant)", "-{{.Method3 nil}}-", tVal},
-		{"method on var", "{{if $x := .}}-{{$x.Method2 .U16 $x.X}}{{end}}-", tVal},
 
 		// Range.
 		{"range []int", "{{range .SI}}-{{.}}-{{end}}", tVal},
@@ -218,6 +226,30 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"range $x PSI", "{{range $x := .PSI}}<{{$x}}>{{end}}", tVal},
 		{"declare in range", "{{range $x := .PSI}}<{{$foo:=$x}}{{$x}}>{{end}}", tVal},
 		{"range 5", `{{range $v := 5}}{{printf "%d" $v}}{{end}}`, nil},
+
+		// Method calls.
+		{".Method0", "-{{.Method0}}-", tVal},
+		{".Method1(1234)", "-{{.Method1 1234}}-", tVal},
+		{".Method1(.I)", "-{{.Method1 .I}}-", tVal},
+		{".Method2(3, .X)", "-{{.Method2 3 .X}}-", tVal},
+		{".Method2(.U16, `str`)", "-{{.Method2 .U16 `str`}}-", tVal},
+		{".Method2(.U16, $x)", "{{if $x := .X}}-{{.Method2 .U16 $x}}{{end}}-", tVal},
+		{".Method3(nil constant)", "-{{.Method3 nil}}-", tVal},
+		{"method on var", "{{if $x := .}}-{{$x.Method2 .U16 $x.X}}{{end}}-", tVal},
+		{"method on chained var",
+			"{{range .MSIone}}{{if $.U.TrueFalse $.True}}{{$.U.TrueFalse $.True}}{{else}}WRONG{{end}}{{end}}",
+			tVal},
+		//	{"chained method",
+		//		"{{range .MSIone}}{{if $.GetU.TrueFalse $.True}}{{$.U.TrueFalse $.True}}{{else}}WRONG{{end}}{{end}}",
+		//		"true", tVal, true},
+		//	{"chained method on variable",
+		//		"{{with $x := .}}{{with .SI}}{{$.GetU.TrueFalse $.True}}{{end}}{{end}}",
+		//		"true", tVal, true},
+		//	{".NilOKFunc not nil", "{{call .NilOKFunc .PI}}", "false", tVal, true},
+		//	{".NilOKFunc nil", "{{call .NilOKFunc nil}}", "true", tVal, true},
+		//	{"method on nil value from slice", "-{{range .}}{{.Method1 1234}}{{end}}-", "-1234-", tSliceOfNil, true},
+		//	{"method on typed nil interface value", "{{.NonEmptyInterfaceTypedNil.Method0}}", "M0", tVal, true},
+
 	}
 
 	for _, tt := range tests {
