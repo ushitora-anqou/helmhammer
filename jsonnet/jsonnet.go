@@ -270,7 +270,8 @@ local helmhammer = {
 		std.join("", std.map(std.toString, ary)),
 
 	isTrue(v):
-		if std.isArray(v) || std.isObject(v) || std.isString(v) then std.length(v) > 0
+		if v == null then false
+		else if std.isArray(v) || std.isObject(v) || std.isString(v) then std.length(v) > 0
 		else if std.isBoolean(v) then v
 		else if std.isFunction(v) then v != null
 		else if std.isNumber(v) then v != 0
