@@ -224,10 +224,10 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 }
 
 func compileNode(scope *scope, preStateName string, node parse.Node) (*state, error) {
-	postStateName := generateStateName()
 
 	switch node := node.(type) {
 	case *parse.ActionNode:
+		postStateName := generateStateName()
 		vExpr, vsExpr, err := compilePipeline(scope, preStateName, node.Pipe)
 		if err != nil {
 			return nil, err
@@ -290,7 +290,7 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 		}
 
 		return &state{
-			name: postStateName,
+			name: generateStateName(),
 			body: nestedPreState.toLocal(
 				&jsonnet.Expr{
 					Kind:   jsonnet.EIf,
@@ -321,123 +321,14 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 		for i := len(states) - 1; i >= 0; i-- {
 			body = states[i].toLocal(body)
 		}
-		return &state{name: postStateName, body: body}, nil
+		return &state{name: generateStateName(), body: body}, nil
 
 	case *parse.RangeNode:
-		vExpr, err := compilePipelineWithoutDecls(scope, preStateName, node.Pipe)
-		if err != nil {
-			return nil, err
-		}
-		nestedPreStateName := generateStateName()
-
-		nestedPostStateThen, err := withScope(
-			scope,
-			nestedPreStateName,
-			func(scope *scopeT) (*state, error) {
-				for _, variable := range node.Pipe.Decl {
-					scope.defineVariable(variable.Ident[0])
-				}
-				return compileNode(scope, nestedPreStateName, node.List)
-			},
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		var nestedPostStateElse *state
-		if node.ElseList == nil {
-			nestedPostStateElse = &state{
-				name: generateStateName(),
-				body: jsonnet.Index(nestedPreStateName),
-			}
-		} else {
-			nestedPostStateElse, err = withScope(
-				scope,
-				nestedPreStateName,
-				func(scope *scopeT) (*state, error) {
-					return compileNode(scope, nestedPreStateName, node.ElseList)
-				},
-			)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		assignments := map[*jsonnet.Expr]*jsonnet.Expr{}
-		switch len(node.Pipe.Decl) {
-		case 0:
-		// do nothing
-		case 1:
-			assignments[&jsonnet.Expr{
-				Kind:          jsonnet.EStringLiteral,
-				StringLiteral: node.Pipe.Decl[0].Ident[0],
-			}] = &jsonnet.Expr{
-				Kind:   jsonnet.EID,
-				IDName: "dot",
-			}
-		case 2:
-			assignments[&jsonnet.Expr{
-				Kind:          jsonnet.EStringLiteral,
-				StringLiteral: node.Pipe.Decl[0].Ident[0],
-			}] = &jsonnet.Expr{
-				Kind:   jsonnet.EID,
-				IDName: "i",
-			}
-			assignments[&jsonnet.Expr{
-				Kind:          jsonnet.EStringLiteral,
-				StringLiteral: node.Pipe.Decl[1].Ident[0],
-			}] = &jsonnet.Expr{
-				Kind:   jsonnet.EID,
-				IDName: "dot",
-			}
-		default:
-			return nil, fmt.Errorf("compileNode: not implemented: len(node.Pipe.Decl) > 2")
-		}
-		nestedPreStateName0 := generateStateName()
-		nestedPreStateValue := jsonnet.Index(nestedPreStateName0)
-		if len(assignments) > 0 {
-			nestedPreStateValue = &jsonnet.Expr{
-				Kind: jsonnet.EMap,
-				Map: map[*jsonnet.Expr]*jsonnet.Expr{
-					stringLiteralStateV: jsonnet.Index(nestedPreStateName0, stateV),
-					stringLiteralStateVS: jsonnet.AddMap(
-						jsonnet.Index(nestedPreStateName0, stateVS),
-						assignments,
-					),
-				},
-			}
-		}
-
-		return &state{
-			name: postStateName,
-			body: jsonnet.CallRange(
-				&jsonnet.Expr{
-					Kind:   jsonnet.EID,
-					IDName: preStateName,
-				},
-				vExpr,
-				&jsonnet.Expr{
-					Kind:           jsonnet.EFunction,
-					FunctionParams: []string{nestedPreStateName0, "i", "dot"},
-					FunctionBody: &jsonnet.Expr{
-						Kind: jsonnet.ELocal,
-						LocalBinds: []*jsonnet.LocalBind{
-							{Name: nestedPreStateName, Body: nestedPreStateValue},
-						},
-						LocalBody: nestedPostStateThen.body,
-					},
-				},
-				&jsonnet.Expr{
-					Kind:           jsonnet.EFunction,
-					FunctionParams: []string{nestedPreStateName},
-					FunctionBody:   nestedPostStateElse.body,
-				},
-			),
-		}, nil
+		return compileRange(scope, preStateName, node)
 
 	case *parse.TextNode:
 		return &state{
-			name: postStateName,
+			name: generateStateName(),
 			body: stateBody(
 				&jsonnet.Expr{
 					Kind:          jsonnet.EStringLiteral,
@@ -708,4 +599,117 @@ func compileNil() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind: jsonnet.ENull,
 	}
+}
+
+func compileRange(scope *scope, preStateName string, node *parse.RangeNode) (*state, error) {
+	vExpr, err := compilePipelineWithoutDecls(scope, preStateName, node.Pipe)
+	if err != nil {
+		return nil, err
+	}
+	nestedPreStateName := generateStateName()
+
+	nestedPostStateThen, err := withScope(
+		scope,
+		nestedPreStateName,
+		func(scope *scopeT) (*state, error) {
+			for _, variable := range node.Pipe.Decl {
+				scope.defineVariable(variable.Ident[0])
+			}
+			return compileNode(scope, nestedPreStateName, node.List)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var nestedPostStateElse *state
+	if node.ElseList == nil {
+		nestedPostStateElse = &state{
+			name: generateStateName(),
+			body: jsonnet.Index(nestedPreStateName),
+		}
+	} else {
+		nestedPostStateElse, err = withScope(
+			scope,
+			nestedPreStateName,
+			func(scope *scopeT) (*state, error) {
+				return compileNode(scope, nestedPreStateName, node.ElseList)
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	assignments := map[*jsonnet.Expr]*jsonnet.Expr{}
+	switch len(node.Pipe.Decl) {
+	case 0:
+	// do nothing
+	case 1:
+		assignments[&jsonnet.Expr{
+			Kind:          jsonnet.EStringLiteral,
+			StringLiteral: node.Pipe.Decl[0].Ident[0],
+		}] = &jsonnet.Expr{
+			Kind:   jsonnet.EID,
+			IDName: "dot",
+		}
+	case 2:
+		assignments[&jsonnet.Expr{
+			Kind:          jsonnet.EStringLiteral,
+			StringLiteral: node.Pipe.Decl[0].Ident[0],
+		}] = &jsonnet.Expr{
+			Kind:   jsonnet.EID,
+			IDName: "i",
+		}
+		assignments[&jsonnet.Expr{
+			Kind:          jsonnet.EStringLiteral,
+			StringLiteral: node.Pipe.Decl[1].Ident[0],
+		}] = &jsonnet.Expr{
+			Kind:   jsonnet.EID,
+			IDName: "dot",
+		}
+	default:
+		return nil, fmt.Errorf("compileNode: not implemented: len(node.Pipe.Decl) > 2")
+	}
+	nestedPreStateName0 := generateStateName()
+	nestedPreStateValue := jsonnet.Index(nestedPreStateName0)
+	if len(assignments) > 0 {
+		nestedPreStateValue = &jsonnet.Expr{
+			Kind: jsonnet.EMap,
+			Map: map[*jsonnet.Expr]*jsonnet.Expr{
+				stringLiteralStateV: jsonnet.Index(nestedPreStateName0, stateV),
+				stringLiteralStateVS: jsonnet.AddMap(
+					jsonnet.Index(nestedPreStateName0, stateVS),
+					assignments,
+				),
+			},
+		}
+	}
+
+	return &state{
+		name: generateStateName(),
+		body: jsonnet.CallRange(
+			&jsonnet.Expr{
+				Kind:   jsonnet.EID,
+				IDName: preStateName,
+			},
+			vExpr,
+			&jsonnet.Expr{
+				Kind:           jsonnet.EFunction,
+				FunctionParams: []string{nestedPreStateName0, "i", "dot"},
+				FunctionBody: &jsonnet.Expr{
+					Kind: jsonnet.ELocal,
+					LocalBinds: []*jsonnet.LocalBind{
+						{Name: nestedPreStateName, Body: nestedPreStateValue},
+					},
+					LocalBody: nestedPostStateThen.body,
+				},
+			},
+			&jsonnet.Expr{
+				Kind:           jsonnet.EFunction,
+				FunctionParams: []string{nestedPreStateName},
+				FunctionBody:   nestedPostStateElse.body,
+			},
+		),
+	}, nil
 }
