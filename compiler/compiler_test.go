@@ -31,6 +31,7 @@ type T struct {
 	SB       []bool
 	Empty0   any
 	Empty3   any
+	PSI      *[]int
 }
 
 func (t T) Method0() string {
@@ -118,6 +119,13 @@ func (t T) MAddJsonnet() *jsonnet.Expr {
 	}
 }
 
+func newIntSlice(n ...int) *[]int {
+	p := new([]int)
+	*p = make([]int, len(n))
+	copy(*p, n)
+	return p
+}
+
 func TestCompileValidTemplates(t *testing.T) {
 	tVal := &T{
 		I:      17,
@@ -129,6 +137,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		SI:     []int{3, 4, 5},
 		SB:     []bool{true, false},
 		Empty3: []int{7, 8},
+		PSI:    newIntSlice(21, 22, 23),
 	}
 
 	// The following test table comes from Go compiler's test code:
@@ -208,8 +217,8 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"range $x $y SI", "{{range $x, $y := .SI}}<{{$x}}={{$y}}>{{end}}", tVal},
 		{"range $x MSIone", "{{range $x := .MSIone}}<{{$x}}>{{end}}", tVal},
 		{"range $x $y MSIone", "{{range $x, $y := .MSIone}}<{{$x}}={{$y}}>{{end}}", tVal},
-		//{"range $x PSI", "{{range $x := .PSI}}<{{$x}}>{{end}}", "<21><22><23>", tVal, true},
-		//{"declare in range", "{{range $x := .PSI}}<{{$foo:=$x}}{{$x}}>{{end}}", "<21><22><23>", tVal, true},
+		{"range $x PSI", "{{range $x := .PSI}}<{{$x}}>{{end}}", tVal},
+		{"declare in range", "{{range $x := .PSI}}<{{$foo:=$x}}{{$x}}>{{end}}", tVal},
 		//{"range count", `{{range $i, $x := count 5}}[{{$i}}]{{$x}}{{end}}`, "[0]a[1]b[2]c[3]d[4]e", tVal, true},
 		//{"range nil count", `{{range $i, $x := count 0}}{{else}}empty{{end}}`, "empty", tVal, true},
 		//{"range iter.Seq[int]", `{{range $i := .}}{{$i}}{{end}}`, "01", fVal1(2), true},
