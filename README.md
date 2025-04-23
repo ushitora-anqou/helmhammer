@@ -73,3 +73,8 @@ local
     vs: s2.vs,
 }
 ```
+
+## Limitations
+
+- no support for `break` and `continue`.
+- no support for channels.
