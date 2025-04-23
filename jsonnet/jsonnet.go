@@ -401,6 +401,18 @@ func CallRange(args ...*Expr) *Expr {
 	}
 }
 
+func CallField(args ...*Expr) *Expr {
+	return &Expr{
+		Kind: ECall,
+		CallFunc: &Expr{
+			Kind:          EIndexList,
+			IndexListHead: &Expr{Kind: EID, IDName: "helmhammer"},
+			IndexListTail: []string{"field"},
+		},
+		CallArgs: args,
+	}
+}
+
 func ConvertIntoJsonnet(data any) *Expr {
 	v := reflect.ValueOf(data)
 

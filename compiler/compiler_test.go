@@ -134,6 +134,18 @@ func (t T) MAddJsonnet() *jsonnet.Expr {
 	}
 }
 
+func (t T) GetU() *U {
+	return t.U
+}
+
+func (t T) GetUJsonnet() *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind:           jsonnet.EFunction,
+		FunctionParams: []string{"args"},
+		FunctionBody:   jsonnet.ConvertIntoJsonnet(t.U),
+	}
+}
+
 func newIntSlice(n ...int) *[]int {
 	p := new([]int)
 	*p = make([]int, len(n))
@@ -239,9 +251,9 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"method on chained var",
 			"{{range .MSIone}}{{if $.U.TrueFalse $.True}}{{$.U.TrueFalse $.True}}{{else}}WRONG{{end}}{{end}}",
 			tVal},
-		//	{"chained method",
-		//		"{{range .MSIone}}{{if $.GetU.TrueFalse $.True}}{{$.U.TrueFalse $.True}}{{else}}WRONG{{end}}{{end}}",
-		//		"true", tVal, true},
+		{"chained method",
+			"{{range .MSIone}}{{if $.GetU.TrueFalse $.True}}{{$.U.TrueFalse $.True}}{{else}}WRONG{{end}}{{end}}",
+			tVal},
 		//	{"chained method on variable",
 		//		"{{with $x := .}}{{with .SI}}{{$.GetU.TrueFalse $.True}}{{end}}{{end}}",
 		//		"true", tVal, true},

@@ -584,41 +584,30 @@ func compileField(
 	args []parse.Node,
 	final *jsonnet.Expr,
 ) (*jsonnet.Expr, error) {
-	if len(ident) >= 2 {
-		receiver = &jsonnet.Expr{
-			Kind:          jsonnet.EIndexList,
-			IndexListHead: receiver,
-			IndexListTail: ident[0 : len(ident)-1],
-		}
-	}
-
 	compiledArgs, err := compileArgs(scope, preStateName, args, final)
 	if err != nil {
 		return nil, err
 	}
 
-	return &jsonnet.Expr{
-		Kind: jsonnet.ECall,
-		CallFunc: &jsonnet.Expr{
-			Kind: jsonnet.EIndexList,
-			IndexListHead: &jsonnet.Expr{
-				Kind:   jsonnet.EID,
-				IDName: "helmhammer",
-			},
-			IndexListTail: []string{"field"},
-		},
-		CallArgs: []*jsonnet.Expr{
+	for i, id := range ident {
+		compiledArgs1 := []*jsonnet.Expr{}
+		if i == len(ident)-1 {
+			compiledArgs1 = compiledArgs
+		}
+		receiver = jsonnet.CallField(
 			receiver,
-			{
+			&jsonnet.Expr{
 				Kind:          jsonnet.EStringLiteral,
-				StringLiteral: ident[len(ident)-1],
+				StringLiteral: id,
 			},
-			{
+			&jsonnet.Expr{
 				Kind: jsonnet.EList,
-				List: compiledArgs,
+				List: compiledArgs1,
 			},
-		},
-	}, nil
+		)
+	}
+
+	return receiver, nil
 }
 
 func compileVariable(scope *scopeT, preStateName string, node *parse.VariableNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
