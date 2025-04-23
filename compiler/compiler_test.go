@@ -199,6 +199,11 @@ func TestCompileValidTemplates(t *testing.T) {
 			tpl:  `{{ if .a.b }}1{{ else }}0{{ end }}`,
 			data: map[string]map[string]any{"a": {"b": false}},
 		},
+		{
+			name: "nested if",
+			tpl:  `{{ $x := 1 }}{{ if true }}{{ $x = 2 }}{{ if true }}{{ $x = 3 }}{{ end }}{{ end }}{{ $x }}`,
+			data: nil,
+		},
 
 		{"empty", "", nil},
 		{"text", "some text", nil},
