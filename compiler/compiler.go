@@ -140,14 +140,17 @@ func withScope(
 		if v.defined {
 			continue
 		}
+
+		// propagate assignments to the parent scope
+		if err := parent.assignVariable(name); err != nil {
+			return nil, err
+		}
+
 		// { ..., NAME: sX.vs.NAME, ... }
 		assignedVars[&jsonnet.Expr{
 			Kind:          jsonnet.EStringLiteral,
 			StringLiteral: name,
 		}] = jsonnet.Index(nestedPostState.name, stateVS, name)
-		if err := parent.assignVariable(name); err != nil {
-			return nil, err
-		}
 	}
 
 	// local [nestedPostState.name] = [nestedPostState.body];
