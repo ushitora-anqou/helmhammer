@@ -275,7 +275,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"if string", "{{if `notempty`}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if emptyslice", "{{if .SIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if slice", "{{if .SI}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
-		//{"if emptymap", "{{if .MSIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
+		{"if emptymap", "{{if .MSIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if map", "{{if .MSI}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		//{"if map unset", "{{if .MXI.none}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		//{"if map not unset", "{{if not .MXI.none}}ZERO{{else}}NON-ZERO{{end}}", tVal},
