@@ -262,6 +262,28 @@ func TestCompileValidTemplates(t *testing.T) {
 		//	{"method on nil value from slice", "-{{range .}}{{.Method1 1234}}{{end}}-", "-1234-", tSliceOfNil, true},
 		//	{"method on typed nil interface value", "{{.NonEmptyInterfaceTypedNil.Method0}}", "M0", tVal, true},
 
+		// If.
+		{"if true", "{{if true}}TRUE{{end}}", tVal},
+		{"if false", "{{if false}}TRUE{{else}}FALSE{{end}}", tVal},
+		//{"if on typed nil interface value", "{{if .NonEmptyInterfaceTypedNil}}TRUE{{ end }}", tVal},
+		{"if 1", "{{if 1}}NON-ZERO{{else}}ZERO{{end}}", tVal},
+		{"if 0", "{{if 0}}NON-ZERO{{else}}ZERO{{end}}", tVal},
+		//{"if 1.5", "{{if 1.5}}NON-ZERO{{else}}ZERO{{end}}", tVal},
+		//{"if 0.0", "{{if .FloatZero}}NON-ZERO{{else}}ZERO{{end}}", tVal},
+		//{"if 1.5i", "{{if 1.5i}}NON-ZERO{{else}}ZERO{{end}}", tVal},
+		//{"if 0.0i", "{{if .ComplexZero}}NON-ZERO{{else}}ZERO{{end}}", tVal},
+		{"if emptystring", "{{if ``}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
+		{"if string", "{{if `notempty`}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
+		//{"if emptyslice", "{{if .SIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
+		{"if slice", "{{if .SI}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
+		//{"if emptymap", "{{if .MSIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
+		{"if map", "{{if .MSI}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
+		//{"if map unset", "{{if .MXI.none}}NON-ZERO{{else}}ZERO{{end}}", tVal},
+		//{"if map not unset", "{{if not .MXI.none}}ZERO{{else}}NON-ZERO{{end}}", tVal},
+		//{"if $x with $y int", "{{if $x := true}}{{with $y := .I}}{{$x}},{{$y}}{{end}}{{end}}", tVal},
+		//{"if $x with $x int", "{{if $x := true}}{{with $x := .I}}{{$x}},{{end}}{{$x}}{{end}}", tVal},
+		{"if else if", "{{if false}}FALSE{{else if true}}TRUE{{end}}", tVal},
+		//{"if else chain", "{{if eq 1 3}}1{{else if eq 2 3}}2{{else if eq 3 3}}3{{end}}", tVal},
 	}
 
 	for _, tt := range tests {
