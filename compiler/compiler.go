@@ -247,23 +247,12 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 	case *parse.ContinueNode:
 
 	case *parse.IfNode:
-		nestedPreState, exprThen, exprElse, err := compileWith(
-			scope, preStateName, node.Pipe, node.List, node.ElseList)
-		if err != nil {
-			return nil, err
-		}
+		return compileIfOrWith(
+			parse.NodeIf, scope, preStateName, node.Pipe, node.List, node.ElseList)
 
-		return &state{
-			name: generateStateName(),
-			body: nestedPreState.toLocal(
-				&jsonnet.Expr{
-					Kind:   jsonnet.EIf,
-					IfCond: jsonnet.CallIsTrue(jsonnet.Index(nestedPreState.name, stateV)),
-					IfThen: exprThen,
-					IfElse: exprElse,
-				},
-			),
-		}, nil
+	case *parse.WithNode:
+		return compileIfOrWith(
+			parse.NodeWith, scope, preStateName, node.Pipe, node.List, node.ElseList)
 
 	case *parse.ListNode:
 		states := []*state{}
@@ -301,8 +290,6 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 				jsonnet.Index(preStateName, stateVS),
 			),
 		}, nil
-
-	case *parse.WithNode:
 
 	case *parse.CommentNode:
 	case *parse.TemplateNode:
@@ -679,10 +666,10 @@ func compileRange(scope *scope, preStateName string, node *parse.RangeNode) (*st
 	}, nil
 }
 
-func compileWith(scope *scope, preStateName string, pipe *parse.PipeNode, list *parse.ListNode, elseList *parse.ListNode) (*state, *jsonnet.Expr, *jsonnet.Expr, error) {
+func compileIfOrWith(typ parse.NodeType, scope *scope, preStateName string, pipe *parse.PipeNode, list *parse.ListNode, elseList *parse.ListNode) (*state, error) {
 	vExpr, vsExpr, err := compilePipeline(scope, preStateName, pipe)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	nestedPreState := &state{
 		name: generateStateName(),
@@ -693,11 +680,24 @@ func compileWith(scope *scope, preStateName string, pipe *parse.PipeNode, list *
 		scope,
 		nestedPreState.name,
 		func(scope *scopeT) (*state, error) {
-			return compileNode(scope, nestedPreState.name, list)
+			state, err := compileNode(scope, nestedPreState.name, list)
+			if err != nil {
+				return nil, err
+			}
+			if typ == parse.NodeWith {
+				state.body = &jsonnet.Expr{
+					Kind: jsonnet.ELocal,
+					LocalBinds: []*jsonnet.LocalBind{
+						{Name: "dot", Body: jsonnet.Index(nestedPreState.name, stateV)},
+					},
+					LocalBody: state.body,
+				}
+			}
+			return state, nil
 		},
 	)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	var nestedPostStateElse *state
@@ -718,9 +718,19 @@ func compileWith(scope *scope, preStateName string, pipe *parse.PipeNode, list *
 			},
 		)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 	}
 
-	return nestedPreState, nestedPostStateThen.body, nestedPostStateElse.body, nil
+	return &state{
+		name: generateStateName(),
+		body: nestedPreState.toLocal(
+			&jsonnet.Expr{
+				Kind:   jsonnet.EIf,
+				IfCond: jsonnet.CallIsTrue(jsonnet.Index(nestedPreState.name, stateV)),
+				IfThen: nestedPostStateThen.body,
+				IfElse: nestedPostStateElse.body,
+			},
+		),
+	}, nil
 }
