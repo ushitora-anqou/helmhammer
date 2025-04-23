@@ -33,20 +33,21 @@ func (u U) TrueFalseJsonnet() *jsonnet.Expr {
 }
 
 type T struct {
-	I        int
-	U16      uint16
-	X        string
-	U        *U
-	MSI      map[string]int
-	MSIEmpty map[string]int
-	MSIone   map[string]int
-	SI       []int
-	SIEmpty  []int
-	SB       []bool
-	Empty0   any
-	Empty3   any
-	PSI      *[]int
-	True     bool
+	I         int
+	U16       uint16
+	X         string
+	U         *U
+	MSI       map[string]int
+	MSIEmpty  map[string]int
+	MSIone    map[string]int
+	SI        []int
+	SIEmpty   []int
+	SB        []bool
+	Empty0    any
+	Empty3    any
+	PSI       *[]int
+	True      bool
+	FloatZero float64
 }
 
 func (t T) Method0() string {
@@ -269,7 +270,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"if 1", "{{if 1}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		{"if 0", "{{if 0}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		{"if 1.5", "{{if 1.5}}NON-ZERO{{else}}ZERO{{end}}", tVal},
-		//{"if 0.0", "{{if .FloatZero}}NON-ZERO{{else}}ZERO{{end}}", tVal},
+		{"if 0.0", "{{if .FloatZero}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		//{"if 1.5i", "{{if 1.5i}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		//{"if 0.0i", "{{if .ComplexZero}}NON-ZERO{{else}}ZERO{{end}}", tVal},
 		{"if emptystring", "{{if ``}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
