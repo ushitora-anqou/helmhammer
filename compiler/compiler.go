@@ -247,46 +247,10 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 	case *parse.ContinueNode:
 
 	case *parse.IfNode:
-		vExpr, vsExpr, err := compilePipeline(scope, preStateName, node.Pipe)
+		nestedPreState, exprThen, exprElse, err := compileWith(
+			scope, preStateName, node.Pipe, node.List, node.ElseList)
 		if err != nil {
 			return nil, err
-		}
-		nestedPreState := &state{
-			name: generateStateName(),
-			body: stateBody(vExpr, vsExpr),
-		}
-
-		nestedPostStateThen, err := withScope(
-			scope,
-			nestedPreState.name,
-			func(scope *scopeT) (*state, error) {
-				return compileNode(scope, nestedPreState.name, node.List)
-			},
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		var nestedPostStateElse *state
-		if node.ElseList == nil {
-			nestedPostStateElse = &state{
-				name: generateStateName(),
-				body: &jsonnet.Expr{
-					Kind:   jsonnet.EID,
-					IDName: nestedPreState.name,
-				},
-			}
-		} else {
-			nestedPostStateElse, err = withScope(
-				scope,
-				nestedPreState.name,
-				func(scope *scopeT) (*state, error) {
-					return compileNode(scope, nestedPreState.name, node.ElseList)
-				},
-			)
-			if err != nil {
-				return nil, err
-			}
 		}
 
 		return &state{
@@ -295,8 +259,8 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 				&jsonnet.Expr{
 					Kind:   jsonnet.EIf,
 					IfCond: jsonnet.CallIsTrue(jsonnet.Index(nestedPreState.name, stateV)),
-					IfThen: nestedPostStateThen.body,
-					IfElse: nestedPostStateElse.body,
+					IfThen: exprThen,
+					IfElse: exprElse,
 				},
 			),
 		}, nil
@@ -338,9 +302,10 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			),
 		}, nil
 
+	case *parse.WithNode:
+
 	case *parse.CommentNode:
 	case *parse.TemplateNode:
-	case *parse.WithNode:
 	}
 	return nil, fmt.Errorf("unknown node: %v", reflect.ValueOf(node).Type())
 }
@@ -712,4 +677,50 @@ func compileRange(scope *scope, preStateName string, node *parse.RangeNode) (*st
 			},
 		),
 	}, nil
+}
+
+func compileWith(scope *scope, preStateName string, pipe *parse.PipeNode, list *parse.ListNode, elseList *parse.ListNode) (*state, *jsonnet.Expr, *jsonnet.Expr, error) {
+	vExpr, vsExpr, err := compilePipeline(scope, preStateName, pipe)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	nestedPreState := &state{
+		name: generateStateName(),
+		body: stateBody(vExpr, vsExpr),
+	}
+
+	nestedPostStateThen, err := withScope(
+		scope,
+		nestedPreState.name,
+		func(scope *scopeT) (*state, error) {
+			return compileNode(scope, nestedPreState.name, list)
+		},
+	)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	var nestedPostStateElse *state
+	if elseList == nil {
+		nestedPostStateElse = &state{
+			name: generateStateName(),
+			body: &jsonnet.Expr{
+				Kind:   jsonnet.EID,
+				IDName: nestedPreState.name,
+			},
+		}
+	} else {
+		nestedPostStateElse, err = withScope(
+			scope,
+			nestedPreState.name,
+			func(scope *scopeT) (*state, error) {
+				return compileNode(scope, nestedPreState.name, elseList)
+			},
+		)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	return nestedPreState, nestedPostStateThen.body, nestedPostStateElse.body, nil
 }
