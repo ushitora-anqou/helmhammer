@@ -244,7 +244,7 @@ func TestCompileValidTemplates(t *testing.T) {
 		//{"range uint", rangeTestInt, rangeTestData[uint](), uint(5), true},
 		//{"range uintptr", rangeTestInt, rangeTestData[uintptr](), uintptr(5), true},
 		//{"range uintptr(0)", `{{range $v := .}}{{print $v}}{{else}}empty{{end}}`, "empty", uintptr(0), true},
-		//{"range 5", `{{range $v := 5}}{{printf "%T%d" $v $v}}{{end}}`, rangeTestData[int](), nil, true},
+		{"range 5", `{{range $v := 5}}{{printf "%d" $v}}{{end}}`, nil},
 	}
 
 	for _, tt := range tests {

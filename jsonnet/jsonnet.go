@@ -278,6 +278,8 @@ local helmhammer = {
 
 	range(state, values, fthen, felse):
 		if values == null then felse(state)
+		else if std.isNumber(values) then
+			self.range(state, std.makeArray(values, function(x) x), fthen, felse)
 		else if std.isArray(values) then
 			if std.length(values) == 0 then felse(state)
 			else
@@ -316,7 +318,10 @@ local helmhammer = {
 						state: state,
 					},
 				).state
-		else error "range: not implemented"
+		else error "range: not implemented",
+
+	printf(args):
+		std.format(args[0], args[1:]),
 };
 %s
 `, e.String())

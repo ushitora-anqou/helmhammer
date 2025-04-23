@@ -51,6 +51,11 @@ const (
 	stateVS = "vs"
 )
 
+var (
+	stringLiteralStateV  = &jsonnet.Expr{Kind: jsonnet.EStringLiteral, StringLiteral: stateV}
+	stringLiteralStateVS = &jsonnet.Expr{Kind: jsonnet.EStringLiteral, StringLiteral: stateVS}
+)
+
 func generateStateName() stateName {
 	return fmt.Sprintf("s%d", genid())
 }
@@ -59,8 +64,8 @@ func stateBody(v *jsonnet.Expr, vs *jsonnet.Expr) *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind: jsonnet.EMap,
 		Map: map[*jsonnet.Expr]*jsonnet.Expr{
-			{Kind: jsonnet.EID, IDName: stateV}:  v,
-			{Kind: jsonnet.EID, IDName: stateVS}: vs,
+			stringLiteralStateV:  v,
+			stringLiteralStateVS: vs,
 		},
 	}
 }
@@ -155,19 +160,34 @@ func withScope(
 }
 
 func Compile(node parse.Node) (*jsonnet.Expr, error) {
+	preDefinedVariablesSrc := map[string]*jsonnet.Expr{
+		"$":      compileDot(),
+		"printf": jsonnet.Index("helmhammer", "printf"),
+	}
+
 	initialStateName := generateStateName()
 	postState, err := withScope(
 		nil,
 		initialStateName,
 		func(scope *scope) (*state, error) {
-			if err := scope.defineVariable("$"); err != nil {
-				return nil, err
+			for key := range preDefinedVariablesSrc {
+				if err := scope.defineVariable(key); err != nil {
+					return nil, err
+				}
 			}
 			return compileNode(scope, initialStateName, node)
 		},
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	preDefinedVariables := map[*jsonnet.Expr]*jsonnet.Expr{}
+	for key, value := range preDefinedVariablesSrc {
+		preDefinedVariables[&jsonnet.Expr{
+			Kind:          jsonnet.EStringLiteral,
+			StringLiteral: key,
+		}] = value
 	}
 
 	return &jsonnet.Expr{
@@ -189,9 +209,7 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 						jsonnet.EmptyString(),
 						&jsonnet.Expr{
 							Kind: jsonnet.EMap,
-							Map: map[*jsonnet.Expr]*jsonnet.Expr{
-								{Kind: jsonnet.EStringLiteral, StringLiteral: "$"}: compileDot(),
-							},
+							Map:  preDefinedVariables,
 						},
 					),
 				},
@@ -345,7 +363,6 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 			}
 		}
 
-		nestedPreStateName0 := generateStateName()
 		assignments := map[*jsonnet.Expr]*jsonnet.Expr{}
 		switch len(node.Pipe.Decl) {
 		case 0:
@@ -376,17 +393,19 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 		default:
 			return nil, fmt.Errorf("compileNode: not implemented: len(node.Pipe.Decl) > 2")
 		}
-		nestedPreStateValue := &jsonnet.Expr{Kind: jsonnet.EID, IDName: nestedPreStateName0}
+		nestedPreStateName0 := generateStateName()
+		nestedPreStateValue := jsonnet.Index(nestedPreStateName0, stateVS)
 		if len(assignments) > 0 {
-			nestedPreStateValue = jsonnet.AddMap(
-				nestedPreStateValue,
-				map[*jsonnet.Expr]*jsonnet.Expr{
-					{Kind: jsonnet.EStringLiteral, StringLiteral: stateVS}: {
-						Kind: jsonnet.EMap,
-						Map:  assignments,
-					},
+			nestedPreStateValue = &jsonnet.Expr{
+				Kind: jsonnet.EMap,
+				Map: map[*jsonnet.Expr]*jsonnet.Expr{
+					stringLiteralStateV: jsonnet.Index(nestedPreStateName0, stateV),
+					stringLiteralStateVS: jsonnet.AddMap(
+						jsonnet.Index(nestedPreStateName0, stateVS),
+						assignments,
+					),
 				},
-			)
+			}
 		}
 
 		return &state{
@@ -482,7 +501,9 @@ func compileCommand(scope *scope, preStateName string, cmd *parse.CommandNode, f
 		return compileField(scope, preStateName, compileDot(), node.Ident, cmd.Args, final)
 
 	case *parse.ChainNode:
+
 	case *parse.IdentifierNode:
+		return compileFunction(scope, preStateName, node, cmd.Args, final)
 
 	case *parse.PipeNode:
 		if len(node.Decl) != 0 {
@@ -571,20 +592,11 @@ func compileField(
 		}
 	}
 
-	compiledArgs := []*jsonnet.Expr{}
-	for i, arg := range args {
-		if i == 0 {
-			continue
-		}
-		compiledArg, err := compileArg(scope, preStateName, arg)
-		if err != nil {
-			return nil, err
-		}
-		compiledArgs = append(compiledArgs, compiledArg)
+	compiledArgs, err := compileArgs(scope, preStateName, args, final)
+	if err != nil {
+		return nil, err
 	}
-	if final != nil {
-		compiledArgs = append(compiledArgs, final)
-	}
+
 	return &jsonnet.Expr{
 		Kind: jsonnet.ECall,
 		CallFunc: &jsonnet.Expr{
@@ -619,6 +631,50 @@ func compileVariable(scope *scopeT, preStateName string, node *parse.VariableNod
 		return receiver, nil
 	}
 	return compileField(scope, preStateName, receiver, node.Ident[1:], args, final)
+}
+
+func compileFunction(scope *scope, preStateName string, node *parse.IdentifierNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
+	_, ok := scope.getVariable(node.Ident)
+	if !ok {
+		return nil, fmt.Errorf("function not found: %s", node.Ident)
+	}
+
+	function := jsonnet.Index(preStateName, stateVS, node.Ident)
+
+	compiledArgs, err := compileArgs(scope, preStateName, args, final)
+	if err != nil {
+		return nil, err
+	}
+
+	return &jsonnet.Expr{
+		Kind:     jsonnet.ECall,
+		CallFunc: function,
+		CallArgs: []*jsonnet.Expr{
+			{
+				Kind: jsonnet.EList,
+				List: compiledArgs,
+			},
+		},
+	}, nil
+}
+
+func compileArgs(scope *scope, preStateName string, args []parse.Node, final *jsonnet.Expr) ([]*jsonnet.Expr, error) {
+	compiledArgs := []*jsonnet.Expr{}
+	for i, arg := range args {
+		if i == 0 {
+			continue
+		}
+		compiledArg, err := compileArg(scope, preStateName, arg)
+		if err != nil {
+			return nil, err
+		}
+		compiledArgs = append(compiledArgs, compiledArg)
+	}
+	if final != nil {
+		compiledArgs = append(compiledArgs, final)
+	}
+
+	return compiledArgs, nil
 }
 
 func compileBool(node *parse.BoolNode) (*jsonnet.Expr, error) {
