@@ -204,6 +204,7 @@ func TestCompileValidTemplates(t *testing.T) {
 			tpl:  `{{ $x := 1 }}{{ if true }}{{ $x = 2 }}{{ if true }}{{ $x = 3 }}{{ end }}{{ end }}{{ $x }}`,
 			data: nil,
 		},
+		{"templates", `{{define "foo"}}{{.}}{{end}}{{template "foo" 3}}`, nil},
 
 		{"empty", "", nil},
 		{"text", "some text", nil},
