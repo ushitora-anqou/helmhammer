@@ -154,6 +154,54 @@ func newIntSlice(n ...int) *[]int {
 	return p
 }
 
+type compileTest struct {
+	name string
+	tpl  string
+	data any
+}
+
+func testCompile(t *testing.T, tmpl0 *template.Template, tests []compileTest) {
+	t.Helper()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpl, err := tmpl0.Clone()
+			require.NoError(t, err)
+			tmpl, err = tmpl.New(tt.name).Parse(tt.tpl)
+			require.NoError(t, err)
+			jsonnetExpr, err := compiler.Compile(tmpl)
+			require.NoError(t, err)
+			jsonnetExpr = &jsonnet.Expr{
+				Kind: jsonnet.ECall,
+				CallFunc: &jsonnet.Expr{
+					Kind:          jsonnet.EIndexList,
+					IndexListHead: jsonnetExpr,
+					IndexListTail: []string{tt.name},
+				},
+				CallArgs: []*jsonnet.Expr{jsonnet.ConvertIntoJsonnet(tt.data)},
+			}
+
+			log.Printf("%s", jsonnetExpr.StringWithPrologue())
+
+			sb := strings.Builder{}
+			tmpl.Option("missingkey=zero")
+			err = tmpl.ExecuteTemplate(&sb, tt.name, tt.data)
+			require.NoError(t, err)
+			expected := sb.String()
+
+			vm := gojsonnet.MakeVM()
+			vm.StringOutput = true
+			got, err := vm.EvaluateAnonymousSnippet(
+				"file.jsonnet",
+				jsonnetExpr.StringWithPrologue(),
+			)
+			require.NoError(t, err)
+			got = strings.Trim(got, "\n")
+			assert.Equal(t, expected, got)
+		})
+	}
+}
+
 func TestCompileValidTemplates(t *testing.T) {
 	tVal := &T{
 		I:      17,
@@ -171,11 +219,7 @@ func TestCompileValidTemplates(t *testing.T) {
 
 	// The following test table comes from Go compiler's test code:
 	// 	https://cs.opensource.google/go/go/+/refs/tags/go1.24.2:src/text/template/exec_test.go
-	tests := []struct {
-		name string
-		tpl  string
-		data any
-	}{
+	tests := []compileTest{
 		{
 			name: "if simple true",
 			tpl:  `hel{{ if true }}lo2{{ else }}lo3{{ end }}`,
@@ -308,40 +352,5 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"with else with chain", "{{with 0}}{{.}}{{else with false}}{{.}}{{else with `notempty`}}{{.}}{{end}}", tVal},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tpl0 := template.New("gotpl")
-			tpl, err := tpl0.New("file").Parse(tt.tpl)
-			require.NoError(t, err)
-			jsonnetExpr, err := compiler.Compile(tpl0)
-			require.NoError(t, err)
-			jsonnetExpr = &jsonnet.Expr{
-				Kind: jsonnet.ECall,
-				CallFunc: &jsonnet.Expr{
-					Kind:          jsonnet.EIndexList,
-					IndexListHead: jsonnetExpr,
-					IndexListTail: []string{"file"},
-				},
-				CallArgs: []*jsonnet.Expr{jsonnet.ConvertIntoJsonnet(tt.data)},
-			}
-
-			log.Printf("%s", jsonnetExpr.StringWithPrologue())
-
-			sb := strings.Builder{}
-			tpl.Option("missingkey=zero")
-			err = tpl.ExecuteTemplate(&sb, "file", tt.data)
-			require.NoError(t, err)
-			expected := sb.String()
-
-			vm := gojsonnet.MakeVM()
-			vm.StringOutput = true
-			got, err := vm.EvaluateAnonymousSnippet(
-				"file.jsonnet",
-				jsonnetExpr.StringWithPrologue(),
-			)
-			require.NoError(t, err)
-			got = strings.Trim(got, "\n")
-			assert.Equal(t, expected, got)
-		})
-	}
+	testCompile(t, template.New("gotpl"), tests)
 }
