@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"text/template"
 	"text/template/parse"
 
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
@@ -165,7 +166,25 @@ func withScope(
 	return &state{name: generateStateName(), body: &expr}, nil
 }
 
-func Compile(node parse.Node) (*jsonnet.Expr, error) {
+func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
+	compiledTemplates := map[*jsonnet.Expr]*jsonnet.Expr{}
+	for _, tmpl := range tmpl0.Templates() {
+		compiledTemplate, err := compile(tmpl0, tmpl.Root)
+		if err != nil {
+			return nil, err
+		}
+		compiledTemplates[&jsonnet.Expr{
+			Kind:          jsonnet.EStringLiteral,
+			StringLiteral: tmpl.Name(),
+		}] = compiledTemplate
+	}
+	return &jsonnet.Expr{
+		Kind: jsonnet.EMap,
+		Map:  compiledTemplates,
+	}, nil
+}
+
+func compile(tmpl *template.Template, node parse.Node) (*jsonnet.Expr, error) {
 	preDefinedVariablesSrc := map[string]*jsonnet.Expr{
 		"$":      compileDot(),
 		"printf": jsonnet.Index("helmhammer", "printf"),
@@ -181,7 +200,7 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 					return nil, err
 				}
 			}
-			return compileNode(scope, initialStateName, node)
+			return compileNode(tmpl, scope, initialStateName, node)
 		},
 	)
 	if err != nil {
@@ -198,17 +217,10 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 
 	return &jsonnet.Expr{
 		Kind:           jsonnet.EFunction,
-		FunctionParams: []string{"values"},
+		FunctionParams: []string{"dot"},
 		FunctionBody: &jsonnet.Expr{
 			Kind: jsonnet.ELocal,
 			LocalBinds: []*jsonnet.LocalBind{
-				{
-					Name: "dot",
-					Body: &jsonnet.Expr{
-						Kind:   jsonnet.EID,
-						IDName: "values",
-					},
-				},
 				{
 					Name: initialStateName,
 					Body: stateBody(
@@ -229,8 +241,7 @@ func Compile(node parse.Node) (*jsonnet.Expr, error) {
 	}, nil
 }
 
-func compileNode(scope *scope, preStateName string, node parse.Node) (*state, error) {
-
+func compileNode(tmpl *template.Template, scope *scope, preStateName string, node parse.Node) (*state, error) {
 	switch node := node.(type) {
 	case *parse.ActionNode:
 		postStateName := generateStateName()
@@ -254,18 +265,18 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 
 	case *parse.IfNode:
 		return compileIfOrWith(
-			parse.NodeIf, scope, preStateName, node.Pipe, node.List, node.ElseList)
+			tmpl, parse.NodeIf, scope, preStateName, node.Pipe, node.List, node.ElseList)
 
 	case *parse.WithNode:
 		return compileIfOrWith(
-			parse.NodeWith, scope, preStateName, node.Pipe, node.List, node.ElseList)
+			tmpl, parse.NodeWith, scope, preStateName, node.Pipe, node.List, node.ElseList)
 
 	case *parse.ListNode:
 		states := []*state{}
 		varsToBeJoined := []*jsonnet.Expr{}
 		stateName := preStateName
 		for _, node := range node.Nodes {
-			newState, err := compileNode(scope, stateName, node)
+			newState, err := compileNode(tmpl, scope, stateName, node)
 			if err != nil {
 				return nil, err
 			}
@@ -283,7 +294,7 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 		return &state{name: generateStateName(), body: body}, nil
 
 	case *parse.RangeNode:
-		return compileRange(scope, preStateName, node)
+		return compileRange(tmpl, scope, preStateName, node)
 
 	case *parse.TextNode:
 		return &state{
@@ -298,7 +309,26 @@ func compileNode(scope *scope, preStateName string, node parse.Node) (*state, er
 		}, nil
 
 	case *parse.CommentNode:
+
 	case *parse.TemplateNode:
+		if foundTmpl := tmpl.Lookup(node.Name); foundTmpl == nil {
+			return nil, fmt.Errorf("template not found: %s", node.Name)
+		}
+		vExpr, vsExpr, err := compilePipeline(scope, preStateName, node.Pipe)
+		if err != nil {
+			return nil, err
+		}
+		return &state{
+			name: generateStateName(),
+			body: stateBody(
+				&jsonnet.Expr{
+					Kind:     jsonnet.ECall,
+					CallFunc: jsonnet.Index("$", node.Name),
+					CallArgs: []*jsonnet.Expr{vExpr},
+				},
+				vsExpr,
+			),
+		}, nil
 	}
 	return nil, fmt.Errorf("unknown node: %v", reflect.ValueOf(node).Type())
 }
@@ -559,7 +589,7 @@ func compileNil() *jsonnet.Expr {
 	}
 }
 
-func compileRange(scope *scope, preStateName string, node *parse.RangeNode) (*state, error) {
+func compileRange(tmpl *template.Template, scope *scope, preStateName string, node *parse.RangeNode) (*state, error) {
 	vExpr, err := compilePipelineWithoutDecls(scope, preStateName, node.Pipe)
 	if err != nil {
 		return nil, err
@@ -573,7 +603,7 @@ func compileRange(scope *scope, preStateName string, node *parse.RangeNode) (*st
 			for _, variable := range node.Pipe.Decl {
 				scope.defineVariable(variable.Ident[0])
 			}
-			return compileNode(scope, nestedPreStateName, node.List)
+			return compileNode(tmpl, scope, nestedPreStateName, node.List)
 		},
 	)
 	if err != nil {
@@ -591,7 +621,7 @@ func compileRange(scope *scope, preStateName string, node *parse.RangeNode) (*st
 			scope,
 			nestedPreStateName,
 			func(scope *scopeT) (*state, error) {
-				return compileNode(scope, nestedPreStateName, node.ElseList)
+				return compileNode(tmpl, scope, nestedPreStateName, node.ElseList)
 			},
 		)
 		if err != nil {
@@ -672,7 +702,7 @@ func compileRange(scope *scope, preStateName string, node *parse.RangeNode) (*st
 	}, nil
 }
 
-func compileIfOrWith(typ parse.NodeType, scope *scope, preStateName string, pipe *parse.PipeNode, list *parse.ListNode, elseList *parse.ListNode) (*state, error) {
+func compileIfOrWith(tmpl *template.Template, typ parse.NodeType, scope *scope, preStateName string, pipe *parse.PipeNode, list *parse.ListNode, elseList *parse.ListNode) (*state, error) {
 	return withScope(
 		scope,
 		preStateName,
@@ -690,7 +720,7 @@ func compileIfOrWith(typ parse.NodeType, scope *scope, preStateName string, pipe
 				scope,
 				nestedPreState.name,
 				func(scope *scopeT) (*state, error) {
-					state, err := compileNode(scope, nestedPreState.name, list)
+					state, err := compileNode(tmpl, scope, nestedPreState.name, list)
 					if err != nil {
 						return nil, err
 					}
@@ -724,7 +754,7 @@ func compileIfOrWith(typ parse.NodeType, scope *scope, preStateName string, pipe
 					scope,
 					nestedPreState.name,
 					func(scope *scopeT) (*state, error) {
-						return compileNode(scope, nestedPreState.name, elseList)
+						return compileNode(tmpl, scope, nestedPreState.name, elseList)
 					},
 				)
 				if err != nil {
@@ -745,5 +775,4 @@ func compileIfOrWith(typ parse.NodeType, scope *scope, preStateName string, pipe
 			}, nil
 		},
 	)
-
 }

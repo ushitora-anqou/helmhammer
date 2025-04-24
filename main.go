@@ -36,13 +36,17 @@ func doMain() error {
 		return errors.New("failed to lookup")
 	}
 
-	out, err := compiler.Compile(t0.Root)
+	out, err := compiler.Compile(t)
 	if err != nil {
 		return fmt.Errorf("failed to walk: %w", err)
 	}
 	out = &jsonnet.Expr{
-		Kind:     jsonnet.ECall,
-		CallFunc: out,
+		Kind: jsonnet.ECall,
+		CallFunc: &jsonnet.Expr{
+			Kind:          jsonnet.EIndexList,
+			IndexListHead: out,
+			IndexListTail: []string{"file1"},
+		},
 		CallArgs: []*jsonnet.Expr{
 			{
 				Kind: jsonnet.ERaw,

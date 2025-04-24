@@ -312,11 +312,15 @@ func TestCompileValidTemplates(t *testing.T) {
 			tpl0 := template.New("gotpl")
 			tpl, err := tpl0.New("file").Parse(tt.tpl)
 			require.NoError(t, err)
-			jsonnetExpr, err := compiler.Compile(tpl.Root)
+			jsonnetExpr, err := compiler.Compile(tpl0)
 			require.NoError(t, err)
 			jsonnetExpr = &jsonnet.Expr{
-				Kind:     jsonnet.ECall,
-				CallFunc: jsonnetExpr,
+				Kind: jsonnet.ECall,
+				CallFunc: &jsonnet.Expr{
+					Kind:          jsonnet.EIndexList,
+					IndexListHead: jsonnetExpr,
+					IndexListTail: []string{"file"},
+				},
 				CallArgs: []*jsonnet.Expr{jsonnet.ConvertIntoJsonnet(tt.data)},
 			}
 
