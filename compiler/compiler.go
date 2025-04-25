@@ -168,7 +168,17 @@ func withScope(
 
 func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
 	globalVariables := map[string]*jsonnet.Expr{
-		"printf": jsonnet.Index("helmhammer", "printf"),
+		"printf":     jsonnet.Index("helmhammer", "printf"),
+		"include":    jsonnet.Index("helmhammer", "include"),
+		"nindent":    jsonnet.Index("helmhammer", "nindent"),
+		"not":        jsonnet.Index("helmhammer", "not"),
+		"quote":      jsonnet.Index("helmhammer", "quote"),
+		"default":    jsonnet.Index("helmhammer", "default"),
+		"replace":    jsonnet.Index("helmhammer", "replace"),
+		"trunc":      jsonnet.Index("helmhammer", "trunc"),
+		"toYaml":     jsonnet.Index("helmhammer", "toYaml"),
+		"trimSuffix": jsonnet.Index("helmhammer", "trimSuffix"),
+		"contains":   jsonnet.Index("helmhammer", "contains"),
 	}
 	initialStateName := generateStateName()
 
@@ -473,6 +483,13 @@ func compileArg(scope *scopeT, preStateName string, arg parse.Node) (*jsonnet.Ex
 		return compileVariable(scope, preStateName, node, nil, nil)
 
 	case *parse.PipeNode:
+		vExpr, _, err := compilePipeline(scope, preStateName, node)
+		if err != nil {
+			return nil, err
+		}
+		// FIXME: handle vsExpr
+		return vExpr, nil
+
 	case *parse.IdentifierNode:
 	case *parse.ChainNode:
 
@@ -486,7 +503,7 @@ func compileArg(scope *scopeT, preStateName string, arg parse.Node) (*jsonnet.Ex
 		return compileString(node)
 	}
 
-	return nil, fmt.Errorf("compile Arg: not implemented: %v", arg)
+	return nil, fmt.Errorf("compile Arg: not implemented: %v", reflect.TypeOf(arg))
 }
 
 func compileField(

@@ -35,7 +35,7 @@ func doMain() error {
 		return fmt.Errorf("failed to compile: %w", err)
 	}
 
-	print(expr.StringWithPrologue())
+	fmt.Print(expr.StringWithPrologue())
 
 	return nil
 }
