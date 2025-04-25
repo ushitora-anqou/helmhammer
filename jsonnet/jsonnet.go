@@ -173,7 +173,7 @@ func (e *Expr) String() string {
 		wrapParen(&b, e, e.IndexListHead)
 		for _, elm := range e.IndexListTail {
 			b.WriteString("[\"")
-			b.WriteString(elm) // FIXME escape
+			b.WriteString(escapeString(elm, false, true))
 			b.WriteString("\"]")
 		}
 		return b.String()
@@ -216,7 +216,7 @@ func (e *Expr) String() string {
 			cnt++
 			switch k.Kind {
 			case EID:
-				b.WriteString(k.IDName) // FIXME: escape
+				b.WriteString(k.IDName)
 				b.WriteString(": ")
 				b.WriteString(v.String())
 				if cnt != len(e.Map) {
@@ -224,7 +224,7 @@ func (e *Expr) String() string {
 				}
 			case EStringLiteral:
 				b.WriteString("\"")
-				b.WriteString(k.StringLiteral) // FIXME: escape
+				b.WriteString(escapeString(k.StringLiteral, false, true))
 				b.WriteString("\"")
 				b.WriteString(": ")
 				b.WriteString(v.String())
@@ -245,7 +245,7 @@ func (e *Expr) String() string {
 		return e.Raw
 
 	case EStringLiteral:
-		return fmt.Sprintf("\"%s\"", e.StringLiteral) // FIXME: escape
+		return fmt.Sprintf("\"%s\"", escapeString(e.StringLiteral, false, true))
 
 	case ETrue:
 		return "true"
@@ -516,4 +516,34 @@ func IdentityFunction() *Expr {
 		Kind: ERaw,
 		Raw:  `function(x) x`,
 	}
+}
+
+func escapeString(s string, escapeSingleQuote bool, escapeDoubleQuote bool) string {
+	var b strings.Builder
+	buf := []byte(s)
+	for _, ch := range buf {
+		switch ch {
+		case '\n':
+			b.WriteString("\\n")
+		case '\r':
+			b.WriteString("\\r")
+		case '\t':
+			b.WriteString("\\t")
+		case '"':
+			if escapeDoubleQuote {
+				b.WriteString("\\\"")
+			} else {
+				b.WriteByte(ch)
+			}
+		case '\'':
+			if escapeSingleQuote {
+				b.WriteString("\\'")
+			} else {
+				b.WriteByte(ch)
+			}
+		default:
+			b.WriteByte(ch)
+		}
+	}
+	return b.String()
 }
