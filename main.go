@@ -32,7 +32,7 @@ func doMain() error {
 
 	expr, err := compiler.Compile(tmpl)
 	if err != nil {
-		return fmt.Errorf("failed to compile")
+		return fmt.Errorf("failed to compile: %w", err)
 	}
 
 	print(expr.StringWithPrologue())

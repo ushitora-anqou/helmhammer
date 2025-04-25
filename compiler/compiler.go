@@ -167,9 +167,24 @@ func withScope(
 }
 
 func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
+	globalVariables := map[string]*jsonnet.Expr{
+		"printf": jsonnet.Index("helmhammer", "printf"),
+	}
+	initialStateName := generateStateName()
+
+	globalScope := &scope{
+		parent:    nil,
+		variables: map[string]*variable{},
+	}
+	for key := range globalVariables {
+		if err := globalScope.defineVariable(key); err != nil {
+			return nil, err
+		}
+	}
+
 	compiledTemplates := map[*jsonnet.Expr]*jsonnet.Expr{}
 	for _, tmpl := range tmpl0.Templates() {
-		compiledTemplate, err := compile(tmpl0, tmpl.Root)
+		compiledTemplate, err := compile(globalScope, initialStateName, tmpl0, tmpl.Root)
 		if err != nil {
 			return nil, err
 		}
@@ -178,23 +193,46 @@ func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
 			StringLiteral: tmpl.Name(),
 		}] = compiledTemplate
 	}
+
+	compiledGlobalVariables := map[*jsonnet.Expr]*jsonnet.Expr{}
+	for key, value := range globalVariables {
+		compiledGlobalVariables[&jsonnet.Expr{
+			Kind:          jsonnet.EStringLiteral,
+			StringLiteral: key,
+		}] = value
+	}
+
 	return &jsonnet.Expr{
-		Kind: jsonnet.EMap,
-		Map:  compiledTemplates,
+		Kind: jsonnet.ELocal,
+		LocalBinds: []*jsonnet.LocalBind{
+			{
+				Name: initialStateName,
+				Body: stateBody(
+					jsonnet.EmptyString(),
+					&jsonnet.Expr{
+						Kind: jsonnet.EMap,
+						Map:  compiledGlobalVariables,
+					},
+				),
+			},
+		},
+		LocalBody: &jsonnet.Expr{
+			Kind: jsonnet.EMap,
+			Map:  compiledTemplates,
+		},
 	}, nil
 }
 
-func compile(tmpl *template.Template, node parse.Node) (*jsonnet.Expr, error) {
+func compile(scope *scopeT, preStateName string, tmpl *template.Template, node parse.Node) (*jsonnet.Expr, error) {
 	preDefinedVariablesSrc := map[string]*jsonnet.Expr{
-		"$":      compileDot(),
-		"printf": jsonnet.Index("helmhammer", "printf"),
+		"$": compileDot(),
 	}
 
 	initialStateName := generateStateName()
 	postState, err := withScope(
-		nil,
+		scope,
 		initialStateName,
-		func(scope *scope) (*state, error) {
+		func(scope *scopeT) (*state, error) {
 			for key := range preDefinedVariablesSrc {
 				if err := scope.defineVariable(key); err != nil {
 					return nil, err
@@ -225,10 +263,7 @@ func compile(tmpl *template.Template, node parse.Node) (*jsonnet.Expr, error) {
 					Name: initialStateName,
 					Body: stateBody(
 						jsonnet.EmptyString(),
-						&jsonnet.Expr{
-							Kind: jsonnet.EMap,
-							Map:  preDefinedVariables,
-						},
+						jsonnet.AddMap(jsonnet.Index(preStateName, stateVS), preDefinedVariables),
 					),
 				},
 			},
@@ -244,19 +279,18 @@ func compile(tmpl *template.Template, node parse.Node) (*jsonnet.Expr, error) {
 func compileNode(tmpl *template.Template, scope *scope, preStateName string, node parse.Node) (*state, error) {
 	switch node := node.(type) {
 	case *parse.ActionNode:
-		postStateName := generateStateName()
 		vExpr, vsExpr, err := compilePipeline(scope, preStateName, node.Pipe)
 		if err != nil {
 			return nil, err
 		}
 		if len(node.Pipe.Decl) == 0 {
 			return &state{
-				name: postStateName,
+				name: generateStateName(),
 				body: stateBody(vExpr, vsExpr),
 			}, nil
 		}
 		return &state{
-			name: postStateName,
+			name: generateStateName(),
 			body: stateBody(jsonnet.EmptyString(), vsExpr),
 		}, nil
 
