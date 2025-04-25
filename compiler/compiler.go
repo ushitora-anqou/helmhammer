@@ -37,6 +37,19 @@ func newState(v *jsonnet.Expr, vs *jsonnet.Expr) *state {
 	}
 }
 
+func (s *state) toLocal(stateName stateName, localBody *jsonnet.Expr) *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind: jsonnet.ELocal,
+		LocalBinds: []*jsonnet.LocalBind{
+			{
+				Name: stateName,
+				Body: s.body,
+			},
+		},
+		LocalBody: localBody,
+	}
+}
+
 const (
 	stateV  = "v"
 	stateVS = "vs"
@@ -199,67 +212,53 @@ func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
 		}] = value
 	}
 
-	return &jsonnet.Expr{
-		Kind: jsonnet.ELocal,
-		LocalBinds: []*jsonnet.LocalBind{
-			{
-				Name: initialStateName,
-				Body: newState(
-					jsonnet.EmptyString(),
-					&jsonnet.Expr{
-						Kind: jsonnet.EMap,
-						Map:  compiledGlobalVariables,
-					},
-				).body,
-			},
-		},
-		LocalBody: &jsonnet.Expr{
+	initialState := newState(
+		jsonnet.EmptyString(),
+		&jsonnet.Expr{
 			Kind: jsonnet.EMap,
-			Map:  compiledTemplates,
+			Map:  compiledGlobalVariables,
 		},
-	}, nil
+	)
+
+	return initialState.toLocal(initialStateName, &jsonnet.Expr{
+		Kind: jsonnet.EMap,
+		Map:  compiledTemplates,
+	}), nil
 }
 
-func compile(scope *scopeT, preStateName stateName, tmpl *template.Template, node parse.Node) (*jsonnet.Expr, error) {
-	initialStateName := generateStateName()
+func compile(scope *scopeT, preStateName0 stateName, tmpl *template.Template, node parse.Node) (*jsonnet.Expr, error) {
+	preStateName := generateStateName()
 	postState, err := withScope(
 		scope,
-		initialStateName,
+		preStateName,
 		func(scope *scopeT) (*state, error) {
 			if err := scope.defineVariable("$"); err != nil {
 				return nil, err
 			}
-			return compileNode(tmpl, scope, initialStateName, node)
+			return compileNode(tmpl, scope, preStateName, node)
 		},
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	preState := newState(
+		jsonnet.EmptyString(),
+		jsonnet.AddMap(
+			jsonnet.Index(preStateName0, stateVS),
+			map[*jsonnet.Expr]*jsonnet.Expr{
+				{Kind: jsonnet.EStringLiteral, StringLiteral: "$"}: compileDot(),
+			}),
+	)
+
 	return &jsonnet.Expr{
 		Kind:           jsonnet.EFunction,
 		FunctionParams: []string{"dot"},
-		FunctionBody: &jsonnet.Expr{
-			Kind: jsonnet.ELocal,
-			LocalBinds: []*jsonnet.LocalBind{
-				{
-					Name: initialStateName,
-					Body: newState(
-						jsonnet.EmptyString(),
-						jsonnet.AddMap(
-							jsonnet.Index(preStateName, stateVS),
-							map[*jsonnet.Expr]*jsonnet.Expr{
-								{Kind: jsonnet.EStringLiteral, StringLiteral: "$"}: compileDot(),
-							}),
-					).body,
-				},
-			},
-			LocalBody: &jsonnet.Expr{
-				Kind:          jsonnet.EIndexList,
-				IndexListHead: postState.body,
-				IndexListTail: []string{stateV},
-			},
-		},
+		FunctionBody: preState.toLocal(preStateName, &jsonnet.Expr{
+			Kind:          jsonnet.EIndexList,
+			IndexListHead: postState.body,
+			IndexListTail: []string{stateV},
+		}),
 	}, nil
 }
 
@@ -307,13 +306,7 @@ func compileNode(tmpl *template.Template, scope *scope, preStateName stateName, 
 			jsonnet.Index(stateName, stateVS),
 		).body
 		for i := len(states) - 1; i >= 0; i-- {
-			body = &jsonnet.Expr{
-				Kind: jsonnet.ELocal,
-				LocalBinds: []*jsonnet.LocalBind{
-					{Name: stateNames[i], Body: states[i].body},
-				},
-				LocalBody: body,
-			}
+			body = states[i].toLocal(stateNames[i], body)
 		}
 		return &state{body: body}, nil
 
@@ -783,18 +776,12 @@ func compileIfOrWith(tmpl *template.Template, typ parse.NodeType, scope *scope, 
 			}
 
 			return &state{
-				body: &jsonnet.Expr{
-					Kind: jsonnet.ELocal,
-					LocalBinds: []*jsonnet.LocalBind{
-						{Name: nestedPreStateName, Body: nestedPreState.body},
-					},
-					LocalBody: &jsonnet.Expr{
-						Kind:   jsonnet.EIf,
-						IfCond: jsonnet.CallIsTrue(jsonnet.Index(nestedPreStateName, stateV)),
-						IfThen: nestedPostStateThen.body,
-						IfElse: nestedPostStateElse.body,
-					},
-				},
+				body: nestedPreState.toLocal(nestedPreStateName, &jsonnet.Expr{
+					Kind:   jsonnet.EIf,
+					IfCond: jsonnet.CallIsTrue(jsonnet.Index(nestedPreStateName, stateV)),
+					IfThen: nestedPostStateThen.body,
+					IfElse: nestedPostStateElse.body,
+				}),
 			}, nil
 		},
 	)
