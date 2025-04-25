@@ -218,7 +218,7 @@ func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
 	}, nil
 }
 
-func compile(scope *scopeT, preStateName string, tmpl *template.Template, node parse.Node) (*jsonnet.Expr, error) {
+func compile(scope *scopeT, preStateName stateName, tmpl *template.Template, node parse.Node) (*jsonnet.Expr, error) {
 	preDefinedVariablesSrc := map[string]*jsonnet.Expr{
 		"$": compileDot(),
 	}
@@ -271,7 +271,7 @@ func compile(scope *scopeT, preStateName string, tmpl *template.Template, node p
 	}, nil
 }
 
-func compileNode(tmpl *template.Template, scope *scope, preStateName string, node parse.Node) (*state, error) {
+func compileNode(tmpl *template.Template, scope *scope, preStateName stateName, node parse.Node) (*state, error) {
 	switch node := node.(type) {
 	case *parse.ActionNode:
 		vExpr, vsExpr, err := compilePipeline(scope, preStateName, node.Pipe)
@@ -367,7 +367,7 @@ func compileNode(tmpl *template.Template, scope *scope, preStateName string, nod
 	return nil, fmt.Errorf("unknown node: %v", reflect.ValueOf(node).Type())
 }
 
-func compilePipelineWithoutDecls(scope *scope, preStateName string, pipe *parse.PipeNode) (*jsonnet.Expr, error) {
+func compilePipelineWithoutDecls(scope *scope, preStateName stateName, pipe *parse.PipeNode) (*jsonnet.Expr, error) {
 	if pipe == nil {
 		return nil, errors.New("pipe is nil")
 	}
@@ -384,7 +384,7 @@ func compilePipelineWithoutDecls(scope *scope, preStateName string, pipe *parse.
 	return expr, nil
 }
 
-func compilePipeline(scope *scope, preStateName string, pipe *parse.PipeNode) (*jsonnet.Expr, *jsonnet.Expr, error) {
+func compilePipeline(scope *scope, preStateName stateName, pipe *parse.PipeNode) (*jsonnet.Expr, *jsonnet.Expr, error) {
 	expr, err := compilePipelineWithoutDecls(scope, preStateName, pipe)
 	if err != nil {
 		return nil, nil, err
@@ -408,7 +408,7 @@ func compilePipeline(scope *scope, preStateName string, pipe *parse.PipeNode) (*
 	return expr, vsExpr, nil
 }
 
-func compileCommand(scope *scope, preStateName string, cmd *parse.CommandNode, final *jsonnet.Expr) (*jsonnet.Expr, error) {
+func compileCommand(scope *scope, preStateName stateName, cmd *parse.CommandNode, final *jsonnet.Expr) (*jsonnet.Expr, error) {
 	switch node := cmd.Args[0].(type) {
 	case *parse.FieldNode:
 		return compileField(scope, preStateName, compileDot(), node.Ident, cmd.Args, final)
@@ -458,7 +458,7 @@ func isHexInt(s string) bool {
 		!strings.ContainsAny(s, "pP")
 }
 
-func compileArg(scope *scopeT, preStateName string, arg parse.Node) (*jsonnet.Expr, error) {
+func compileArg(scope *scopeT, preStateName stateName, arg parse.Node) (*jsonnet.Expr, error) {
 	switch node := arg.(type) {
 	case *parse.DotNode:
 		return compileDot(), nil
@@ -498,7 +498,7 @@ func compileArg(scope *scopeT, preStateName string, arg parse.Node) (*jsonnet.Ex
 
 func compileField(
 	scope *scopeT,
-	preStateName string,
+	preStateName stateName,
 	receiver *jsonnet.Expr,
 	ident []string,
 	args []parse.Node,
@@ -530,7 +530,7 @@ func compileField(
 	return receiver, nil
 }
 
-func compileVariable(scope *scopeT, preStateName string, node *parse.VariableNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
+func compileVariable(scope *scopeT, preStateName stateName, node *parse.VariableNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
 	_, ok := scope.getVariable(node.Ident[0])
 	if !ok {
 		return nil, fmt.Errorf("variable not found: %s", node.Ident[0])
@@ -542,7 +542,7 @@ func compileVariable(scope *scopeT, preStateName string, node *parse.VariableNod
 	return compileField(scope, preStateName, receiver, node.Ident[1:], args, final)
 }
 
-func compileFunction(scope *scope, preStateName string, node *parse.IdentifierNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
+func compileFunction(scope *scope, preStateName stateName, node *parse.IdentifierNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
 	_, ok := scope.getVariable(node.Ident)
 	if !ok {
 		return nil, fmt.Errorf("function not found: %s", node.Ident)
@@ -567,7 +567,7 @@ func compileFunction(scope *scope, preStateName string, node *parse.IdentifierNo
 	}, nil
 }
 
-func compileArgs(scope *scope, preStateName string, args []parse.Node, final *jsonnet.Expr) ([]*jsonnet.Expr, error) {
+func compileArgs(scope *scope, preStateName stateName, args []parse.Node, final *jsonnet.Expr) ([]*jsonnet.Expr, error) {
 	compiledArgs := []*jsonnet.Expr{}
 	for i, arg := range args {
 		if i == 0 {
@@ -630,7 +630,7 @@ func compileNil() *jsonnet.Expr {
 	}
 }
 
-func compileRange(tmpl *template.Template, scope *scope, preStateName string, node *parse.RangeNode) (*state, error) {
+func compileRange(tmpl *template.Template, scope *scope, preStateName stateName, node *parse.RangeNode) (*state, error) {
 	vExpr, err := compilePipelineWithoutDecls(scope, preStateName, node.Pipe)
 	if err != nil {
 		return nil, err
@@ -741,7 +741,7 @@ func compileRange(tmpl *template.Template, scope *scope, preStateName string, no
 	}, nil
 }
 
-func compileIfOrWith(tmpl *template.Template, typ parse.NodeType, scope *scope, preStateName string, pipe *parse.PipeNode, list *parse.ListNode, elseList *parse.ListNode) (*state, error) {
+func compileIfOrWith(tmpl *template.Template, typ parse.NodeType, scope *scope, preStateName stateName, pipe *parse.PipeNode, list *parse.ListNode, elseList *parse.ListNode) (*state, error) {
 	return withScope(
 		scope,
 		preStateName,
