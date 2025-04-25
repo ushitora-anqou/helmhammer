@@ -91,6 +91,7 @@ func (e *envT) withPreState(name string) *envT {
 
 func withScope(
 	env *envT,
+	nestedPreStateName stateName,
 	nested func(*envT) (*state, error),
 ) (*state, error) {
 	newEnv := newEnv(
@@ -99,7 +100,7 @@ func withScope(
 			parent:    env.scope,
 			variables: make(map[string]*variable),
 		},
-		env.preStateName,
+		nestedPreStateName,
 	)
 	nestedPostState, err := nested(newEnv)
 	if err != nil {
@@ -137,7 +138,7 @@ func withScope(
 		},
 		LocalBody: newState(
 			jsonnet.Index(nestedPostStateName, stateV),
-			jsonnet.AddMap(jsonnet.Index(env.preStateName, stateVS), assignedVars),
+			jsonnet.AddMap(jsonnet.Index(nestedPreStateName, stateVS), assignedVars),
 		).body,
 	}
 
@@ -210,7 +211,8 @@ func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
 func compile(env *envT, node parse.Node) (*jsonnet.Expr, error) {
 	preStateName := generateStateName()
 	postState, err := withScope(
-		env.withPreState(preStateName),
+		env,
+		preStateName,
 		func(env *envT) (*state, error) {
 			if err := env.defineVariable("$"); err != nil {
 				return nil, err
@@ -592,7 +594,8 @@ func compileRange(env *envT, node *parse.RangeNode) (*state, error) {
 	nestedPreStateName := generateStateName()
 
 	nestedPostStateThen, err := withScope(
-		env.withPreState(nestedPreStateName),
+		env,
+		nestedPreStateName,
 		func(env *envT) (*state, error) {
 			for _, variable := range node.Pipe.Decl {
 				env.defineVariable(variable.Ident[0])
@@ -611,7 +614,8 @@ func compileRange(env *envT, node *parse.RangeNode) (*state, error) {
 		}
 	} else {
 		nestedPostStateElse, err = withScope(
-			env.withPreState(nestedPreStateName),
+			env,
+			nestedPreStateName,
 			func(env *envT) (*state, error) {
 				return compileNode(env, node.ElseList)
 			},
@@ -696,6 +700,7 @@ func compileRange(env *envT, node *parse.RangeNode) (*state, error) {
 func compileIfOrWith(env *envT, typ parse.NodeType, pipe *parse.PipeNode, list *parse.ListNode, elseList *parse.ListNode) (*state, error) {
 	return withScope(
 		env,
+		env.preStateName,
 		func(env *envT) (*state, error) {
 			vExpr, vsExpr, err := compilePipeline(env, pipe)
 			if err != nil {
@@ -705,7 +710,8 @@ func compileIfOrWith(env *envT, typ parse.NodeType, pipe *parse.PipeNode, list *
 			nestedPreStateName := generateStateName()
 
 			nestedPostStateThen, err := withScope(
-				env.withPreState(nestedPreStateName),
+				env,
+				nestedPreStateName,
 				func(env *envT) (*state, error) {
 					state, err := compileNode(env, list)
 					if err != nil {
@@ -737,7 +743,8 @@ func compileIfOrWith(env *envT, typ parse.NodeType, pipe *parse.PipeNode, list *
 				}
 			} else {
 				nestedPostStateElse, err = withScope(
-					env.withPreState(nestedPreStateName),
+					env,
+					nestedPreStateName,
 					func(env *envT) (*state, error) {
 						return compileNode(env, elseList)
 					},
