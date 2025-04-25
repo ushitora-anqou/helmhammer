@@ -25,7 +25,17 @@ type state struct {
 	body *jsonnet.Expr
 }
 
-type stateName = string
+func newState(v *jsonnet.Expr, vs *jsonnet.Expr) *state {
+	return &state{
+		body: &jsonnet.Expr{
+			Kind: jsonnet.EMap,
+			Map: map[*jsonnet.Expr]*jsonnet.Expr{
+				stringLiteralStateV:  v,
+				stringLiteralStateVS: vs,
+			},
+		},
+	}
+}
 
 const (
 	stateV  = "v"
@@ -37,18 +47,10 @@ var (
 	stringLiteralStateVS = &jsonnet.Expr{Kind: jsonnet.EStringLiteral, StringLiteral: stateVS}
 )
 
+type stateName = string
+
 func generateStateName() stateName {
 	return fmt.Sprintf("s%d", genid())
-}
-
-func stateBody(v *jsonnet.Expr, vs *jsonnet.Expr) *jsonnet.Expr {
-	return &jsonnet.Expr{
-		Kind: jsonnet.EMap,
-		Map: map[*jsonnet.Expr]*jsonnet.Expr{
-			stringLiteralStateV:  v,
-			stringLiteralStateVS: vs,
-		},
-	}
 }
 
 type scope struct {
@@ -142,10 +144,10 @@ func withScope(
 		LocalBinds: []*jsonnet.LocalBind{
 			{Name: nestedPostStateName, Body: nestedPostState.body},
 		},
-		LocalBody: stateBody(
+		LocalBody: newState(
 			jsonnet.Index(nestedPostStateName, stateV),
 			jsonnet.AddMap(jsonnet.Index(preStateName, stateVS), assignedVars),
-		),
+		).body,
 	}
 
 	return &state{body: expr}, nil
@@ -202,13 +204,13 @@ func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
 		LocalBinds: []*jsonnet.LocalBind{
 			{
 				Name: initialStateName,
-				Body: stateBody(
+				Body: newState(
 					jsonnet.EmptyString(),
 					&jsonnet.Expr{
 						Kind: jsonnet.EMap,
 						Map:  compiledGlobalVariables,
 					},
-				),
+				).body,
 			},
 		},
 		LocalBody: &jsonnet.Expr{
@@ -256,10 +258,10 @@ func compile(scope *scopeT, preStateName stateName, tmpl *template.Template, nod
 			LocalBinds: []*jsonnet.LocalBind{
 				{
 					Name: initialStateName,
-					Body: stateBody(
+					Body: newState(
 						jsonnet.EmptyString(),
 						jsonnet.AddMap(jsonnet.Index(preStateName, stateVS), preDefinedVariables),
-					),
+					).body,
 				},
 			},
 			LocalBody: &jsonnet.Expr{
@@ -279,13 +281,9 @@ func compileNode(tmpl *template.Template, scope *scope, preStateName stateName, 
 			return nil, err
 		}
 		if len(node.Pipe.Decl) == 0 {
-			return &state{
-				body: stateBody(vExpr, vsExpr),
-			}, nil
+			return newState(vExpr, vsExpr), nil
 		}
-		return &state{
-			body: stateBody(jsonnet.EmptyString(), vsExpr),
-		}, nil
+		return newState(jsonnet.EmptyString(), vsExpr), nil
 
 	case *parse.BreakNode:
 	case *parse.ContinueNode:
@@ -314,10 +312,10 @@ func compileNode(tmpl *template.Template, scope *scope, preStateName stateName, 
 			varsToBeJoined = append(varsToBeJoined, jsonnet.Index(newStateName, stateV))
 			stateName = newStateName
 		}
-		body := stateBody(
+		body := newState(
 			jsonnet.CallJoin(varsToBeJoined),
 			jsonnet.Index(stateName, stateVS),
-		)
+		).body
 		for i := len(states) - 1; i >= 0; i-- {
 			body = &jsonnet.Expr{
 				Kind: jsonnet.ELocal,
@@ -333,15 +331,13 @@ func compileNode(tmpl *template.Template, scope *scope, preStateName stateName, 
 		return compileRange(tmpl, scope, preStateName, node)
 
 	case *parse.TextNode:
-		return &state{
-			body: stateBody(
-				&jsonnet.Expr{
-					Kind:          jsonnet.EStringLiteral,
-					StringLiteral: string(node.Text),
-				},
-				jsonnet.Index(preStateName, stateVS),
-			),
-		}, nil
+		return newState(
+			&jsonnet.Expr{
+				Kind:          jsonnet.EStringLiteral,
+				StringLiteral: string(node.Text),
+			},
+			jsonnet.Index(preStateName, stateVS),
+		), nil
 
 	case *parse.CommentNode:
 
@@ -353,16 +349,14 @@ func compileNode(tmpl *template.Template, scope *scope, preStateName stateName, 
 		if err != nil {
 			return nil, err
 		}
-		return &state{
-			body: stateBody(
-				&jsonnet.Expr{
-					Kind:     jsonnet.ECall,
-					CallFunc: jsonnet.Index("$", node.Name),
-					CallArgs: []*jsonnet.Expr{vExpr},
-				},
-				vsExpr,
-			),
-		}, nil
+		return newState(
+			&jsonnet.Expr{
+				Kind:     jsonnet.ECall,
+				CallFunc: jsonnet.Index("$", node.Name),
+				CallArgs: []*jsonnet.Expr{vExpr},
+			},
+			vsExpr,
+		), nil
 	}
 	return nil, fmt.Errorf("unknown node: %v", reflect.ValueOf(node).Type())
 }
@@ -750,9 +744,7 @@ func compileIfOrWith(tmpl *template.Template, typ parse.NodeType, scope *scope, 
 			if err != nil {
 				return nil, err
 			}
-			nestedPreState := &state{
-				body: stateBody(vExpr, vsExpr),
-			}
+			nestedPreState := newState(vExpr, vsExpr)
 			nestedPreStateName := generateStateName()
 
 			nestedPostStateThen, err := withScope(
