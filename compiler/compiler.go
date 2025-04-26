@@ -14,7 +14,6 @@ import (
 func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
 	globalVariables := map[string]*jsonnet.Expr{
 		"printf":     jsonnet.Index("helmhammer", "printf"),
-		"include":    jsonnet.Index("helmhammer", "include"),
 		"nindent":    jsonnet.Index("helmhammer", "nindent"),
 		"not":        jsonnet.Index("helmhammer", "not"),
 		"quote":      jsonnet.Index("helmhammer", "quote"),
@@ -353,6 +352,13 @@ func compileField(
 }
 
 func compileVariable(env *envT, node *parse.VariableNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
+	if node.Ident[0] == "include" {
+		if len(node.Ident) != 1 {
+			return nil, errors.New("include is not a map")
+		}
+		return compileInclude(), nil
+	}
+
 	_, ok := env.getVariable(node.Ident[0])
 	if !ok {
 		return nil, fmt.Errorf("variable not found: %s", node.Ident[0])
@@ -365,12 +371,16 @@ func compileVariable(env *envT, node *parse.VariableNode, args []parse.Node, fin
 }
 
 func compileFunction(env *envT, node *parse.IdentifierNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
-	_, ok := env.getVariable(node.Ident)
-	if !ok {
-		return nil, fmt.Errorf("function not found: %s", node.Ident)
+	var function *jsonnet.Expr
+	if node.Ident == "include" {
+		function = compileInclude()
+	} else {
+		_, ok := env.getVariable(node.Ident)
+		if !ok {
+			return nil, fmt.Errorf("function not found: %s", node.Ident)
+		}
+		function = jsonnet.Index(env.preStateName, stateVS, node.Ident)
 	}
-
-	function := jsonnet.Index(env.preStateName, stateVS, node.Ident)
 
 	compiledArgs, err := compileArgs(env, args, final)
 	if err != nil {
@@ -630,4 +640,11 @@ func compileIfOrWith(env *envT, typ parse.NodeType, pipe *parse.PipeNode, list *
 			}, nil
 		},
 	)
+}
+
+func compileInclude() *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind: jsonnet.ERaw,
+		Raw:  `helmhammer.include($)`,
+	}
 }

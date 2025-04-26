@@ -323,6 +323,10 @@ local helmhammer = {
 
 	printf(args):
 		std.format(args[0], args[1:]),
+
+	include(root):
+		function(args)
+			root[args[0]](args[1]),
 };
 %s
 `, e.String())
