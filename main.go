@@ -8,7 +8,6 @@ import (
 
 	"github.com/ushitora-anqou/helmhammer/compiler"
 	"github.com/ushitora-anqou/helmhammer/helm"
-	"github.com/ushitora-anqou/helmhammer/jsonnet"
 )
 
 var file1 = `{{ $x := 1 }}{{ if true }}{{ $x = 2 }}{{ if true }}{{ $x = 3 }}{{ end }}{{ end }}{{ $x }}`
@@ -31,15 +30,10 @@ func doMain() error {
 		return fmt.Errorf("failed to load chart: %w", err)
 	}
 
-	expr, err := compiler.Compile(chart.Template)
+	expr, err := compiler.CompileChart(chart)
 	if err != nil {
-		return fmt.Errorf("failed to compile: %w", err)
+		return fmt.Errorf("faield to compile chart: %w", err)
 	}
-
-	expr = jsonnet.CallChartMain(
-		chart.Name, chart.Version, chart.AppVersion,
-		chart.Name, "Helm",
-		chart.RenderedKeys, jsonnet.ConvertIntoJsonnet(chart.Values), expr)
 
 	fmt.Print(expr.StringWithPrologue())
 

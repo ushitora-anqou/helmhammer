@@ -8,8 +8,24 @@ import (
 	"text/template"
 	"text/template/parse"
 
+	"github.com/ushitora-anqou/helmhammer/helm"
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
 )
+
+func CompileChart(chart *helm.Chart) (*jsonnet.Expr, error) {
+	expr, err := Compile(chart.Template)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile: %w", err)
+	}
+
+	expr = jsonnet.CallChartMain(
+		chart.Name, chart.Version, chart.AppVersion,
+		chart.Name, "Helm",
+		chart.RenderedKeys, jsonnet.ConvertIntoJsonnet(chart.Values), expr,
+	)
+
+	return expr, nil
+}
 
 func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
 	globalVariables := map[string]*jsonnet.Expr{
