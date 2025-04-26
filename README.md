@@ -74,7 +74,10 @@ local
 }
 ```
 
-## Limitations
+## Limitations by design
 
 - no support for `break` and `continue`.
 - no support for channels.
+- no support for `lookup` function in Helm.
+- no support for `tpl` function in Helm.
+  - It seems this limitation will not be accepted by most of existing Helm Charts.
