@@ -611,12 +611,10 @@ func compileIfOrWith(env *envT, typ parse.NodeType, pipe *parse.PipeNode, list *
 
 			var nestedPostStateElse *state
 			if elseList == nil {
-				nestedPostStateElse = &state{
-					body: &jsonnet.Expr{
-						Kind:   jsonnet.EID,
-						IDName: nestedPreStateName,
-					},
-				}
+				nestedPostStateElse = newState(
+					jsonnet.EmptyString(),
+					jsonnet.Index(nestedPreStateName, stateVS),
+				)
 			} else {
 				nestedPostStateElse, err = withScope(
 					env,

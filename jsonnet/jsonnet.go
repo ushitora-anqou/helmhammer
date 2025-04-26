@@ -327,6 +327,62 @@ local helmhammer = {
 	include(root):
 		function(args)
 			root[args[0]](args[1]),
+
+	contains(args):
+		std.findSubstr(args[0], args[1]) != [],
+
+	default(args):
+		local v = args[0];
+		if
+			v == null ||
+			std.isNumber(v) && v == 0 ||
+			std.isString(v) && v == "" ||
+			std.isArray(v) && v == [] ||
+			std.isObject(v) && v == {} ||
+			std.isBoolean(v) && v == false
+		then
+			args[1]
+		else
+			v,
+
+	trimSuffix(args):
+		if std.endsWith(args[1], args[0]) then
+			std.substr(args[1], 0, std.length(args[1]) - std.length(args[0]))
+		else
+			args[1],
+
+	trunc(args):
+		if args[0] >= 0 then
+			std.substr(args[1], 0, args[0])
+		else
+			std.substr(args[1], std.length(args[1]) + args[0], -args[0]),
+
+	nindent(args):
+		"\n" + $.indent(args),
+
+	indent(args):
+		std.join(
+			"\n",
+			std.map(
+				function(x) std.repeat(' ', args[0]) + x,
+				std.split(args[1], "\n"),
+			),
+		),
+
+	replace(args):
+		std.strReplace(args[2], args[0], args[1]),
+
+	quote(args):
+		std.format('"%%s"', std.strReplace(args[0], '"', '\\"')),
+
+	squote(args):
+		std.format("'%%s'", std.strReplace(args[0], "'", "\\'")),
+
+	not(args):
+		!args[0],
+
+	toYaml(args):
+		std.manifestYamlDoc(args[0], quote_keys=false),
 };
 %s
 `, e.String())
