@@ -136,6 +136,6 @@ local helmhammer = {
             Service: 'Helm',
           },
         }));
-      std.map(aux, keys),
+      std.filter(function(x) x != null, std.map(aux, keys)),
 };
 ''
