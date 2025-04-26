@@ -131,7 +131,7 @@ local helmhammer = {
     defaultValues,
     files,
   ):
-    function(values)
+    function(values={})
       local aux(key) =
         std.parseYaml(files[key]({
           Values: std.mergePatch(defaultValues, values),
