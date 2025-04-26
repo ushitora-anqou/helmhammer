@@ -37,6 +37,8 @@ func doMain() error {
 	}
 
 	expr = jsonnet.CallChartMain(
+		chart.Name, chart.Version, chart.AppVersion,
+		chart.Name, "Helm",
 		chart.RenderedKeys, jsonnet.ConvertIntoJsonnet(chart.Values), expr)
 
 	fmt.Print(expr.StringWithPrologue())

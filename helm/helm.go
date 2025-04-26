@@ -15,6 +15,9 @@ type Chart struct {
 	Template     *template.Template
 	RenderedKeys []string
 	Values       map[string]any
+	Name         string
+	Version      string
+	AppVersion   string
 }
 
 func Load(chartDir string) (*Chart, error) {
@@ -49,6 +52,9 @@ func Load(chartDir string) (*Chart, error) {
 		Template:     tmpls,
 		RenderedKeys: keys,
 		Values:       chart.Values,
+		Name:         chart.Metadata.Name,
+		Version:      chart.Metadata.Version,
+		AppVersion:   chart.Metadata.AppVersion,
 	}, nil
 }
 

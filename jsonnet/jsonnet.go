@@ -488,7 +488,10 @@ func escapeString(s string, escapeSingleQuote bool, escapeDoubleQuote bool) stri
 	return b.String()
 }
 
-func CallChartMain(keys []string, defaultValues *Expr, body *Expr) *Expr {
+func CallChartMain(
+	chartName, chartVersion, chartAppVersion string,
+	releaseName, releaseService string,
+	keys []string, defaultValues *Expr, body *Expr) *Expr {
 	exprKeys := []*Expr{}
 	for _, key := range keys {
 		exprKeys = append(exprKeys, &Expr{
@@ -500,6 +503,15 @@ func CallChartMain(keys []string, defaultValues *Expr, body *Expr) *Expr {
 	return &Expr{
 		Kind:     ECall,
 		CallFunc: Index("helmhammer", "chartMain"),
-		CallArgs: []*Expr{{Kind: EList, List: exprKeys}, defaultValues, body},
+		CallArgs: []*Expr{
+			{Kind: EStringLiteral, StringLiteral: chartName},
+			{Kind: EStringLiteral, StringLiteral: chartVersion},
+			{Kind: EStringLiteral, StringLiteral: chartAppVersion},
+			{Kind: EStringLiteral, StringLiteral: releaseName},
+			{Kind: EStringLiteral, StringLiteral: releaseService},
+			{Kind: EList, List: exprKeys},
+			defaultValues,
+			body,
+		},
 	}
 }
