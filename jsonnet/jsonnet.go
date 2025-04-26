@@ -487,3 +487,19 @@ func escapeString(s string, escapeSingleQuote bool, escapeDoubleQuote bool) stri
 	}
 	return b.String()
 }
+
+func CallChartMain(keys []string, body *Expr) *Expr {
+	exprKeys := []*Expr{}
+	for _, key := range keys {
+		exprKeys = append(exprKeys, &Expr{
+			Kind:          EStringLiteral,
+			StringLiteral: key,
+		})
+	}
+
+	return &Expr{
+		Kind:     ECall,
+		CallFunc: Index("helmhammer", "chartMain"),
+		CallArgs: []*Expr{{Kind: EList, List: exprKeys}, body},
+	}
+}

@@ -2,13 +2,21 @@ package helm
 
 import (
 	"maps"
+	"path"
+	"sort"
+	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
 	"helm.sh/helm/v4/pkg/chart/v2/loader"
 )
 
-func Load(chartDir string) (*template.Template, error) {
+type Chart struct {
+	Template     *template.Template
+	RenderedKeys []string
+}
+
+func Load(chartDir string) (*Chart, error) {
 	chart, err := loader.Load(chartDir)
 	if err != nil {
 		return nil, err
@@ -25,7 +33,21 @@ func Load(chartDir string) (*template.Template, error) {
 		}
 	}
 
-	return tmpls, nil
+	keys := []string{}
+	for _, tmpl := range chart.Templates {
+		filename := tmpl.Name
+		if strings.HasPrefix(path.Base(tmpl.Name), "_") ||
+			strings.HasSuffix(filename, "NOTES.txt") {
+			continue
+		}
+		keys = append(keys, filename)
+	}
+	sort.Strings(keys)
+
+	return &Chart{
+		Template:     tmpls,
+		RenderedKeys: keys,
+	}, nil
 }
 
 func funcMap() template.FuncMap {

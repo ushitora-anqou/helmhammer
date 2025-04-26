@@ -120,5 +120,22 @@ local helmhammer = {
 
   toYaml(args):
     std.manifestYamlDoc(args[0], quote_keys=false),
+
+  chartMain(keys, files):
+    function(values)
+      local aux(key) =
+        std.parseYaml(files[key]({
+          Values: values,
+          Chart: {
+            Name: 'hello',
+            Version: '0.1.0',
+            AppVersion: '1.16.0',
+          },
+          Release: {
+            Name: 'hello',
+            Service: 'Helm',
+          },
+        }));
+      std.map(aux, keys),
 };
 ''
