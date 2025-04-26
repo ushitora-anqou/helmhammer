@@ -10,16 +10,6 @@ import (
 	"github.com/ushitora-anqou/helmhammer/helm"
 )
 
-var file1 = `{{ $x := 1 }}{{ if true }}{{ $x = 2 }}{{ if true }}{{ $x = 3 }}{{ end }}{{ end }}{{ $x }}`
-var file2 = `world`
-
-var tpls = map[string]struct {
-	tpl string
-}{
-	"file1": {tpl: file1},
-	"file2": {tpl: file2},
-}
-
 func doMain() error {
 	if len(os.Args) <= 1 {
 		return errors.New("chart dir not specified")
