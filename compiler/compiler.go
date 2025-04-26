@@ -15,7 +15,7 @@ import (
 func CompileChart(chart *helm.Chart) (*jsonnet.Expr, error) {
 	expr, err := Compile(chart.Template)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compile: %w", err)
+		return nil, fmt.Errorf("failed to compile template: %w", err)
 	}
 
 	expr = jsonnet.CallChartMain(
