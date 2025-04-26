@@ -265,7 +265,7 @@ type LocalBind struct {
 var prologue string
 
 func (e *Expr) StringWithPrologue() string {
-	return fmt.Sprintf(prologue, e.String())
+	return fmt.Sprintf(prologue[0:len(prologue)-3]+"%s", e.String())
 }
 
 var emptyString = &Expr{
