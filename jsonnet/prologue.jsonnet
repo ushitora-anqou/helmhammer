@@ -121,11 +121,11 @@ local helmhammer = {
   toYaml(args):
     std.manifestYamlDoc(args[0], quote_keys=false),
 
-  chartMain(keys, files):
+  chartMain(keys, defaultValues, files):
     function(values)
       local aux(key) =
         std.parseYaml(files[key]({
-          Values: values,
+          Values: std.mergePatch(defaultValues, values),
           Chart: {
             Name: 'hello',
             Version: '0.1.0',

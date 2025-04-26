@@ -14,6 +14,7 @@ import (
 type Chart struct {
 	Template     *template.Template
 	RenderedKeys []string
+	Values       map[string]any
 }
 
 func Load(chartDir string) (*Chart, error) {
@@ -47,6 +48,7 @@ func Load(chartDir string) (*Chart, error) {
 	return &Chart{
 		Template:     tmpls,
 		RenderedKeys: keys,
+		Values:       chart.Values,
 	}, nil
 }
 

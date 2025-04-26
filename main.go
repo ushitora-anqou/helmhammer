@@ -36,7 +36,8 @@ func doMain() error {
 		return fmt.Errorf("failed to compile: %w", err)
 	}
 
-	expr = jsonnet.CallChartMain(chart.RenderedKeys, expr)
+	expr = jsonnet.CallChartMain(
+		chart.RenderedKeys, jsonnet.ConvertIntoJsonnet(chart.Values), expr)
 
 	fmt.Print(expr.StringWithPrologue())
 
