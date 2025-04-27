@@ -126,16 +126,22 @@ local helmhammer = {
       str = args[0],
       dot = args[1],
       loop(i, out, state) =
+        local s = state.state;
         if i >= std.length(str) then
-          if state == 0 then out
-          else if state == 1 then out + "{"
+          if s == 0 then out
+          else if s == 1 then out + '{'
           else error 'unexpected termination of template'
-        else if state.state == 0 then  // initial state; find "{{"
-          local c = str[i];
-          if c == '{' then loop(i + 1, out, { state: 1 }) tailstrict
-          else loop(i + 1, out + c, { state: 0 }) tailstrict
         else
-          error 'unknown state'
+          local c = str[i];
+          if s == 0 then  // initial state; find "{{"
+            if c == '{' then loop(i + 1, out, { state: 1 }) tailstrict
+            else loop(i + 1, out + c, { state: 0 }) tailstrict
+          else if s == 1 then  // found "{"; find next "{"
+            if c == '{' then loop(i + 1, out, { state: 2 }) tailstrict
+            else loop(i + 1, out + '{' + c, { state: 0 }) tailstrict
+          else if s == 2 then error 'FIXME'
+          else
+            error 'unknown state'
     ;
     loop(0, '', { state: 0 }),
 
@@ -166,4 +172,11 @@ local helmhammer = {
       std.filter(function(x) x != null, std.map(aux, keys)),
 };
 // DON'T USE BELOW
-'foo'
+assert
+  helmhammer.tpl(['', {}]) == '' &&
+  helmhammer.tpl(['abc', {}]) == 'abc' &&
+  helmhammer.tpl(['{', {}]) == '{' &&
+  helmhammer.tpl(['{ {', {}]) == '{ {' &&
+  true
+  ;
+'ok'
