@@ -265,7 +265,12 @@ type LocalBind struct {
 var prologue string
 
 func (e *Expr) StringWithPrologue() string {
-	return fmt.Sprintf(prologue[0:len(prologue)-3]+"%s", e.String())
+	keyword := "// DON'T USE BELOW\n"
+	index := strings.Index(prologue, keyword)
+	if index == -1 {
+		panic("invalid prologue")
+	}
+	return prologue[0:index] + e.String()
 }
 
 var emptyString = &Expr{

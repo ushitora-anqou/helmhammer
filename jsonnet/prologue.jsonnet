@@ -110,16 +110,34 @@ local helmhammer = {
     std.strReplace(args[2], args[0], args[1]),
 
   quote(args):
-    std.format('"%%s"', std.strReplace(args[0], '"', '\\"')),
+    std.format('"%s"', std.strReplace(args[0], '"', '\\"')),
 
   squote(args):
-    std.format("'%%s'", std.strReplace(args[0], "'", "\\'")),
+    std.format("'%s'", std.strReplace(args[0], "'", "\\'")),
 
   not(args):
     !args[0],
 
   toYaml(args):
     std.manifestYamlDoc(args[0], quote_keys=false),
+
+  tpl(args):
+    local
+      str = args[0],
+      dot = args[1],
+      loop(i, out, state) =
+        if i >= std.length(str) then
+          if state == 0 then out
+          else if state == 1 then out + "{"
+          else error 'unexpected termination of template'
+        else if state.state == 0 then  // initial state; find "{{"
+          local c = str[i];
+          if c == '{' then loop(i + 1, out, { state: 1 }) tailstrict
+          else loop(i + 1, out + c, { state: 0 }) tailstrict
+        else
+          error 'unknown state'
+    ;
+    loop(0, '', { state: 0 }),
 
   chartMain(
     chartName,
@@ -147,4 +165,5 @@ local helmhammer = {
         }));
       std.filter(function(x) x != null, std.map(aux, keys)),
 };
-''
+// DON'T USE BELOW
+'foo'
