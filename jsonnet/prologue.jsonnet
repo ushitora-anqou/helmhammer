@@ -283,6 +283,8 @@ assert tpl_.lex('a{{- }}', 0, []) == [{ t: 'text', v: 'a' }];
 assert tpl_.lex('a {{- }}', 0, []) == [{ t: 'text', v: 'a' }];
 assert tpl_.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'b' }];
 assert tpl_.lex('{{ . }}', 0, []) == [{ t: 'field', v: '' }];
+assert tpl_.lex('{{ .A }}', 0, []) == [{ t: 'field', v: 'A' }];
+assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }];
 
 //helmhammer.tpl(['', {}]) == '' &&
 //helmhammer.tpl(['abc', {}]) == 'abc' &&
