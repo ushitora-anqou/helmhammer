@@ -210,34 +210,15 @@ local helmhammer = {
         else
           self.lexText(str, i, out, skipLeadingSpaces),
 
-      //loop(i, out, state) =
-      //  local s = state.state;
-      //  if i >= std.length(str) then
-      //    if s == 0 then out
-      //    else if s == 1 then out + '{'
-      //    else error 'unexpected termination of template'
-      //  else
-      //    local c = str[i];
-      //    if s == 0 then  // initial state; find "{{"
-      //      if c == '{' then loop(i + 1, out, state { state: 1 }) tailstrict
-      //      else loop(i + 1, out + c, state { state: 0 }) tailstrict
-      //    else if s == 1 then  // found "{"; find next "{"
-      //      if c == '{' then loop(i + 1, out, state { state: 2 }) tailstrict
-      //      else loop(i + 1, out + '{' + c, state { state: 0 }) tailstrict
-      //    else if s == 2 then  // found "{{"; check "-" is followed
-      //      if c == '-' then loop(i + 1, out, state { state: 3, prefixMinus: true }) tailstrict
-      //      else loop(i, out, state { state: 3 }) tailstrict
-      //    else if s == 3 then  // found "{{" or "{{-"; skip spaces
-      //      if c == ' ' then loop(i + 1, out, state { state: 3 }) tailstrict
-      //      else loop(i, out, state { state: 4 }) tailstrict
-      //    else if s == 4 then  // start to parse pipeline; eat '.'
-      //      if c == '.' then  //loop(i + 1, out + dot, state {
-      //        error 'FIXME'
-      //      else
-      //        error 'FIXME'
-      //    else
-      //      error 'unknown state'
-      //loop(0, '', { state: 0 }),
+      parse(toks/* tokens */, i):
+        local loop(i, root) =
+          if i >= std.length(toks) then
+            root
+          else
+            local tok = toks[i];
+            if tok.t == 'text' then
+              loop(i + 1, root { v+: [{ t: 'text', v: tok.v }] }) tailstrict;
+        loop(i, { t: 'list', v: [] }),
     },
 
   chartMain(
@@ -300,7 +281,9 @@ assert tpl_.lex('{{ . }}', 0, []) == [{ t: 'field', v: '' }];
 assert tpl_.lex('{{ .A }}', 0, []) == [{ t: 'field', v: 'A' }];
 assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }];
 assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }];
-
+assert tpl_.parse(tpl_.lex('', 0, []), 0) == { t: 'list', v: [] };
+assert tpl_.parse(tpl_.lex('a', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }] };
+assert tpl_.parse(tpl_.lex('a{{}}b', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }, { t: 'text', v: 'b' }] };
 
 //helmhammer.tpl(['', {}]) == '' &&
 //helmhammer.tpl(['abc', {}]) == 'abc' &&
