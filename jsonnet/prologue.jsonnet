@@ -121,176 +121,51 @@ local helmhammer = {
   toYaml(args):
     std.manifestYamlDoc(args[0], quote_keys=false),
 
-  // WIP; written by humans (anqou)
-  //  tpl(args):
-  //    local
-  //      str = args[0],
-  //      dot = args[1],
-  //      loop(i, out, state) =
-  //        local s = state.state;
-  //        if i >= std.length(str) then
-  //          if s == 0 then out
-  //          else if s == 1 then out + '{'
-  //          else error 'unexpected termination of template'
-  //        else
-  //          local c = str[i];
-  //          if s == 0 then  // initial state; find "{{"
-  //            if c == '{' then loop(i + 1, out, state { state: 1 }) tailstrict
-  //            else loop(i + 1, out + c, state { state: 0 }) tailstrict
-  //          else if s == 1 then  // found "{"; find next "{"
-  //            if c == '{' then loop(i + 1, out, state { state: 2 }) tailstrict
-  //            else loop(i + 1, out + '{' + c, state { state: 0 }) tailstrict
-  //          else if s == 2 then  // found "{{"; check "-" is followed
-  //            if c == '-' then loop(i + 1, out, state { state: 3, prefixMinus: true }) tailstrict
-  //            else loop(i, out, state { state: 3 }) tailstrict
-  //          else if s == 3 then  // found "{{" or "{{-"; skip spaces
-  //            if c == ' ' then loop(i + 1, out, state { state: 3 }) tailstrict
-  //            else loop(i, out, state { state: 4 }) tailstrict
-  //          else if s == 4 then  // start to parse pipeline; eat '.'
-  //            if c == '.' then loop(i + 1, out + dot, state {
-  //            error 'FIXME'
-  //          else
-  //            error 'unknown state'
-  //    ;
-  //    loop(0, '', { state: 0 }),
+  tpl_:
+    {
+      strIndex(pat, str, start):
+        // FIXME: slow
+        local occurrences = std.findSubstr(pat, str[start:std.length(str)]);
+        if occurrences == [] then -1 else start + occurrences[0],
 
-  tpl(args):  // Written by ChatGPT
-    local lib =
-      {
-        render(template, data)::
-          self._render(template, data),
+      lexText(str, i):
+        local j = self.strIndex('{{', str, i);
+        if j + 2 >= std.length(str) then error 'unexpected {{'
+        else if str[j + 2] == '-' then
+          local k = self.findNonSpace(j, -1);
+          [j + 2, { t: 'text', v: str[i:k] }]
+        else
+          [j + 2, { t: 'text', v: str[i:j] }],
 
-        _render(template, data):
-          if self._findFirst('{{', template) == -1 then
-            template
-          else
-            local block = self._parseNextBlock(template);
-            local renderedInner =
-              if block.kind == 'var' then
-                self._evalVar(block.expr, data)
-              else if block.kind == 'if' then
-                self._evalIf(block, data)
-              else if block.kind == 'range' then
-                self._evalRange(block, data)
-              else
-                error 'unknown block kind: ' + block.kind;
-            block.before + renderedInner + self._render(block.after, data),
-
-        _parseNextBlock(template):
-          local startIdx = self._findFirst('{{', template);
-          local endIdx = self._findFirst('}}', template);
-          local before = template[:startIdx];
-          local inside = std.stripChars(template[startIdx + 2:endIdx], ' ');
-          local after = template[endIdx + 2:];
-          if std.startsWith(inside, 'if ') then
-            self._parseIf(before, inside[3:], after)
-          else if std.startsWith(inside, 'range ') then
-            self._parseRange(before, inside[6:], after)
-          else if inside == 'else' || inside == 'end' then
-            error "unexpected 'else' or 'end' without matching block"
-          else
-            { kind: 'var', expr: inside, before: before, after: after },
-
-        _extractIfBlock(template):
-          local elseIdx = self._findFirst('{{else}}', template);
-          local endIdx = self._findFirst('{{end}}', template);
-          if endIdx == -1 then
-            error 'unterminated if block'
-          else if elseIdx != -1 && elseIdx < endIdx then
-            {
-              thenPart: template[:elseIdx],
-              elsePart: template[elseIdx + 8:endIdx],  // 8 = len("{{else}}")
-              remain: template[endIdx + 7:],  // 7 = len("{{end}}")
-            }
-          else
-            {
-              thenPart: template[:endIdx],
-              elsePart: null,
-              remain: template[endIdx + 7:],
-            },
-
-        _parseIf(before, condExpr, after):
-          local block = self._extractIfBlock(after);
-          {
-            kind: 'if',
-            cond: condExpr,
-            thenPart: block.thenPart,
-            elsePart: block.elsePart,
-            before: before,
-            after: block.remain,
-          },
-
-        _parseRange(before, listExpr, after):
-          local block = self._extractBlock(after, ['else', 'end']);
-          local parts = std.split(block.inner, '{{else}}');
-          {
-            kind: 'range',
-            listExpr: listExpr,
-            thenPart: parts[0],
-            elsePart: if std.length(parts) == 2 then parts[1] else null,
-            before: before,
-            after: block.remain,
-          },
-
-        _extractBlock(template, endTags):
-          local endIdx = std.foldl(
-            function(acc, tag)
-              local idx = self._findFirst('{{' + tag + '}}', template);
-              if acc == -1 || (idx != -1 && idx < acc) then idx else acc,
-            endTags,
-            -1
-          );
-          if endIdx == -1 then error 'unterminated block'
-          else {
-            inner: template[:endIdx],
-            remain: template[endIdx + std.length('{{end}}'):],
-          },
-
-        _evalVar(expr, data):
-          local v = self._evalExpr(expr, data);
-          std.toString(v),
-
-        _evalIf(block, data):
-          if self._truthy(self._evalExpr(block.cond, data)) then
-            self._render(block.thenPart, data)
-          else if block.elsePart != null then
-            self._render(block.elsePart, data)
-          else
-            '',
-
-        _evalRange(block, data):
-          local list = self._evalExpr(block.listExpr, data);
-          if list == null || std.length(list) == 0 then
-            if block.elsePart != null then self._render(block.elsePart, data) else ''
-          else
-            std.join('', [self._render(block.thenPart, data { '.': item }) for item in list]),
-
-        _evalExpr(expr, data):
-          if std.startsWith(expr, '.') then
-            self._lookupField(data, std.split(expr[1:], '.'))
-          else
-            data[expr],
-
-        _lookupField(obj, path):
-          if std.length(path) == 0 then obj
-          else
-            if std.objectHas(obj, path[0]) then
-              self._lookupField(obj[path[0]], path[1:])
-            else
-              error 'field not found: ' + path[0],
-
-        _truthy(x):
-          if x == null then false
-          else if x == false then false
-          else if x == 0 then false
-          else if x == '' then false
-          else true,
-
-        _findFirst(pat, str):
-          local matches = std.findSubstr(pat, str);
-          if std.length(matches) > 0 then matches[0] else -1,
-      };
-    lib.render(args[0], args[1]),
+      //loop(i, out, state) =
+      //  local s = state.state;
+      //  if i >= std.length(str) then
+      //    if s == 0 then out
+      //    else if s == 1 then out + '{'
+      //    else error 'unexpected termination of template'
+      //  else
+      //    local c = str[i];
+      //    if s == 0 then  // initial state; find "{{"
+      //      if c == '{' then loop(i + 1, out, state { state: 1 }) tailstrict
+      //      else loop(i + 1, out + c, state { state: 0 }) tailstrict
+      //    else if s == 1 then  // found "{"; find next "{"
+      //      if c == '{' then loop(i + 1, out, state { state: 2 }) tailstrict
+      //      else loop(i + 1, out + '{' + c, state { state: 0 }) tailstrict
+      //    else if s == 2 then  // found "{{"; check "-" is followed
+      //      if c == '-' then loop(i + 1, out, state { state: 3, prefixMinus: true }) tailstrict
+      //      else loop(i, out, state { state: 3 }) tailstrict
+      //    else if s == 3 then  // found "{{" or "{{-"; skip spaces
+      //      if c == ' ' then loop(i + 1, out, state { state: 3 }) tailstrict
+      //      else loop(i, out, state { state: 4 }) tailstrict
+      //    else if s == 4 then  // start to parse pipeline; eat '.'
+      //      if c == '.' then  //loop(i + 1, out + dot, state {
+      //        error 'FIXME'
+      //      else
+      //        error 'FIXME'
+      //    else
+      //      error 'unknown state'
+      //loop(0, '', { state: 0 }),
+    },
 
   chartMain(
     chartName,
@@ -320,19 +195,28 @@ local helmhammer = {
 };
 // DON'T USE BELOW
 assert
-  helmhammer.tpl(['', {}]) == '' &&
-  helmhammer.tpl(['abc', {}]) == 'abc' &&
-  helmhammer.tpl(['{', {}]) == '{' &&
-  helmhammer.tpl(['{ {', {}]) == '{ {' &&
-  helmhammer.tpl(['{{.A}}', { A: 'hello' }]) == 'hello' &&
-  helmhammer.tpl(['{{.A}}{{.A}}', { A: 'hello' }]) == 'hellohello' &&
-  helmhammer.tpl(['{{.A.B}}', { A: { B: 'hello' } }]) == 'hello' &&
-  helmhammer.tpl(['{{if .C}}{{.A.B}}{{end}}', { A: { B: 'hello' }, C: true }]) == 'hello' &&
-  helmhammer.tpl(['{{if .C}}{{.A.B}}{{end}}', { A: { B: 'hello' }, C: false }]) == '' &&
-  helmhammer.tpl([
-    '{{if .C}}{{.A.B}}{{else}}no{{end}}',
-    { A: { B: 'hello' }, C: false },
-  ]) == 'no' &&
+  local tpl_ = helmhammer.tpl_;
+  tpl_.strIndex('', '', 0) == -1 &&
+  tpl_.strIndex('a', '', 0) == -1 &&
+  tpl_.strIndex('', 'a', 0) == -1 &&
+  tpl_.strIndex('a', 'a', 0) == 0 &&
+  tpl_.strIndex('b', 'a', 0) == -1 &&
+  tpl_.strIndex('a', 'a', 1) == -1 &&
+  tpl_.strIndex('a', 'aa', 1) == 1 &&
+  tpl_.strIndex('aa', 'baa', 1) == 1 &&
+  //helmhammer.tpl(['', {}]) == '' &&
+  //helmhammer.tpl(['abc', {}]) == 'abc' &&
+  //helmhammer.tpl(['{', {}]) == '{' &&
+  //helmhammer.tpl(['{ {', {}]) == '{ {' &&
+  //helmhammer.tpl(['{{.A}}', { A: 'hello' }]) == 'hello' &&
+  //helmhammer.tpl(['{{.A}}{{.A}}', { A: 'hello' }]) == 'hellohello' &&
+  //helmhammer.tpl(['{{.A.B}}', { A: { B: 'hello' } }]) == 'hello' &&
+  //helmhammer.tpl(['{{if .C}}{{.A.B}}{{end}}', { A: { B: 'hello' }, C: true }]) == 'hello' &&
+  //helmhammer.tpl(['{{if .C}}{{.A.B}}{{end}}', { A: { B: 'hello' }, C: false }]) == '' &&
+  //helmhammer.tpl([
+  //  '{{if .C}}{{.A.B}}{{else}}no{{end}}',
+  //  { A: { B: 'hello' }, C: false },
+  //]) == 'no' &&
   true
   ;
 'ok'
