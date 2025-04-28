@@ -193,7 +193,9 @@ local helmhammer = {
           local c = str[i];
           if c == '.' then
             local res = self.lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
-            self.lexInsideAction(str, j, out + [{ t: 'field', v: v }])
+            self.lexInsideAction(str, j, out + [{ t: 'field', v: v }]) tailstrict
+          else if c == ' ' then
+            self.lexInsideAction(str, i + 1, out) tailstrict
           else error 'lexInsideAction: unexpected char',
 
       lex(str, i, out):
@@ -272,8 +274,15 @@ assert tpl_.findNonSpace(' a', 0, 1) == 1;
 assert tpl_.findNonSpace('a ', 1, -1) == 0;
 assert tpl_.findNonSpace(' ', 0, -1) == -1;
 assert tpl_.findNonSpace(' ', 0, 1) == 1;
+assert tpl_.lex('aa', 0, []) == [{ t: 'text', v: 'aa' }];
 assert tpl_.lex('{{}}', 0, []) == [];
+assert tpl_.lex('a{{}}', 0, []) == [{ t: 'text', v: 'a' }];
+assert tpl_.lex('a {{}}', 0, []) == [{ t: 'text', v: 'a ' }];
+assert tpl_.lex('{{- }}', 0, []) == [];
+assert tpl_.lex('a{{- }}', 0, []) == [{ t: 'text', v: 'a' }];
+assert tpl_.lex('a {{- }}', 0, []) == [{ t: 'text', v: 'a' }];
 assert tpl_.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'b' }];
+assert tpl_.lex('{{ . }}', 0, []) == [{ t: 'field', v: '' }];
 
 //helmhammer.tpl(['', {}]) == '' &&
 //helmhammer.tpl(['abc', {}]) == 'abc' &&
