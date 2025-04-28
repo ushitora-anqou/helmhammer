@@ -137,7 +137,12 @@ local helmhammer = {
         else
           i,
 
-      lexText(str, i, out):
+      lexText(str, i0, out, skipLeadingSpaces):
+        assert i0 < std.length(str) : 'lexText: unexpected eof';
+        local i =
+          if skipLeadingSpaces then self.findNonSpace(str, i0, 1)
+          else i0;
+        assert i < std.length(str) : 'lexText: unexpected eof';
         /*
                   0 1 2 3 4 5
                   a   { { - a
@@ -149,7 +154,6 @@ local helmhammer = {
           k     = 0
           k + 1 =   1
         */
-        assert i < std.length(str) : 'lexText: unexpected eof';
         local j = self.strIndex('{{', str, i);
         if j == -1 then out + [{ t: 'text', v: str[i:] }]
         else
@@ -187,7 +191,9 @@ local helmhammer = {
         [j, str[i:j]],
 
       lexInsideAction(str, i, out):
-        if i + 1 < std.length(str) && str[i] == '}' && str[i + 1] == '}' then
+        if i + 2 < std.length(str) && str[i] == '-' && str[i + 1] == '}' && str[i + 2] == '}' then
+          self.lex(str, i + 3, out, skipLeadingSpaces=true)
+        else if i + 1 < std.length(str) && str[i] == '}' && str[i + 1] == '}' then
           self.lex(str, i + 2, out)
         else
           local c = str[i];
@@ -198,11 +204,11 @@ local helmhammer = {
             self.lexInsideAction(str, i + 1, out) tailstrict
           else error 'lexInsideAction: unexpected char',
 
-      lex(str, i, out):
+      lex(str, i, out, skipLeadingSpaces=false):
         if i >= std.length(str) then
           out
         else
-          self.lexText(str, i, out),
+          self.lexText(str, i, out, skipLeadingSpaces),
 
       //loop(i, out, state) =
       //  local s = state.state;
@@ -281,10 +287,20 @@ assert tpl_.lex('a {{}}', 0, []) == [{ t: 'text', v: 'a ' }];
 assert tpl_.lex('{{- }}', 0, []) == [];
 assert tpl_.lex('a{{- }}', 0, []) == [{ t: 'text', v: 'a' }];
 assert tpl_.lex('a {{- }}', 0, []) == [{ t: 'text', v: 'a' }];
+assert tpl_.lex('{{ -}}', 0, []) == [];
+assert tpl_.lex('{{ -}}a', 0, []) == [{ t: 'text', v: 'a' }];
+assert tpl_.lex('{{ -}} a', 0, []) == [{ t: 'text', v: 'a' }];
+assert tpl_.lex('{{- -}}', 0, []) == [];
+assert tpl_.lex('a{{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a {{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a{{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a {{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'a' }];
 assert tpl_.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'b' }];
 assert tpl_.lex('{{ . }}', 0, []) == [{ t: 'field', v: '' }];
 assert tpl_.lex('{{ .A }}', 0, []) == [{ t: 'field', v: 'A' }];
 assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }];
+assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }];
+
 
 //helmhammer.tpl(['', {}]) == '' &&
 //helmhammer.tpl(['abc', {}]) == 'abc' &&
