@@ -220,11 +220,11 @@ local helmhammer = {
               loop(i + 1, root { v+: [{ t: 'text', v: tok.v }] }) tailstrict;
         loop(i, { t: 'list', v: [] }),
 
-      eval(node, out):
+      eval(node, dot, out):
         if node.t == 'text' then
           out + node.v
         else if node.t == 'list' then
-          std.foldl(function(out, node) self.eval(node, out), node.v, out),
+          std.foldl(function(out, node) self.eval(node, dot, out), node.v, out),
     },
 
   chartMain(
@@ -290,9 +290,9 @@ assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v
 assert tpl_.parse(tpl_.lex('', 0, []), 0) == { t: 'list', v: [] };
 assert tpl_.parse(tpl_.lex('a', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }] };
 assert tpl_.parse(tpl_.lex('a{{}}b', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }, { t: 'text', v: 'b' }] };
-assert tpl_.eval(tpl_.parse(tpl_.lex('', 0, []), 0), '') == '';
-assert tpl_.eval(tpl_.parse(tpl_.lex('a', 0, []), 0), '') == 'a';
-assert tpl_.eval(tpl_.parse(tpl_.lex('a{{}}b', 0, []), 0), '') == 'ab';
+assert tpl_.eval(tpl_.parse(tpl_.lex('', 0, []), 0), {}, '') == '';
+assert tpl_.eval(tpl_.parse(tpl_.lex('a', 0, []), 0), {}, '') == 'a';
+assert tpl_.eval(tpl_.parse(tpl_.lex('a{{}}b', 0, []), 0), {}, '') == 'ab';
 
 //helmhammer.tpl(['', {}]) == '' &&
 //helmhammer.tpl(['abc', {}]) == 'abc' &&
