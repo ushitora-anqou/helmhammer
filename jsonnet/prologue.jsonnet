@@ -128,12 +128,22 @@ local helmhammer = {
         local occurrences = std.findSubstr(pat, str[start:std.length(str)]);
         if occurrences == [] then -1 else start + occurrences[0],
 
+      findNonSpace(str, i, step):
+        local c = str[i];
+        if i < 0 || i >= std.length(str) then
+          i
+        else if c == ' ' || c == '\n' || c == '\r' || c == '\t' then
+          self.findNonSpace(str, i + step, step)
+        else
+          i,
+
       lexText(str, i):
         local j = self.strIndex('{{', str, i);
-        if j + 2 >= std.length(str) then error 'unexpected {{'
+        if j == -1 then [i + std.length(str), { t: 'text', v: str }]
+        else if j + 2 >= std.length(str) then error 'unexpected {{'
         else if str[j + 2] == '-' then
-          local k = self.findNonSpace(j, -1);
-          [j + 2, { t: 'text', v: str[i:k] }]
+          local k = self.findNonSpace(str, j - 1, -1);
+          [j + 3, { t: 'text', v: str[i:k + 1] }]
         else
           [j + 2, { t: 'text', v: str[i:j] }],
 
@@ -204,6 +214,18 @@ assert
   tpl_.strIndex('a', 'a', 1) == -1 &&
   tpl_.strIndex('a', 'aa', 1) == 1 &&
   tpl_.strIndex('aa', 'baa', 1) == 1 &&
+  tpl_.findNonSpace(' a', 0, 1) == 1 &&
+  tpl_.findNonSpace('a ', 1, -1) == 0 &&
+  tpl_.findNonSpace(' ', 0, -1) == -1 &&
+  tpl_.findNonSpace(' ', 0, 1) == 1 &&
+  tpl_.lexText('', 0) == [0, { t: 'text', v: '' }] &&
+  tpl_.lexText('aa', 0) == [2, { t: 'text', v: 'aa' }] &&
+  tpl_.lexText('{{ ', 0) == [2, { t: 'text', v: '' }] &&
+  tpl_.lexText('a{{ ', 0) == [3, { t: 'text', v: 'a' }] &&
+  tpl_.lexText('a {{ ', 0) == [4, { t: 'text', v: 'a ' }] &&
+  tpl_.lexText('{{- ', 0) == [3, { t: 'text', v: '' }] &&
+  tpl_.lexText('a{{- ', 0) == [4, { t: 'text', v: 'a' }] &&
+  tpl_.lexText('a {{- ', 0) == [5, { t: 'text', v: 'a' }] &&
   //helmhammer.tpl(['', {}]) == '' &&
   //helmhammer.tpl(['abc', {}]) == 'abc' &&
   //helmhammer.tpl(['{', {}]) == '{' &&
