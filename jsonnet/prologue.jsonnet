@@ -137,15 +137,70 @@ local helmhammer = {
         else
           i,
 
-      lexText(str, i):
+      lexText(str, i, out):
+        /*
+                  0 1 2 3 4 5
+                  a   { { - a
+          i     = 0
+          j     =     2
+          j - 1 =   1
+          j + 2 =         4
+          j + 3 =           5
+          k     = 0
+          k + 1 =   1
+        */
+        assert i < std.length(str) : 'lexText: unexpected eof';
         local j = self.strIndex('{{', str, i);
-        if j == -1 then [i + std.length(str), { t: 'text', v: str }]
-        else if j + 2 >= std.length(str) then error 'unexpected {{'
-        else if str[j + 2] == '-' then
-          local k = self.findNonSpace(str, j - 1, -1);
-          [j + 3, { t: 'text', v: str[i:k + 1] }]
+        if j == -1 then out + [{ t: 'text', v: str[i:] }]
         else
-          [j + 2, { t: 'text', v: str[i:j] }],
+          assert j + 2 < std.length(str) : 'lexText: unexpected {{';
+          if str[j + 2] == '-' then
+            local k = self.findNonSpace(str, j - 1, -1);
+            self.lexInsideAction(
+              str,
+              j + 3,
+              if i >= k + 1 then out else out + [{ t: 'text', v: str[i:k + 1] }]
+            ) tailstrict
+          else
+            self.lexInsideAction(
+              str,
+              j + 2,
+              if i >= j then out else out + [{ t: 'text', v: str[i:j] }]
+            ) tailstrict,
+
+      isAlphanumeric(ch):
+        local c = std.codepoint(ch);
+        ch == '_' ||
+        std.codepoint('a') <= c && c <= std.codepoint('z') ||
+        std.codepoint('A') <= c && c <= std.codepoint('Z') ||
+        std.codepoint('0') <= c && c <= std.codepoint('9'),
+
+      // lexFieldOrVariable scans a field or variable: [.$]Alphanumeric.
+      // The . or $ has been scanned.
+      lexFieldOrVariable(str, i):
+        local
+          loop(i) =
+            if i >= std.length(str) then error 'lexFieldOrVariable: unexpected eof'
+            else if self.isAlphanumeric(str[i]) then loop(i + 1) tailstrict
+            else i,
+          j = loop(i);
+        [j, str[i:j]],
+
+      lexInsideAction(str, i, out):
+        if i + 1 < std.length(str) && str[i] == '}' && str[i + 1] == '}' then
+          self.lex(str, i + 2, out)
+        else
+          local c = str[i];
+          if c == '.' then
+            local res = self.lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
+            self.lexInsideAction(str, j, out + [{ t: 'field', v: v }])
+          else error 'lexInsideAction: unexpected char',
+
+      lex(str, i, out):
+        if i >= std.length(str) then
+          out
+        else
+          self.lexText(str, i, out),
 
       //loop(i, out, state) =
       //  local s = state.state;
@@ -204,41 +259,33 @@ local helmhammer = {
       std.filter(function(x) x != null, std.map(aux, keys)),
 };
 // DON'T USE BELOW
-assert
-  local tpl_ = helmhammer.tpl_;
-  tpl_.strIndex('', '', 0) == -1 &&
-  tpl_.strIndex('a', '', 0) == -1 &&
-  tpl_.strIndex('', 'a', 0) == -1 &&
-  tpl_.strIndex('a', 'a', 0) == 0 &&
-  tpl_.strIndex('b', 'a', 0) == -1 &&
-  tpl_.strIndex('a', 'a', 1) == -1 &&
-  tpl_.strIndex('a', 'aa', 1) == 1 &&
-  tpl_.strIndex('aa', 'baa', 1) == 1 &&
-  tpl_.findNonSpace(' a', 0, 1) == 1 &&
-  tpl_.findNonSpace('a ', 1, -1) == 0 &&
-  tpl_.findNonSpace(' ', 0, -1) == -1 &&
-  tpl_.findNonSpace(' ', 0, 1) == 1 &&
-  tpl_.lexText('', 0) == [0, { t: 'text', v: '' }] &&
-  tpl_.lexText('aa', 0) == [2, { t: 'text', v: 'aa' }] &&
-  tpl_.lexText('{{ ', 0) == [2, { t: 'text', v: '' }] &&
-  tpl_.lexText('a{{ ', 0) == [3, { t: 'text', v: 'a' }] &&
-  tpl_.lexText('a {{ ', 0) == [4, { t: 'text', v: 'a ' }] &&
-  tpl_.lexText('{{- ', 0) == [3, { t: 'text', v: '' }] &&
-  tpl_.lexText('a{{- ', 0) == [4, { t: 'text', v: 'a' }] &&
-  tpl_.lexText('a {{- ', 0) == [5, { t: 'text', v: 'a' }] &&
-  //helmhammer.tpl(['', {}]) == '' &&
-  //helmhammer.tpl(['abc', {}]) == 'abc' &&
-  //helmhammer.tpl(['{', {}]) == '{' &&
-  //helmhammer.tpl(['{ {', {}]) == '{ {' &&
-  //helmhammer.tpl(['{{.A}}', { A: 'hello' }]) == 'hello' &&
-  //helmhammer.tpl(['{{.A}}{{.A}}', { A: 'hello' }]) == 'hellohello' &&
-  //helmhammer.tpl(['{{.A.B}}', { A: { B: 'hello' } }]) == 'hello' &&
-  //helmhammer.tpl(['{{if .C}}{{.A.B}}{{end}}', { A: { B: 'hello' }, C: true }]) == 'hello' &&
-  //helmhammer.tpl(['{{if .C}}{{.A.B}}{{end}}', { A: { B: 'hello' }, C: false }]) == '' &&
-  //helmhammer.tpl([
-  //  '{{if .C}}{{.A.B}}{{else}}no{{end}}',
-  //  { A: { B: 'hello' }, C: false },
-  //]) == 'no' &&
-  true
-  ;
+local tpl_ = helmhammer.tpl_;
+assert tpl_.strIndex('', '', 0) == -1;
+assert tpl_.strIndex('a', '', 0) == -1;
+assert tpl_.strIndex('', 'a', 0) == -1;
+assert tpl_.strIndex('a', 'a', 0) == 0;
+assert tpl_.strIndex('b', 'a', 0) == -1;
+assert tpl_.strIndex('a', 'a', 1) == -1;
+assert tpl_.strIndex('a', 'aa', 1) == 1;
+assert tpl_.strIndex('aa', 'baa', 1) == 1;
+assert tpl_.findNonSpace(' a', 0, 1) == 1;
+assert tpl_.findNonSpace('a ', 1, -1) == 0;
+assert tpl_.findNonSpace(' ', 0, -1) == -1;
+assert tpl_.findNonSpace(' ', 0, 1) == 1;
+assert tpl_.lex('{{}}', 0, []) == [];
+assert tpl_.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'b' }];
+
+//helmhammer.tpl(['', {}]) == '' &&
+//helmhammer.tpl(['abc', {}]) == 'abc' &&
+//helmhammer.tpl(['{', {}]) == '{' &&
+//helmhammer.tpl(['{ {', {}]) == '{ {' &&
+//helmhammer.tpl(['{{.A}}', { A: 'hello' }]) == 'hello' &&
+//helmhammer.tpl(['{{.A}}{{.A}}', { A: 'hello' }]) == 'hellohello' &&
+//helmhammer.tpl(['{{.A.B}}', { A: { B: 'hello' } }]) == 'hello' &&
+//helmhammer.tpl(['{{if .C}}{{.A.B}}{{end}}', { A: { B: 'hello' }, C: true }]) == 'hello' &&
+//helmhammer.tpl(['{{if .C}}{{.A.B}}{{end}}', { A: { B: 'hello' }, C: false }]) == '' &&
+//helmhammer.tpl([
+//  '{{if .C}}{{.A.B}}{{else}}no{{end}}',
+//  { A: { B: 'hello' }, C: false },
+//]) == 'no' &&
 'ok'
