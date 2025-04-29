@@ -217,14 +217,27 @@ local helmhammer = {
           else
             local tok = toks[i];
             if tok.t == 'text' then
-              loop(i + 1, root { v+: [{ t: 'text', v: tok.v }] }) tailstrict;
+              loop(i + 1, root { v+: [{ t: 'text', v: tok.v }] }) tailstrict
+            else if tok.t == 'field' then
+              local
+                aux(i, out) =
+                  if i >= std.length(toks) || toks[i].t != 'field' then out
+                  else aux(i + 1, out + [toks[i].v]),
+                fields = aux(i, []);
+              loop(i + std.length(fields), root { v+: [{
+                t: 'field',
+                v: if std.length(fields) == 1 && fields[0] == '' then [] else fields,
+              }] }) tailstrict;
         loop(i, { t: 'list', v: [] }),
 
       eval(node, dot, out):
         if node.t == 'text' then
           out + node.v
         else if node.t == 'list' then
-          std.foldl(function(out, node) self.eval(node, dot, out), node.v, out),
+          std.foldl(function(out, node) self.eval(node, dot, out), node.v, out)
+        else if node.t == 'field' then
+          out + std.toString(std.foldl(function(acc, field) acc[field], node.v, dot))
+        else error 'eval: unknown node',
     },
 
   tpl(args):
@@ -295,11 +308,19 @@ assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v
 assert tpl_.parse(tpl_.lex('', 0, []), 0) == { t: 'list', v: [] };
 assert tpl_.parse(tpl_.lex('a', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }] };
 assert tpl_.parse(tpl_.lex('a{{}}b', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }, { t: 'text', v: 'b' }] };
+assert tpl_.parse(tpl_.lex('a{{.}}b', 0, []), 0) == { t: 'list', v: [
+  { t: 'text', v: 'a' },
+  { t: 'field', v: [] },
+  { t: 'text', v: 'b' },
+] };
 
 local tpl = helmhammer.tpl;
 assert tpl(['', {}]) == '';
 assert tpl(['a', {}]) == 'a';
 assert tpl(['a{{}}b', {}]) == 'ab';
+assert tpl(['a{{.}}b', 3]) == 'a3b';
+assert tpl(['a{{.A}}b', { A: 3 }]) == 'a3b';
+assert tpl(['a{{.A.b}}b', { A: { b: 'c' } }]) == 'acb';
 
 //helmhammer.tpl(['', {}]) == '' &&
 //helmhammer.tpl(['abc', {}]) == 'abc' &&
