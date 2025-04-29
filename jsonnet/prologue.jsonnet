@@ -222,6 +222,9 @@ local helmhammer = {
           if c == '.' then
             local res = self.lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
             self.lexInsideAction(str, j, out + [{ t: 'field', v: v }]) tailstrict
+          else if c == '$' then
+            local res = self.lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
+            self.lexInsideAction(str, j, out + [{ t: 'var', v: v }]) tailstrict
           else if c == '|' then
             self.lexInsideAction(str, i + 1, out + [{ t: '|' }]) tailstrict
           else if c == ' ' then
@@ -244,6 +247,8 @@ local helmhammer = {
         local tok = toks[i];
         if tok.t == 'field' then
           [i + 1, { t: 'field', v: tok.v }]
+        else if tok.t == 'var' then
+          [i + 1, { t: 'var', v: tok.v }]
         else if tok.t == 'id' then
           [i + 1, { t: 'id', v: tok.v }]
         else if tok.t == 'number' then
@@ -299,6 +304,8 @@ local helmhammer = {
           [s, std.foldl(function(acc, field) acc[field], op.v[1], val)]
         else if op.t == 'field' then
           [s0, if op.v == '' then s0.dot else s0.dot[op.v]]
+        else if op.t == 'var' then
+          [s0, s0.vars[op.v]]
         else if op.t == 'number' then
           [s0, op.v]
         else
@@ -339,15 +346,16 @@ local helmhammer = {
     },
 
   tpl(args):
-    local tpl_ = self.tpl_;
+    local tpl_ = self.tpl_, src = args[0], dot = args[1];
     tpl_.eval(
       tpl_.parse(
-        tpl_.lex(args[0], 0, []),
+        tpl_.lex(src, 0, []),
         0,
       ),
       {
-        dot: args[1],
+        dot: dot,
         out: '',
+        vars: { ''/* $ */: dot },
       },
     ).out,
 
@@ -433,6 +441,8 @@ assert tpl_.parse(tpl_.lex('a{{.}}b', 0, []), 0) == { t: 'list', v: [
 local tpl = helmhammer.tpl;
 assert tpl(['', {}]) == '';
 assert tpl(['a', {}]) == 'a';
+assert tpl(['{', {}]) == '{';
+assert tpl(['{ {', {}]) == '{ {';
 assert tpl(['a{{}}b', {}]) == 'ab';
 assert tpl(['a{{.}}b', 3]) == 'a3b';
 assert tpl(['a{{.A}}b', { A: 3 }]) == 'a3b';
@@ -440,18 +450,7 @@ assert tpl(['a{{.A.b}}b', { A: { b: 'c' } }]) == 'acb';
 assert tpl(['a{{.A.b}}{{.A.b}}b', { A: { b: 'c' } }]) == 'accb';
 assert tpl(['a{{.A.b | nindent 1}}b', { A: { b: 'c' } }]) == 'a\n cb';
 assert tpl(['a{{.A.b | nindent 1 | nindent 1}}b', { A: { b: 'c' } }]) == 'a\n \n  cb';
-
-//helmhammer.tpl(['', {}]) == '' &&
-//helmhammer.tpl(['abc', {}]) == 'abc' &&
-//helmhammer.tpl(['{', {}]) == '{' &&
-//helmhammer.tpl(['{ {', {}]) == '{ {' &&
-//helmhammer.tpl(['{{.A}}', { A: 'hello' }]) == 'hello' &&
-//helmhammer.tpl(['{{.A}}{{.A}}', { A: 'hello' }]) == 'hellohello' &&
-//helmhammer.tpl(['{{.A.B}}', { A: { B: 'hello' } }]) == 'hello' &&
-//helmhammer.tpl(['{{if .C}}{{.A.B}}{{end}}', { A: { B: 'hello' }, C: true }]) == 'hello' &&
-//helmhammer.tpl(['{{if .C}}{{.A.B}}{{end}}', { A: { B: 'hello' }, C: false }]) == '' &&
-//helmhammer.tpl([
-//  '{{if .C}}{{.A.B}}{{else}}no{{end}}',
-//  { A: { B: 'hello' }, C: false },
-//]) == 'no' &&
+assert tpl(['a{{$}}b', 3]) == 'a3b';
+assert tpl(['a{{$.A}}b', { A: 3 }]) == 'a3b';
+assert tpl(['a{{$.A.b}}b', { A: { b: 'c' } }]) == 'acb';
 'ok'
