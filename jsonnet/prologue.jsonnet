@@ -121,7 +121,7 @@ local helmhammer = {
   toYaml(args):
     std.manifestYamlDoc(args[0], quote_keys=false),
 
-  tpl_:
+  tpl_(templates):
     {
       local strIndex(pat, str, start) =
         // FIXME: slow
@@ -212,6 +212,15 @@ local helmhammer = {
           j = loop(i);
         [j, std.parseInt(str[i:j])],
 
+      local lexString(str, i) =  // FIXME: escape
+        local
+          loop(i) =
+            if i >= std.length(str) then error 'lexString: unexpected eof'
+            else if str[i] == '"' then i + 1
+            else loop(i + 1) tailstrict,
+          j = loop(i + 1);
+        [j, str[i + 1:j - 1]],
+
       local lexInsideAction(str, i, out) =
         if i + 2 < std.length(str) && str[i] == '-' && str[i + 1] == '}' && str[i + 2] == '}' then
           lex(str, i + 3, out + [{ t: '}}' }], skipLeadingSpaces=true)
@@ -229,6 +238,9 @@ local helmhammer = {
             lexInsideAction(str, i + 1, out + [{ t: '|' }]) tailstrict
           else if c == ' ' then
             lexInsideAction(str, i + 1, out) tailstrict
+          else if c == '"' then
+            local res = lexString(str, i), j = res[0], v = res[1];
+            lexInsideAction(str, j, out + [{ t: 'string', v: v }]) tailstrict
           else if isNumeric(c) then
             local res = lexNumber(str, i), j = res[0], v = res[1];
             lexInsideAction(str, j, out + [{ t: 'number', v: v }]) tailstrict
@@ -253,6 +265,8 @@ local helmhammer = {
           [i + 1, { t: 'id', v: tok.v }]
         else if tok.t == 'number' then
           [i + 1, { t: 'number', v: tok.v }]
+        else if tok.t == 'string' then
+          [i + 1, { t: 'string', v: tok.v }]
         else error ('parseTerm: unexpected token: %s' % [tok.t]),
 
       local parseOperand(toks, i) =
@@ -306,7 +320,7 @@ local helmhammer = {
           [s0, if op.v == '' then s0.dot else s0.dot[op.v]]
         else if op.t == 'var' then
           [s0, s0.vars[op.v]]
-        else if op.t == 'number' then
+        else if op.t == 'number' || op.t == 'string' then
           [s0, op.v]
         else
           error 'evalOperand: unknown operand',
@@ -317,6 +331,10 @@ local helmhammer = {
           if op0.v == 'nindent' then
             local res = evalOperand(command.v[1], s0), s = res[0], val = res[1];
             [s, $.nindent([val, final])]
+          else if op0.v == 'include' then
+            local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
+            local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
+            [s2, $.include(templates)([name, newDot])]
           else
             error ('evalCommand: unknown id: %s' % [op0.v])
         else
@@ -351,19 +369,20 @@ local helmhammer = {
       eval: eval,
     },
 
-  tpl(args):
-    local tpl_ = self.tpl_, src = args[0], dot = args[1];
-    tpl_.eval(
-      tpl_.parse(
-        tpl_.lex(src, 0, []),
-        0,
-      ),
-      {
-        dot: dot,
-        out: '',
-        vars: { ''/* $ */: dot },
-      },
-    ).out,
+  tpl(templates):
+    function(args)
+      local tpl_ = self.tpl_(templates), src = args[0], dot = args[1];
+      tpl_.eval(
+        tpl_.parse(
+          tpl_.lex(src, 0, []),
+          0,
+        ),
+        {
+          dot: dot,
+          out: '',
+          vars: { ''/* $ */: dot },
+        },
+      ).out,
 
   chartMain(
     chartName,
@@ -393,7 +412,7 @@ local helmhammer = {
 };
 // DON'T USE BELOW
 
-local tpl_ = helmhammer.tpl_;
+local tpl_ = helmhammer.tpl_({});
 assert tpl_.strIndex('', '', 0) == -1;
 assert tpl_.strIndex('a', '', 0) == -1;
 assert tpl_.strIndex('', 'a', 0) == -1;
@@ -444,7 +463,7 @@ assert tpl_.parse(tpl_.lex('a{{.}}b', 0, []), 0) == { t: 'list', v: [
   { t: 'text', v: 'b' },
 ] };
 
-local tpl = helmhammer.tpl;
+local tpl = helmhammer.tpl({ tpl0(dot): dot.valueTpl0 });
 assert tpl(['', {}]) == '';
 assert tpl(['a', {}]) == 'a';
 assert tpl(['{', {}]) == '{';
@@ -459,4 +478,5 @@ assert tpl(['a{{.A.b | nindent 1 | nindent 1}}b', { A: { b: 'c' } }]) == 'a\n \n
 assert tpl(['a{{$}}b', 3]) == 'a3b';
 assert tpl(['a{{$.A}}b', { A: 3 }]) == 'a3b';
 assert tpl(['a{{$.A.b}}b', { A: { b: 'c' } }]) == 'acb';
+assert tpl(['{{ include "tpl0" $ }}', { valueTpl0: 'here' }]) == 'here';
 'ok'
