@@ -227,6 +227,10 @@ local helmhammer = {
           std.foldl(function(out, node) self.eval(node, dot, out), node.v, out),
     },
 
+  tpl(args):
+    local tpl_ = self.tpl_;
+    tpl_.eval(tpl_.parse(tpl_.lex(args[0], 0, []), 0), args[1], ''),
+
   chartMain(
     chartName,
     chartVersion,
@@ -254,6 +258,7 @@ local helmhammer = {
       std.filter(function(x) x != null, std.map(aux, keys)),
 };
 // DON'T USE BELOW
+
 local tpl_ = helmhammer.tpl_;
 assert tpl_.strIndex('', '', 0) == -1;
 assert tpl_.strIndex('a', '', 0) == -1;
@@ -290,9 +295,11 @@ assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v
 assert tpl_.parse(tpl_.lex('', 0, []), 0) == { t: 'list', v: [] };
 assert tpl_.parse(tpl_.lex('a', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }] };
 assert tpl_.parse(tpl_.lex('a{{}}b', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }, { t: 'text', v: 'b' }] };
-assert tpl_.eval(tpl_.parse(tpl_.lex('', 0, []), 0), {}, '') == '';
-assert tpl_.eval(tpl_.parse(tpl_.lex('a', 0, []), 0), {}, '') == 'a';
-assert tpl_.eval(tpl_.parse(tpl_.lex('a{{}}b', 0, []), 0), {}, '') == 'ab';
+
+local tpl = helmhammer.tpl;
+assert tpl(['', {}]) == '';
+assert tpl(['a', {}]) == 'a';
+assert tpl(['a{{}}b', {}]) == 'ab';
 
 //helmhammer.tpl(['', {}]) == '' &&
 //helmhammer.tpl(['abc', {}]) == 'abc' &&
