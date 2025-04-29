@@ -192,14 +192,16 @@ local helmhammer = {
 
       lexInsideAction(str, i, out):
         if i + 2 < std.length(str) && str[i] == '-' && str[i + 1] == '}' && str[i + 2] == '}' then
-          self.lex(str, i + 3, out, skipLeadingSpaces=true)
+          self.lex(str, i + 3, out + [{ t: '}}' }], skipLeadingSpaces=true)
         else if i + 1 < std.length(str) && str[i] == '}' && str[i + 1] == '}' then
-          self.lex(str, i + 2, out)
+          self.lex(str, i + 2, out + [{ t: '}}' }])
         else
           local c = str[i];
           if c == '.' then
             local res = self.lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
             self.lexInsideAction(str, j, out + [{ t: 'field', v: v }]) tailstrict
+          else if c == '|' then
+            self.lexInsideAction(str, i + 1, out + [{ t: 'pipe' }]) tailstrict
           else if c == ' ' then
             self.lexInsideAction(str, i + 1, out) tailstrict
           else error 'lexInsideAction: unexpected char',
@@ -227,6 +229,25 @@ local helmhammer = {
           [j + std.length(fields), { t: 'chain', v: [node, fields] }]
         else [j, node],
 
+      parseCommand(toks, i):
+        local loop(i, operands) =
+          if toks[i].t == '}}' then
+            [i, { t: 'command', v: operands }]
+          else if toks[i].t == '|' then
+            [i + 1, { t: 'command', v: operands }]
+          else
+            local res = self.parseOperand(toks, i), j = res[0], node = res[1];
+            loop(j, operands + [node]);
+        loop(i, []),
+
+      parsePipeline(toks, i):
+        local loop(i, commands) =
+          if toks[i].t == '}}' then [i + 1, { t: 'pipeline', v: commands }]
+          else
+            local res = self.parseCommand(toks, i), j = res[0], node = res[1];
+            loop(j, commands + [node]);
+        loop(i, []),
+
       parse(toks/* tokens */, i):
         local loop(i, root) =
           if i >= std.length(toks) then
@@ -236,18 +257,34 @@ local helmhammer = {
             if tok.t == 'text' then
               loop(i + 1, root { v+: [{ t: 'text', v: tok.v }] }) tailstrict
             else
-              local res = self.parseOperand(toks, i), j = res[0], node = res[1];
+              local res = self.parsePipeline(toks, i), j = res[0], node = res[1];
               loop(j, root { v+: [{ t: 'action', v: node }] }) tailstrict;
         loop(i, { t: 'list', v: [] }),
 
-      evalPipeline(node, s0):
-        if node.t == 'chain' then
-          local res = self.evalPipeline(node.v[0], s0), s = res[0], val = res[1];
-          [s, std.foldl(function(acc, field) acc[field], node.v[1], val)]
-        else if node.t == 'field' then
-          [s0, if node.v == '' then s0.dot else s0.dot[node.v]]
+      evalOperand(op, s0):
+        if op.t == 'chain' then
+          local res = self.evalOperand(op.v[0], s0), s = res[0], val = res[1];
+          [s, std.foldl(function(acc, field) acc[field], op.v[1], val)]
+        else if op.t == 'field' then
+          [s0, if op.v == '' then s0.dot else s0.dot[op.v]]
         else
-          error 'evalPipeline: unexpected node',
+          error 'evalOperand: unknown operand',
+
+      evalCommand(command, final, s0):
+        local op0 = command.v[0];  // FIXME
+        self.evalOperand(op0, s0),
+
+      evalPipeline(commands, s0):
+        local acc =
+          std.foldl(
+            function(acc, command)
+              local s0 = acc.s, final = acc.final;
+              local res = self.evalCommand(command, final, s0), s1 = res[0], v = res[1];
+              { s: s1, final: v },
+            commands,
+            { s: s0, final: null },
+          );
+        [acc.s, if acc.final == null then '' else acc.final],
 
       eval(node, s0):
         if node.t == 'text' then
@@ -255,7 +292,8 @@ local helmhammer = {
         else if node.t == 'list' then
           std.foldl(function(s, node) self.eval(node, s), node.v, s0)
         else if node.t == 'action' then
-          local res = self.evalPipeline(node.v, s0), s = res[0], val = res[1];
+          assert node.v.t == 'pipeline';
+          local res = self.evalPipeline(node.v.v, s0), s = res[0], val = res[1];
           s { out+: std.toString(val) },
     },
 
@@ -314,31 +352,40 @@ assert tpl_.findNonSpace('a ', 1, -1) == 0;
 assert tpl_.findNonSpace(' ', 0, -1) == -1;
 assert tpl_.findNonSpace(' ', 0, 1) == 1;
 assert tpl_.lex('aa', 0, []) == [{ t: 'text', v: 'aa' }];
-assert tpl_.lex('{{}}', 0, []) == [];
-assert tpl_.lex('a{{}}', 0, []) == [{ t: 'text', v: 'a' }];
-assert tpl_.lex('a {{}}', 0, []) == [{ t: 'text', v: 'a ' }];
-assert tpl_.lex('{{- }}', 0, []) == [];
-assert tpl_.lex('a{{- }}', 0, []) == [{ t: 'text', v: 'a' }];
-assert tpl_.lex('a {{- }}', 0, []) == [{ t: 'text', v: 'a' }];
-assert tpl_.lex('{{ -}}', 0, []) == [];
-assert tpl_.lex('{{ -}}a', 0, []) == [{ t: 'text', v: 'a' }];
-assert tpl_.lex('{{ -}} a', 0, []) == [{ t: 'text', v: 'a' }];
-assert tpl_.lex('{{- -}}', 0, []) == [];
-assert tpl_.lex('a{{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'a' }];
-assert tpl_.lex('a {{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'a' }];
-assert tpl_.lex('a{{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'a' }];
-assert tpl_.lex('a {{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'a' }];
-assert tpl_.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: 'text', v: 'b' }];
-assert tpl_.lex('{{ . }}', 0, []) == [{ t: 'field', v: '' }];
-assert tpl_.lex('{{ .A }}', 0, []) == [{ t: 'field', v: 'A' }];
-assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }];
-assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }];
+assert tpl_.lex('{{}}', 0, []) == [{ t: '}}' }];
+assert tpl_.lex('a{{}}', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }];
+assert tpl_.lex('a {{}}', 0, []) == [{ t: 'text', v: 'a ' }, { t: '}}' }];
+assert tpl_.lex('{{- }}', 0, []) == [{ t: '}}' }];
+assert tpl_.lex('a{{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }];
+assert tpl_.lex('a {{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }];
+assert tpl_.lex('{{ -}}', 0, []) == [{ t: '}}' }];
+assert tpl_.lex('{{ -}}a', 0, []) == [{ t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('{{ -}} a', 0, []) == [{ t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('{{- -}}', 0, []) == [{ t: '}}' }];
+assert tpl_.lex('a{{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a {{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a{{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a {{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }, { t: 'text', v: 'b' }];
+assert tpl_.lex('{{ . }}', 0, []) == [{ t: 'field', v: '' }, { t: '}}' }];
+assert tpl_.lex('{{ .A }}', 0, []) == [{ t: 'field', v: 'A' }, { t: '}}' }];
+assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: '}}' }];
+assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: '}}' }];
 assert tpl_.parse(tpl_.lex('', 0, []), 0) == { t: 'list', v: [] };
 assert tpl_.parse(tpl_.lex('a', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }] };
-assert tpl_.parse(tpl_.lex('a{{}}b', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }, { t: 'text', v: 'b' }] };
+assert tpl_.parse(tpl_.lex('a{{}}b', 0, []), 0) == {
+  t: 'list',
+  v: [
+    { t: 'text', v: 'a' },
+    { t: 'action', v: { t: 'pipeline', v: [] } },
+    { t: 'text', v: 'b' },
+  ],
+};
 assert tpl_.parse(tpl_.lex('a{{.}}b', 0, []), 0) == { t: 'list', v: [
   { t: 'text', v: 'a' },
-  { t: 'action', v: { t: 'field', v: '' } },
+  { t: 'action', v: { t: 'pipeline', v: [
+    { t: 'command', v: [{ t: 'field', v: '' }] },
+  ] } },
   { t: 'text', v: 'b' },
 ] };
 
