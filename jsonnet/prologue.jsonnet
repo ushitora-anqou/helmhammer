@@ -123,24 +123,24 @@ local helmhammer = {
 
   tpl_:
     {
-      strIndex(pat, str, start):
+      local strIndex(pat, str, start) =
         // FIXME: slow
         local occurrences = std.findSubstr(pat, str[start:std.length(str)]);
         if occurrences == [] then -1 else start + occurrences[0],
 
-      findNonSpace(str, i, step):
+      local findNonSpace(str, i, step) =
         local c = str[i];
         if i < 0 || i >= std.length(str) then
           i
         else if c == ' ' || c == '\n' || c == '\r' || c == '\t' then
-          self.findNonSpace(str, i + step, step)
+          findNonSpace(str, i + step, step)
         else
           i,
 
-      lexText(str, i0, out, skipLeadingSpaces):
+      local lexText(str, i0, out, skipLeadingSpaces) =
         assert i0 < std.length(str) : 'lexText: unexpected eof';
         local i =
-          if skipLeadingSpaces then self.findNonSpace(str, i0, 1)
+          if skipLeadingSpaces then findNonSpace(str, i0, 1)
           else i0;
         assert i < std.length(str) : 'lexText: unexpected eof';
         /*
@@ -154,96 +154,96 @@ local helmhammer = {
           k     = 0
           k + 1 =   1
         */
-        local j = self.strIndex('{{', str, i);
+        local j = strIndex('{{', str, i);
         if j == -1 then out + [{ t: 'text', v: str[i:] }]
         else
           assert j + 2 < std.length(str) : 'lexText: unexpected {{';
           if str[j + 2] == '-' then
-            local k = self.findNonSpace(str, j - 1, -1);
-            self.lexInsideAction(
+            local k = findNonSpace(str, j - 1, -1);
+            lexInsideAction(
               str,
               j + 3,
               if i >= k + 1 then out else out + [{ t: 'text', v: str[i:k + 1] }]
             ) tailstrict
           else
-            self.lexInsideAction(
+            lexInsideAction(
               str,
               j + 2,
               if i >= j then out else out + [{ t: 'text', v: str[i:j] }]
             ) tailstrict,
 
-      isAlphanumeric(ch):
+      local isAlphanumeric(ch) =
         local c = std.codepoint(ch);
         ch == '_' ||
         std.codepoint('a') <= c && c <= std.codepoint('z') ||
         std.codepoint('A') <= c && c <= std.codepoint('Z') ||
         std.codepoint('0') <= c && c <= std.codepoint('9'),
 
-      isNumeric(ch):
+      local isNumeric(ch) =
         local c = std.codepoint(ch);
         std.codepoint('0') <= c && c <= std.codepoint('9'),
 
       // lexFieldOrVariable scans a field or variable: [.$]Alphanumeric.
       // The . or $ has been scanned.
-      lexFieldOrVariable(str, i):
+      local lexFieldOrVariable(str, i) =
         local
           loop(i) =
             if i >= std.length(str) then error 'lexFieldOrVariable: unexpected eof'
-            else if self.isAlphanumeric(str[i]) then loop(i + 1) tailstrict
+            else if isAlphanumeric(str[i]) then loop(i + 1) tailstrict
             else i,
           j = loop(i);
         [j, str[i:j]],
 
-      lexIdentifier(str, i):
+      local lexIdentifier(str, i) =
         local
           loop(i) =
             if i >= std.length(str) then error 'lexIdentifier: unexpected eof'
-            else if self.isAlphanumeric(str[i]) then loop(i + 1) tailstrict
+            else if isAlphanumeric(str[i]) then loop(i + 1) tailstrict
             else i,
           j = loop(i);
         [j, str[i:j]],
 
-      lexNumber(str, i):
+      local lexNumber(str, i) =
         local
           loop(i) =
             if i >= std.length(str) then error 'lexNumber: unexpected eof'
-            else if self.isNumeric(str[i]) then loop(i + 1) tailstrict
+            else if isNumeric(str[i]) then loop(i + 1) tailstrict
             else i,
           j = loop(i);
         [j, std.parseInt(str[i:j])],
 
-      lexInsideAction(str, i, out):
+      local lexInsideAction(str, i, out) =
         if i + 2 < std.length(str) && str[i] == '-' && str[i + 1] == '}' && str[i + 2] == '}' then
-          self.lex(str, i + 3, out + [{ t: '}}' }], skipLeadingSpaces=true)
+          lex(str, i + 3, out + [{ t: '}}' }], skipLeadingSpaces=true)
         else if i + 1 < std.length(str) && str[i] == '}' && str[i + 1] == '}' then
-          self.lex(str, i + 2, out + [{ t: '}}' }])
+          lex(str, i + 2, out + [{ t: '}}' }])
         else
           local c = str[i];
           if c == '.' then
-            local res = self.lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
-            self.lexInsideAction(str, j, out + [{ t: 'field', v: v }]) tailstrict
+            local res = lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
+            lexInsideAction(str, j, out + [{ t: 'field', v: v }]) tailstrict
           else if c == '$' then
-            local res = self.lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
-            self.lexInsideAction(str, j, out + [{ t: 'var', v: v }]) tailstrict
+            local res = lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
+            lexInsideAction(str, j, out + [{ t: 'var', v: v }]) tailstrict
           else if c == '|' then
-            self.lexInsideAction(str, i + 1, out + [{ t: '|' }]) tailstrict
+            lexInsideAction(str, i + 1, out + [{ t: '|' }]) tailstrict
           else if c == ' ' then
-            self.lexInsideAction(str, i + 1, out) tailstrict
-          else if self.isNumeric(c) then
-            local res = self.lexNumber(str, i), j = res[0], v = res[1];
-            self.lexInsideAction(str, j, out + [{ t: 'number', v: v }]) tailstrict
-          else if self.isAlphanumeric(c) then
-            local res = self.lexIdentifier(str, i), j = res[0], v = res[1];
-            self.lexInsideAction(str, j, out + [{ t: 'id', v: v }]) tailstrict
+            lexInsideAction(str, i + 1, out) tailstrict
+          else if isNumeric(c) then
+            local res = lexNumber(str, i), j = res[0], v = res[1];
+            lexInsideAction(str, j, out + [{ t: 'number', v: v }]) tailstrict
+          else if isAlphanumeric(c) then
+            local res = lexIdentifier(str, i), j = res[0], v = res[1];
+            lexInsideAction(str, j, out + [{ t: 'id', v: v }]) tailstrict
           else error 'lexInsideAction: unexpected char',
 
-      lex(str, i, out, skipLeadingSpaces=false):
+      local lex(str, i, out, skipLeadingSpaces=false) =
         if i >= std.length(str) then
           out
         else
-          self.lexText(str, i, out, skipLeadingSpaces),
+          lexText(str, i, out, skipLeadingSpaces),
 
-      parseTerm(toks, i):
+      local parseTerm(toks, i) =
         local tok = toks[i];
         if tok.t == 'field' then
           [i + 1, { t: 'field', v: tok.v }]
@@ -255,8 +255,8 @@ local helmhammer = {
           [i + 1, { t: 'number', v: tok.v }]
         else error ('parseTerm: unexpected token: %s' % [tok.t]),
 
-      parseOperand(toks, i):
-        local res = self.parseTerm(toks, i), j = res[0], node = res[1];
+      local parseOperand(toks, i) =
+        local res = parseTerm(toks, i), j = res[0], node = res[1];
         if toks[j].t == 'field' then
           local
             aux(i, out) =
@@ -266,26 +266,26 @@ local helmhammer = {
           [j + std.length(fields), { t: 'chain', v: [node, fields] }]
         else [j, node],
 
-      parseCommand(toks, i):
+      local parseCommand(toks, i) =
         local loop(i, operands) =
           if toks[i].t == '}}' then
             [i, { t: 'command', v: operands }]
           else if toks[i].t == '|' then
             [i + 1, { t: 'command', v: operands }]
           else
-            local res = self.parseOperand(toks, i), j = res[0], node = res[1];
+            local res = parseOperand(toks, i), j = res[0], node = res[1];
             loop(j, operands + [node]);
         loop(i, []),
 
-      parsePipeline(toks, i):
+      local parsePipeline(toks, i) =
         local loop(i, commands) =
           if toks[i].t == '}}' then [i + 1, { t: 'pipeline', v: commands }]
           else
-            local res = self.parseCommand(toks, i), j = res[0], node = res[1];
+            local res = parseCommand(toks, i), j = res[0], node = res[1];
             loop(j, commands + [node]);
         loop(i, []),
 
-      parse(toks/* tokens */, i):
+      local parse(toks/* tokens */, i) =
         local loop(i, root) =
           if i >= std.length(toks) then
             root
@@ -294,13 +294,13 @@ local helmhammer = {
             if tok.t == 'text' then
               loop(i + 1, root { v+: [{ t: 'text', v: tok.v }] }) tailstrict
             else
-              local res = self.parsePipeline(toks, i), j = res[0], node = res[1];
+              local res = parsePipeline(toks, i), j = res[0], node = res[1];
               loop(j, root { v+: [{ t: 'action', v: node }] }) tailstrict;
         loop(i, { t: 'list', v: [] }),
 
-      evalOperand(op, s0):
+      local evalOperand(op, s0) =
         if op.t == 'chain' then
-          local res = self.evalOperand(op.v[0], s0), s = res[0], val = res[1];
+          local res = evalOperand(op.v[0], s0), s = res[0], val = res[1];
           [s, std.foldl(function(acc, field) acc[field], op.v[1], val)]
         else if op.t == 'field' then
           [s0, if op.v == '' then s0.dot else s0.dot[op.v]]
@@ -311,38 +311,44 @@ local helmhammer = {
         else
           error 'evalOperand: unknown operand',
 
-      evalCommand(command, final, s0):
+      local evalCommand(command, final, s0) =
         local op0 = command.v[0];  // FIXME
         if op0.t == 'id' then
           if op0.v == 'nindent' then
-            local res = self.evalOperand(command.v[1], s0), s = res[0], val = res[1];
+            local res = evalOperand(command.v[1], s0), s = res[0], val = res[1];
             [s, $.nindent([val, final])]
           else
             error ('evalCommand: unknown id: %s' % [op0.v])
         else
-          self.evalOperand(op0, s0),
+          evalOperand(op0, s0),
 
-      evalPipeline(commands, s0):
+      local evalPipeline(commands, s0) =
         local acc =
           std.foldl(
             function(acc, command)
               local s0 = acc.s, final = acc.final;
-              local res = self.evalCommand(command, final, s0), s1 = res[0], v = res[1];
+              local res = evalCommand(command, final, s0), s1 = res[0], v = res[1];
               { s: s1, final: v },
             commands,
             { s: s0, final: null },
           );
         [acc.s, if acc.final == null then '' else acc.final],
 
-      eval(node, s0):
+      local eval(node, s0) =
         if node.t == 'text' then
           s0 { out+: node.v }
         else if node.t == 'list' then
-          std.foldl(function(s, node) self.eval(node, s), node.v, s0)
+          std.foldl(function(s, node) eval(node, s), node.v, s0)
         else if node.t == 'action' then
           assert node.v.t == 'pipeline';
-          local res = self.evalPipeline(node.v.v, s0), s = res[0], val = res[1];
+          local res = evalPipeline(node.v.v, s0), s = res[0], val = res[1];
           s { out+: std.toString(val) },
+
+      strIndex: strIndex,
+      findNonSpace: findNonSpace,
+      lex: lex,
+      parse: parse,
+      eval: eval,
     },
 
   tpl(args):
