@@ -179,6 +179,10 @@ local helmhammer = {
         std.codepoint('A') <= c && c <= std.codepoint('Z') ||
         std.codepoint('0') <= c && c <= std.codepoint('9'),
 
+      isNumeric(ch):
+        local c = std.codepoint(ch);
+        std.codepoint('0') <= c && c <= std.codepoint('9'),
+
       // lexFieldOrVariable scans a field or variable: [.$]Alphanumeric.
       // The . or $ has been scanned.
       lexFieldOrVariable(str, i):
@@ -189,6 +193,24 @@ local helmhammer = {
             else i,
           j = loop(i);
         [j, str[i:j]],
+
+      lexIdentifier(str, i):
+        local
+          loop(i) =
+            if i >= std.length(str) then error 'lexIdentifier: unexpected eof'
+            else if self.isAlphanumeric(str[i]) then loop(i + 1) tailstrict
+            else i,
+          j = loop(i);
+        [j, str[i:j]],
+
+      lexNumber(str, i):
+        local
+          loop(i) =
+            if i >= std.length(str) then error 'lexNumber: unexpected eof'
+            else if self.isNumeric(str[i]) then loop(i + 1) tailstrict
+            else i,
+          j = loop(i);
+        [j, std.parseInt(str[i:j])],
 
       lexInsideAction(str, i, out):
         if i + 2 < std.length(str) && str[i] == '-' && str[i + 1] == '}' && str[i + 2] == '}' then
@@ -201,9 +223,15 @@ local helmhammer = {
             local res = self.lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
             self.lexInsideAction(str, j, out + [{ t: 'field', v: v }]) tailstrict
           else if c == '|' then
-            self.lexInsideAction(str, i + 1, out + [{ t: 'pipe' }]) tailstrict
+            self.lexInsideAction(str, i + 1, out + [{ t: '|' }]) tailstrict
           else if c == ' ' then
             self.lexInsideAction(str, i + 1, out) tailstrict
+          else if self.isNumeric(c) then
+            local res = self.lexNumber(str, i), j = res[0], v = res[1];
+            self.lexInsideAction(str, j, out + [{ t: 'number', v: v }]) tailstrict
+          else if self.isAlphanumeric(c) then
+            local res = self.lexIdentifier(str, i), j = res[0], v = res[1];
+            self.lexInsideAction(str, j, out + [{ t: 'id', v: v }]) tailstrict
           else error 'lexInsideAction: unexpected char',
 
       lex(str, i, out, skipLeadingSpaces=false):
@@ -216,7 +244,11 @@ local helmhammer = {
         local tok = toks[i];
         if tok.t == 'field' then
           [i + 1, { t: 'field', v: tok.v }]
-        else error 'parseTerm: unexpected token',
+        else if tok.t == 'id' then
+          [i + 1, { t: 'id', v: tok.v }]
+        else if tok.t == 'number' then
+          [i + 1, { t: 'number', v: tok.v }]
+        else error ('parseTerm: unexpected token: %s' % [tok.t]),
 
       parseOperand(toks, i):
         local res = self.parseTerm(toks, i), j = res[0], node = res[1];
@@ -267,12 +299,21 @@ local helmhammer = {
           [s, std.foldl(function(acc, field) acc[field], op.v[1], val)]
         else if op.t == 'field' then
           [s0, if op.v == '' then s0.dot else s0.dot[op.v]]
+        else if op.t == 'number' then
+          [s0, op.v]
         else
           error 'evalOperand: unknown operand',
 
       evalCommand(command, final, s0):
         local op0 = command.v[0];  // FIXME
-        self.evalOperand(op0, s0),
+        if op0.t == 'id' then
+          if op0.v == 'nindent' then
+            local res = self.evalOperand(command.v[1], s0), s = res[0], val = res[1];
+            [s, $.nindent([val, final])]
+          else
+            error ('evalCommand: unknown id: %s' % [op0.v])
+        else
+          self.evalOperand(op0, s0),
 
       evalPipeline(commands, s0):
         local acc =
@@ -397,6 +438,7 @@ assert tpl(['a{{.}}b', 3]) == 'a3b';
 assert tpl(['a{{.A}}b', { A: 3 }]) == 'a3b';
 assert tpl(['a{{.A.b}}b', { A: { b: 'c' } }]) == 'acb';
 assert tpl(['a{{.A.b}}{{.A.b}}b', { A: { b: 'c' } }]) == 'accb';
+assert tpl(['a{{.A.b | nindent 1}}b', { A: { b: 'c' } }]) == 'a\n cb';
 
 //helmhammer.tpl(['', {}]) == '' &&
 //helmhammer.tpl(['abc', {}]) == 'abc' &&
