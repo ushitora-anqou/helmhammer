@@ -396,6 +396,7 @@ assert tpl(['a{{}}b', {}]) == 'ab';
 assert tpl(['a{{.}}b', 3]) == 'a3b';
 assert tpl(['a{{.A}}b', { A: 3 }]) == 'a3b';
 assert tpl(['a{{.A.b}}b', { A: { b: 'c' } }]) == 'acb';
+assert tpl(['a{{.A.b}}{{.A.b}}b', { A: { b: 'c' } }]) == 'accb';
 
 //helmhammer.tpl(['', {}]) == '' &&
 //helmhammer.tpl(['abc', {}]) == 'abc' &&
