@@ -246,7 +246,11 @@ local helmhammer = {
             lexInsideAction(str, j, out + [{ t: 'number', v: v }]) tailstrict
           else if isAlphanumeric(c) then
             local res = lexIdentifier(str, i), j = res[0], v = res[1];
-            lexInsideAction(str, j, out + [{ t: 'id', v: v }]) tailstrict
+            local token =
+              if v == 'with' then { t: 'with' }
+              else if v == 'end' then { t: 'end' }
+              else { t: 'id', v: v };
+            lexInsideAction(str, j, out + [token]) tailstrict
           else error 'lexInsideAction: unexpected char',
 
       local lex(str, i, out, skipLeadingSpaces=false) =
@@ -299,18 +303,36 @@ local helmhammer = {
             loop(j, commands + [node]);
         loop(i, []),
 
-      local parse(toks/* tokens */, i) =
+      local parseControl(toks, i) =
+        local res = parsePipeline(toks, i), j = res[0], pipe = res[1];
+        local res = parseList(toks, j), k = res[0], list = res[1];
+        if toks[k].t != 'end' || toks[k + 1].t != '}}' then
+          error 'parseControl: end not found'
+        else
+          [k + 2, { pipe: pipe.v, list: list }],
+
+      local parseList(toks, i) =
         local loop(i, root) =
           if i >= std.length(toks) then
-            root
+            [i, root]
           else
             local tok = toks[i];
             if tok.t == 'text' then
               loop(i + 1, root { v+: [{ t: 'text', v: tok.v }] }) tailstrict
+            else if tok.t == 'with' then
+              local res = parseControl(toks, i + 1), j = res[0], node = res[1];
+              loop(j, root { v+: [{ t: 'with', v: node }] }) tailstrict
+            else if tok.t == 'end' then
+              [i, root]
             else
               local res = parsePipeline(toks, i), j = res[0], node = res[1];
               loop(j, root { v+: [{ t: 'action', v: node }] }) tailstrict;
         loop(i, { t: 'list', v: [] }),
+
+      local parse(toks/* tokens */, i) =
+        local res = parseList(toks, i), j = res[0], node = res[1];
+        if j < std.length(toks) then error 'parse: unexpected end'
+        else node,
 
       local evalOperand(op, s0) =
         if op.t == 'chain' then
@@ -360,7 +382,12 @@ local helmhammer = {
         else if node.t == 'action' then
           assert node.v.t == 'pipeline';
           local res = evalPipeline(node.v.v, s0), s = res[0], val = res[1];
-          s { out+: std.toString(val) },
+          s { out+: std.toString(val) }
+        else if node.t == 'with' then
+          local res = evalPipeline(node.v.pipe, s0), s = res[0], pipeVal = res[1];
+          if $.isTrue(pipeVal) then eval(node.v.list, s)
+          else s0
+        else error 'eval: unexpected node',
 
       strIndex: strIndex,
       findNonSpace: findNonSpace,
@@ -479,4 +506,6 @@ assert tpl(['a{{$}}b', 3]) == 'a3b';
 assert tpl(['a{{$.A}}b', { A: 3 }]) == 'a3b';
 assert tpl(['a{{$.A.b}}b', { A: { b: 'c' } }]) == 'acb';
 assert tpl(['{{ include "tpl0" $ }}', { valueTpl0: 'here' }]) == 'here';
+assert tpl(['>{{ with $ }}1{{ end }}<', true]) == '>1<';
+assert tpl(['>{{ with $ }}1{{ end }}<', false]) == '><';
 'ok'
