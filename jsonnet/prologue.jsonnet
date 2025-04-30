@@ -248,6 +248,7 @@ local helmhammer = {
             local res = lexIdentifier(str, i), j = res[0], v = res[1];
             local token =
               if v == 'with' then { t: 'with' }
+              else if v == 'if' then { t: 'if' }
               else if v == 'else' then { t: 'else' }
               else if v == 'end' then { t: 'end' }
               else { t: 'id', v: v };
@@ -326,9 +327,9 @@ local helmhammer = {
             local tok = toks[i];
             if tok.t == 'text' then
               loop(i + 1, root { v+: [{ t: 'text', v: tok.v }] }) tailstrict
-            else if tok.t == 'with' then
+            else if tok.t == 'with' || tok.t == 'if' then
               local res = parseControl(toks, i + 1), j = res[0], node = res[1];
-              loop(j, root { v+: [{ t: 'with', v: node }] }) tailstrict
+              loop(j, root { v+: [{ t: tok.t, v: node }] }) tailstrict
             else if tok.t == 'else' || tok.t == 'end' then
               [i, root]
             else
@@ -390,11 +391,14 @@ local helmhammer = {
           assert node.v.t == 'pipeline';
           local res = evalPipeline(node.v.v, s0), s = res[0], val = res[1];
           s { out+: std.toString(val) }
-        else if node.t == 'with' then
+        else if node.t == 'with' || node.t == 'if' then
           local res = evalPipeline(node.v.pipe, s0), s = res[0], pipeVal = res[1];
-          if $.isTrue(pipeVal) then eval(node.v.list, s { dot: pipeVal })
-          else if node.v.elseList != null then eval(node.v.elseList, s)
-          else s0
+          if $.isTrue(pipeVal) then
+            eval(node.v.list, if node.t == 'if' then s else s { dot: pipeVal })
+          else if node.v.elseList != null then
+            eval(node.v.elseList, s)
+          else
+            s0
         else error 'eval: unexpected node',
 
       strIndex: strIndex,
@@ -519,4 +523,9 @@ assert tpl(['>{{ with $ }}1{{ end }}<', false]) == '><';
 assert tpl(['{{ with .A }}{{.B}}{{ end }}', { A: { B: 1 } }]) == '1';
 assert tpl(['>{{ with $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
 assert tpl(['>{{ with $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
+assert tpl(['>{{ if $ }}1{{ end }}<', true]) == '>1<';
+assert tpl(['>{{ if $ }}1{{ end }}<', false]) == '><';
+assert tpl(['{{ if .A }}{{.B}}{{ end }}', { A: { B: 1 }, B: 0 }]) == '0';
+assert tpl(['>{{ if $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
+assert tpl(['>{{ if $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
 'ok'
