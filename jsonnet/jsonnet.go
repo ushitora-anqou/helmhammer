@@ -538,15 +538,15 @@ func CallChartMain(
 
 func PredefinedFunctions() map[string]*Expr {
 	return map[string]*Expr{
-		"printf":     Index("helmhammer", "printf"),
+		"contains":   Index("helmhammer", "contains"),
+		"default":    Index("helmhammer", "default"),
 		"nindent":    Index("helmhammer", "nindent"),
 		"not":        Index("helmhammer", "not"),
+		"printf":     Index("helmhammer", "printf"),
 		"quote":      Index("helmhammer", "quote"),
-		"default":    Index("helmhammer", "default"),
 		"replace":    Index("helmhammer", "replace"),
-		"trunc":      Index("helmhammer", "trunc"),
 		"toYaml":     Index("helmhammer", "toYaml"),
 		"trimSuffix": Index("helmhammer", "trimSuffix"),
-		"contains":   Index("helmhammer", "contains"),
+		"trunc":      Index("helmhammer", "trunc"),
 	}
 }
