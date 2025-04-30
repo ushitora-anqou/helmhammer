@@ -248,6 +248,7 @@ local helmhammer = {
             local res = lexIdentifier(str, i), j = res[0], v = res[1];
             local token =
               if v == 'with' then { t: 'with' }
+              else if v == 'else' then { t: 'else' }
               else if v == 'end' then { t: 'end' }
               else { t: 'id', v: v };
             lexInsideAction(str, j, out + [token]) tailstrict
@@ -306,10 +307,16 @@ local helmhammer = {
       local parseControl(toks, i) =
         local res = parsePipeline(toks, i), j = res[0], pipe = res[1];
         local res = parseList(toks, j), k = res[0], list = res[1];
-        if toks[k].t != 'end' || toks[k + 1].t != '}}' then
+        local
+          res =
+            if toks[k].t == 'else' && toks[k + 1].t == '}}' then parseList(toks, k + 2)
+            else [k, null],
+          l = res[0],
+          elseList = res[1];
+        if toks[l].t != 'end' || toks[l + 1].t != '}}' then
           error 'parseControl: end not found'
         else
-          [k + 2, { pipe: pipe.v, list: list }],
+          [l + 2, { pipe: pipe.v, list: list, elseList: elseList }],
 
       local parseList(toks, i) =
         local loop(i, root) =
@@ -322,7 +329,7 @@ local helmhammer = {
             else if tok.t == 'with' then
               local res = parseControl(toks, i + 1), j = res[0], node = res[1];
               loop(j, root { v+: [{ t: 'with', v: node }] }) tailstrict
-            else if tok.t == 'end' then
+            else if tok.t == 'else' || tok.t == 'end' then
               [i, root]
             else
               local res = parsePipeline(toks, i), j = res[0], node = res[1];
@@ -386,6 +393,7 @@ local helmhammer = {
         else if node.t == 'with' then
           local res = evalPipeline(node.v.pipe, s0), s = res[0], pipeVal = res[1];
           if $.isTrue(pipeVal) then eval(node.v.list, s { dot: pipeVal })
+          else if node.v.elseList != null then eval(node.v.elseList, s)
           else s0
         else error 'eval: unexpected node',
 
@@ -509,4 +517,6 @@ assert tpl(['{{ include "tpl0" $ }}', { valueTpl0: 'here' }]) == 'here';
 assert tpl(['>{{ with $ }}1{{ end }}<', true]) == '>1<';
 assert tpl(['>{{ with $ }}1{{ end }}<', false]) == '><';
 assert tpl(['{{ with .A }}{{.B}}{{ end }}', { A: { B: 1 } }]) == '1';
+assert tpl(['>{{ with $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
+assert tpl(['>{{ with $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
 'ok'
