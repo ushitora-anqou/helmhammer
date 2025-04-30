@@ -34,19 +34,7 @@ func CompileChart(chart *helm.Chart) (*jsonnet.Expr, error) {
 }
 
 func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
-	globalVariables := map[string]*jsonnet.Expr{
-		"printf":     jsonnet.Index("helmhammer", "printf"),
-		"nindent":    jsonnet.Index("helmhammer", "nindent"),
-		"not":        jsonnet.Index("helmhammer", "not"),
-		"quote":      jsonnet.Index("helmhammer", "quote"),
-		"default":    jsonnet.Index("helmhammer", "default"),
-		"replace":    jsonnet.Index("helmhammer", "replace"),
-		"trunc":      jsonnet.Index("helmhammer", "trunc"),
-		"toYaml":     jsonnet.Index("helmhammer", "toYaml"),
-		"trimSuffix": jsonnet.Index("helmhammer", "trimSuffix"),
-		"contains":   jsonnet.Index("helmhammer", "contains"),
-	}
-
+	globalVariables := jsonnet.PredefinedFunctions()
 	globalEnv := newEnv(
 		tmpl0,
 		&scope{
