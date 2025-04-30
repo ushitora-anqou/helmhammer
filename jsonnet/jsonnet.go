@@ -38,6 +38,7 @@ type Expr struct {
 	IfElse         *Expr
 	CallFunc       *Expr
 	CallArgs       []*Expr
+	CallNamedArgs  map[string]*Expr
 	IntLiteral     int
 	IndexListHead  *Expr
 	IndexListTail  []string
@@ -121,12 +122,16 @@ func (e *Expr) String() string {
 		b := strings.Builder{}
 		wrapParen(&b, e, e.CallFunc)
 		b.WriteString("(")
-		for i, arg := range e.CallArgs {
-			b.WriteString(arg.String())
-			if i != len(e.CallArgs)-1 {
-				b.WriteString(", ")
-			}
+
+		printedArgs := []string{}
+		for _, arg := range e.CallArgs {
+			printedArgs = append(printedArgs, arg.String())
 		}
+		for name, arg := range e.CallNamedArgs {
+			printedArgs = append(printedArgs, fmt.Sprintf("%s=%s", name, arg.String()))
+		}
+		b.WriteString(strings.Join(printedArgs, ", "))
+
 		b.WriteString(")")
 		return b.String()
 

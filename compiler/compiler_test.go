@@ -382,6 +382,9 @@ func TestCompileChartValid(t *testing.T) {
 		Kind:     jsonnet.ECall,
 		CallFunc: compiledChart,
 		CallArgs: []*jsonnet.Expr{},
+		CallNamedArgs: map[string]*jsonnet.Expr{
+			"includeCrds": &jsonnet.Expr{Kind: jsonnet.ETrue},
+		},
 	}
 	vm := gojsonnet.MakeVM()
 	got, err := vm.EvaluateAnonymousSnippet(
