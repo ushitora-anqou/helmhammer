@@ -365,6 +365,10 @@ local helmhammer = {
             local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
             local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
             [s2, $.include(templates)([name, newDot])]
+          else if op0.v == 'tpl' then
+            local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
+            local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
+            [s2, $.tpl(templates)([name, newDot])]
           else
             error ('evalCommand: unknown id: %s' % [op0.v])
         else
@@ -528,4 +532,5 @@ assert tpl(['>{{ if $ }}1{{ end }}<', false]) == '><';
 assert tpl(['{{ if .A }}{{.B}}{{ end }}', { A: { B: 1 }, B: 0 }]) == '0';
 assert tpl(['>{{ if $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
 assert tpl(['>{{ if $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
+assert tpl(['{{ tpl "{{.A}}" $ }}', {A: 10}]) == '10';
 'ok'
