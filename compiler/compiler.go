@@ -373,6 +373,11 @@ func compileVariable(env *envT, node *parse.VariableNode, args []parse.Node, fin
 			return nil, errors.New("include is not a map")
 		}
 		return compileInclude(), nil
+	} else if node.Ident[0] == "tpl" {
+		if len(node.Ident) != 1 {
+			return nil, errors.New("tpl is not a map")
+		}
+		return compileTpl(), nil
 	}
 
 	_, ok := env.getVariable(node.Ident[0])
@@ -660,5 +665,12 @@ func compileInclude() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind: jsonnet.ERaw,
 		Raw:  `helmhammer.include($)`,
+	}
+}
+
+func compileTpl() *jsonnet.Expr {
+	return &jsonnet.Expr{
+		Kind: jsonnet.ERaw,
+		Raw:  `helmhammer.tpl($)`,
 	}
 }
