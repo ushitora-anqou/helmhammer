@@ -437,7 +437,7 @@ local helmhammer = {
     defaultValues,
     files,
   ):
-    function(values={})
+    function(values={}, namespace="")
       local aux(key) =
         std.parseYaml(files[key]({
           Values: std.mergePatch(defaultValues, values),
@@ -448,6 +448,7 @@ local helmhammer = {
           },
           Release: {
             Name: releaseName,
+            Namespace: namespace,
             Service: releaseService,
           },
         }));
