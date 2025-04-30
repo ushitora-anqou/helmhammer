@@ -8,6 +8,7 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
+	helmv2 "helm.sh/helm/v4/pkg/chart/v2"
 	"helm.sh/helm/v4/pkg/chart/v2/loader"
 )
 
@@ -18,6 +19,7 @@ type Chart struct {
 	Name         string
 	Version      string
 	AppVersion   string
+	CRDObjects   []helmv2.CRD
 }
 
 func Load(chartDir string) (*Chart, error) {
@@ -55,6 +57,7 @@ func Load(chartDir string) (*Chart, error) {
 		Name:         chart.Metadata.Name,
 		Version:      chart.Metadata.Version,
 		AppVersion:   chart.Metadata.AppVersion,
+		CRDObjects:   chart.CRDObjects(),
 	}, nil
 }
 

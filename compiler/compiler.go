@@ -18,10 +18,16 @@ func CompileChart(chart *helm.Chart) (*jsonnet.Expr, error) {
 		return nil, fmt.Errorf("failed to compile template: %w", err)
 	}
 
+	crds := [][]byte{}
+	for _, crd := range chart.CRDObjects {
+		crds = append(crds, crd.File.Data)
+	}
+
 	expr = jsonnet.CallChartMain(
 		chart.Name, chart.Version, chart.AppVersion,
 		chart.Name, "Helm",
-		chart.RenderedKeys, jsonnet.ConvertIntoJsonnet(chart.Values), expr,
+		chart.RenderedKeys, jsonnet.ConvertIntoJsonnet(chart.Values),
+		crds, expr,
 	)
 
 	return expr, nil

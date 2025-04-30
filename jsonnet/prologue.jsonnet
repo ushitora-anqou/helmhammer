@@ -435,11 +435,12 @@ local helmhammer = {
     releaseService,
     keys,
     defaultValues,
+    crds,
     files,
   ):
-    function(values={}, namespace="")
+    function(values={}, namespace='', includeCrds=false)
       local aux(key) =
-        std.parseYaml(files[key]({
+        files[key]({
           Values: std.mergePatch(defaultValues, values),
           Chart: {
             Name: chartName,
@@ -451,8 +452,14 @@ local helmhammer = {
             Namespace: namespace,
             Service: releaseService,
           },
-        }));
-      std.filter(function(x) x != null, std.map(aux, keys)),
+        });
+      std.filter(
+        function(x) x != null,
+        std.map(
+          std.parseYaml,
+          (if includeCrds then crds else []) + std.map(aux, keys),
+        ),
+      ),
 };
 // DON'T USE BELOW
 
@@ -533,5 +540,5 @@ assert tpl(['>{{ if $ }}1{{ end }}<', false]) == '><';
 assert tpl(['{{ if .A }}{{.B}}{{ end }}', { A: { B: 1 }, B: 0 }]) == '0';
 assert tpl(['>{{ if $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
 assert tpl(['>{{ if $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
-assert tpl(['{{ tpl "{{.A}}" $ }}', {A: 10}]) == '10';
+assert tpl(['{{ tpl "{{.A}}" $ }}', { A: 10 }]) == '10';
 'ok'

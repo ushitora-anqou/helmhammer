@@ -496,12 +496,21 @@ func escapeString(s string, escapeSingleQuote bool, escapeDoubleQuote bool) stri
 func CallChartMain(
 	chartName, chartVersion, chartAppVersion string,
 	releaseName, releaseService string,
-	keys []string, defaultValues *Expr, body *Expr) *Expr {
+	keys []string, defaultValues *Expr,
+	crds [][]byte, body *Expr) *Expr {
 	exprKeys := []*Expr{}
 	for _, key := range keys {
 		exprKeys = append(exprKeys, &Expr{
 			Kind:          EStringLiteral,
 			StringLiteral: key,
+		})
+	}
+
+	crdsList := []*Expr{}
+	for _, crd := range crds {
+		crdsList = append(crdsList, &Expr{
+			Kind:          EStringLiteral,
+			StringLiteral: string(crd),
 		})
 	}
 
@@ -516,6 +525,7 @@ func CallChartMain(
 			{Kind: EStringLiteral, StringLiteral: releaseService},
 			{Kind: EList, List: exprKeys},
 			defaultValues,
+			{Kind: EList, List: crdsList},
 			body,
 		},
 	}

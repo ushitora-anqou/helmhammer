@@ -4,6 +4,7 @@ test:
 	go test ./...
 
 .PHONY: fmt
+fmt:
 	gofmt -w .
 	jsonnetfmt -i jsonnet/prologue.jsonnet
 
