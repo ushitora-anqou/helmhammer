@@ -537,16 +537,21 @@ func CallChartMain(
 }
 
 func PredefinedFunctions() map[string]*Expr {
-	return map[string]*Expr{
-		"contains":   Index("helmhammer", "contains"),
-		"default":    Index("helmhammer", "default"),
-		"nindent":    Index("helmhammer", "nindent"),
-		"not":        Index("helmhammer", "not"),
-		"printf":     Index("helmhammer", "printf"),
-		"quote":      Index("helmhammer", "quote"),
-		"replace":    Index("helmhammer", "replace"),
-		"toYaml":     Index("helmhammer", "toYaml"),
-		"trimSuffix": Index("helmhammer", "trimSuffix"),
-		"trunc":      Index("helmhammer", "trunc"),
+	m := map[string]*Expr{}
+	for _, name := range []string{
+		"contains",
+		"default",
+		"nindent",
+		"not",
+		"or",
+		"printf",
+		"quote",
+		"replace",
+		"toYaml",
+		"trimSuffix",
+		"trunc",
+	} {
+		m[name] = Index("helmhammer", name)
 	}
+	return m
 }
