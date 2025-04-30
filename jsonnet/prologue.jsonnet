@@ -385,7 +385,7 @@ local helmhammer = {
           s { out+: std.toString(val) }
         else if node.t == 'with' then
           local res = evalPipeline(node.v.pipe, s0), s = res[0], pipeVal = res[1];
-          if $.isTrue(pipeVal) then eval(node.v.list, s)
+          if $.isTrue(pipeVal) then eval(node.v.list, s { dot: pipeVal })
           else s0
         else error 'eval: unexpected node',
 
@@ -508,4 +508,5 @@ assert tpl(['a{{$.A.b}}b', { A: { b: 'c' } }]) == 'acb';
 assert tpl(['{{ include "tpl0" $ }}', { valueTpl0: 'here' }]) == 'here';
 assert tpl(['>{{ with $ }}1{{ end }}<', true]) == '>1<';
 assert tpl(['>{{ with $ }}1{{ end }}<', false]) == '><';
+assert tpl(['{{ with .A }}{{.B}}{{ end }}', { A: { B: 1 } }]) == '1';
 'ok'
