@@ -541,6 +541,7 @@ func PredefinedFunctions() map[string]*Expr {
 	for _, name := range []string{
 		"contains",
 		"default",
+		"indent",
 		"nindent",
 		"not",
 		"or",
