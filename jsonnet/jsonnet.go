@@ -539,16 +539,27 @@ func CallChartMain(
 func PredefinedFunctions() map[string]*Expr {
 	m := map[string]*Expr{}
 	for _, name := range []string{
+		"and",
+		"concat",
 		"contains",
 		"default",
+		"dir",
+		"eq",
 		"indent",
+		"list",
+		"lower",
+		"ne",
 		"nindent",
 		"not",
 		"or",
+		"print",
 		"printf",
 		"quote",
 		"replace",
+		"required",
+		"sha256sum",
 		"toYaml",
+		"tpl",
 		"trimSuffix",
 		"trunc",
 	} {

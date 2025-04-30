@@ -125,6 +125,44 @@ local helmhammer = {
       else loop(i + 1);
     loop(0),
 
+  and(args):
+    assert std.length(args) >= 1;
+    local loop(i) =
+      if i == std.length(args) - 1 || !$.isTrue(args[i]) then args[i]
+      else loop(i + 1);
+    loop(0),
+
+  eq(args):
+    assert std.length(args) == 2;
+    args[0] == args[1],
+
+  ne(args):
+    assert std.length(args) == 2;
+    args[0] != args[1],
+
+  print(args):
+    assert std.length(args) == 1;
+    std.toString(args[0]),
+
+  concat(args):
+    std.join([], args),
+
+  list(args):
+    args,
+
+  lower(args):
+    assert std.length(args) == 1;
+    std.asciiLower(args[0]),
+
+  required(args):
+    assert std.length(args) == 2;
+    // FIXME
+    if args[1] == null then error args[0],
+
+  sha256sum(args):
+    assert std.length(args) == 1;
+    std.sha256(args[0]),
+
   toYaml(args):
     std.manifestYamlDoc(args[0], quote_keys=false),
 
@@ -474,6 +512,11 @@ assert helmhammer.or([0, 0]) == 0;
 assert helmhammer.or([1, 0]) == 1;
 assert helmhammer.or([0, true]) == true;
 assert helmhammer.or([1, 1]) == 1;
+
+assert helmhammer.and([false, 0]) == false;
+assert helmhammer.and([1, 0]) == 0;
+assert helmhammer.and([0, true]) == 0;
+assert helmhammer.and([1, 1]) == 1;
 
 local tpl_ = helmhammer.tpl_({});
 assert tpl_.strIndex('', '', 0) == -1;
