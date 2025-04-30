@@ -118,6 +118,13 @@ local helmhammer = {
   not(args):
     !args[0],
 
+  or(args):
+    assert std.length(args) >= 1;
+    local loop(i) =
+      if i == std.length(args) - 1 || $.isTrue(args[i]) then args[i]
+      else loop(i + 1);
+    loop(0),
+
   toYaml(args):
     std.manifestYamlDoc(args[0], quote_keys=false),
 
@@ -462,6 +469,11 @@ local helmhammer = {
       ),
 };
 // DON'T USE BELOW
+
+assert helmhammer.or([0, 0]) == 0;
+assert helmhammer.or([1, 0]) == 1;
+assert helmhammer.or([0, true]) == true;
+assert helmhammer.or([1, 1]) == 1;
 
 local tpl_ = helmhammer.tpl_({});
 assert tpl_.strIndex('', '', 0) == -1;
