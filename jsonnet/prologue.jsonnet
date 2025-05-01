@@ -371,7 +371,7 @@ local helmhammer = {
             else [k0, null],
           l0 = res[0],
           elseList = res[1];
-        local l1 = findNonSpaceToken(toks, l0), l2 = findNonSpaceToken(toks, l1+1);
+        local l1 = findNonSpaceToken(toks, l0), l2 = findNonSpaceToken(toks, l1 + 1);
         if toks[l1].t != 'end' || toks[l2].t != '}}' then
           error 'parseControl: end not found'
         else
