@@ -13,13 +13,14 @@ import (
 )
 
 type Chart struct {
-	Template     *template.Template
-	RenderedKeys []string
-	Values       map[string]any
-	Name         string
-	Version      string
-	AppVersion   string
-	CRDObjects   []helmv2.CRD
+	Template         *template.Template
+	RenderedKeys     []string
+	Values           map[string]any
+	Name             string
+	Version          string
+	AppVersion       string
+	CRDObjects       []helmv2.CRD
+	TemplateBasePath string
 }
 
 func Load(chartDir string) (*Chart, error) {
@@ -27,6 +28,7 @@ func Load(chartDir string) (*Chart, error) {
 	if err != nil {
 		return nil, err
 	}
+	basePath := chart.ChartFullPath()
 
 	tmpls := template.New(chartDir)
 	tmpls.Funcs(funcMap())
@@ -34,14 +36,14 @@ func Load(chartDir string) (*Chart, error) {
 		if tmpl == nil {
 			continue
 		}
-		if _, err := tmpls.New(tmpl.Name).Parse(string(tmpl.Data)); err != nil {
+		if _, err := tmpls.New(path.Join(basePath, tmpl.Name)).Parse(string(tmpl.Data)); err != nil {
 			return nil, err
 		}
 	}
 
 	keys := []string{}
 	for _, tmpl := range chart.Templates {
-		filename := tmpl.Name
+		filename := path.Join(basePath, tmpl.Name)
 		if strings.HasPrefix(path.Base(tmpl.Name), "_") ||
 			strings.HasSuffix(filename, "NOTES.txt") {
 			continue
@@ -51,13 +53,14 @@ func Load(chartDir string) (*Chart, error) {
 	sort.Strings(keys)
 
 	return &Chart{
-		Template:     tmpls,
-		RenderedKeys: keys,
-		Values:       chart.Values,
-		Name:         chart.Metadata.Name,
-		Version:      chart.Metadata.Version,
-		AppVersion:   chart.Metadata.AppVersion,
-		CRDObjects:   chart.CRDObjects(),
+		Template:         tmpls,
+		RenderedKeys:     keys,
+		Values:           chart.Values,
+		Name:             chart.Metadata.Name,
+		Version:          chart.Metadata.Version,
+		AppVersion:       chart.Metadata.AppVersion,
+		CRDObjects:       chart.CRDObjects(),
+		TemplateBasePath: path.Join(chart.ChartFullPath(), "templates"),
 	}, nil
 }
 

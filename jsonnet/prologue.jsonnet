@@ -518,6 +518,7 @@ local helmhammer = {
     chartAppVersion,
     releaseName,
     releaseService,
+    templateBasePath,
     keys,
     defaultValues,
     crds,
@@ -539,7 +540,7 @@ local helmhammer = {
           },
           Template: {
             Name: key,
-            BasePath: std.join('/', std.split(key, '/')[0:-1]),
+            BasePath: templateBasePath,
           },
         });
       std.filter(

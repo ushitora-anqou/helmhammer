@@ -26,6 +26,7 @@ func CompileChart(chart *helm.Chart) (*jsonnet.Expr, error) {
 	expr = jsonnet.CallChartMain(
 		chart.Name, chart.Version, chart.AppVersion,
 		chart.Name, "Helm",
+		chart.TemplateBasePath,
 		chart.RenderedKeys, jsonnet.ConvertIntoJsonnet(chart.Values),
 		crds, expr,
 	)

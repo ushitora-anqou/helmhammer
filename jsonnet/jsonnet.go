@@ -503,6 +503,7 @@ func escapeString(s string, escapeSingleQuote bool, escapeDoubleQuote bool) stri
 func CallChartMain(
 	chartName, chartVersion, chartAppVersion string,
 	releaseName, releaseService string,
+	templateBasePath string,
 	keys []string, defaultValues *Expr,
 	crds [][]byte, body *Expr) *Expr {
 	exprKeys := []*Expr{}
@@ -530,6 +531,7 @@ func CallChartMain(
 			{Kind: EStringLiteral, StringLiteral: chartAppVersion},
 			{Kind: EStringLiteral, StringLiteral: releaseName},
 			{Kind: EStringLiteral, StringLiteral: releaseService},
+			{Kind: EStringLiteral, StringLiteral: templateBasePath},
 			{Kind: EList, List: exprKeys},
 			defaultValues,
 			{Kind: EList, List: crdsList},
