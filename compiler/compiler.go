@@ -389,6 +389,8 @@ func compileFunction(env *envT, node *parse.IdentifierNode, args []parse.Node, f
 	var function *jsonnet.Expr
 	if node.Ident == "include" {
 		function = compileInclude()
+	} else if node.Ident == "tpl" {
+		function = compileTpl()
 	} else {
 		_, ok := env.getVariable(node.Ident)
 		if !ok {

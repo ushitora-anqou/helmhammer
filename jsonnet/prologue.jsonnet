@@ -1,6 +1,7 @@
 local helmhammer = {
   field(receiver, fieldName, args):
-    if std.isFunction(receiver[fieldName]) then receiver[fieldName](args)
+    if !std.objectHas(receiver, fieldName) then null
+    else if std.isFunction(receiver[fieldName]) then receiver[fieldName](args)
     else receiver[fieldName],
 
   join(ary):
@@ -116,7 +117,7 @@ local helmhammer = {
     std.format("'%s'", std.strReplace(args[0], "'", "\\'")),
 
   not(args):
-    !args[0],
+    !$.isTrue(args[0]),
 
   or(args):
     assert std.length(args) >= 1;

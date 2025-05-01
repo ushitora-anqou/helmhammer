@@ -473,6 +473,8 @@ func escapeString(s string, escapeSingleQuote bool, escapeDoubleQuote bool) stri
 	buf := []byte(s)
 	for _, ch := range buf {
 		switch ch {
+		case '\\':
+			b.WriteString("\\\\")
 		case '\n':
 			b.WriteString("\\n")
 		case '\r':
@@ -559,7 +561,6 @@ func PredefinedFunctions() map[string]*Expr {
 		"required",
 		"sha256sum",
 		"toYaml",
-		"tpl",
 		"trimSuffix",
 		"trunc",
 	} {
