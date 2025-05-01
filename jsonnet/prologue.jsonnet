@@ -528,7 +528,7 @@ local helmhammer = {
     crds,
     files,
   ):
-    function(values={}, namespace='', includeCrds=false)
+    function(values={}, namespace='default', includeCrds=false)
       local
         aux(key) =
           files[key]({
