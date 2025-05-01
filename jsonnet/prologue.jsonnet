@@ -111,10 +111,22 @@ local helmhammer = {
     std.strReplace(args[2], args[0], args[1]),
 
   quote(args):
-    std.format('"%s"', std.strReplace(args[0], '"', '\\"')),
+    std.join(
+      ' ',
+      std.map(
+        function(x) '"%s"' % [std.strReplace(x, '"', '\\"')],
+        std.filterMap(function(x) x != null, std.toString, args),
+      ),
+    ),
 
   squote(args):
-    std.format("'%s'", std.strReplace(args[0], "'", "\\'")),
+    std.join(
+      ' ',
+      std.map(
+        function(x) "'%s'" % [std.strReplace(x, "'", "\\'")],
+        std.filterMap(function(x) x != null, std.toString, args),
+      ),
+    ),
 
   not(args):
     !$.isTrue(args[0]),
