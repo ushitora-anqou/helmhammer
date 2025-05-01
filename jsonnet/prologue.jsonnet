@@ -174,11 +174,14 @@ local helmhammer = {
         local occurrences = std.findSubstr(pat, str[start:std.length(str)]);
         if occurrences == [] then -1 else start + occurrences[0],
 
+      local isSpace(c) =
+        c == ' ' || c == '\n' || c == '\r' || c == '\t',
+
       local findNonSpace(str, i, step) =
         local c = str[i];
         if i < 0 || i >= std.length(str) then
           i
-        else if c == ' ' || c == '\n' || c == '\r' || c == '\t' then
+        else if isSpace(c) then
           findNonSpace(str, i + step, step)
         else
           i,
@@ -209,13 +212,13 @@ local helmhammer = {
             lexInsideAction(
               str,
               j + 3,
-              if i >= k + 1 then out else out + [{ t: 'text', v: str[i:k + 1] }]
+              (if i >= k + 1 then out else out + [{ t: 'text', v: str[i:k + 1] }]) + [{ t: '{{' }]
             ) tailstrict
           else
             lexInsideAction(
               str,
               j + 2,
-              if i >= j then out else out + [{ t: 'text', v: str[i:j] }]
+              (if i >= j then out else out + [{ t: 'text', v: str[i:j] }]) + [{ t: '{{' }]
             ) tailstrict,
 
       local isAlphanumeric(ch) =
@@ -282,8 +285,8 @@ local helmhammer = {
             lexInsideAction(str, j, out + [{ t: 'var', v: v }]) tailstrict
           else if c == '|' then
             lexInsideAction(str, i + 1, out + [{ t: '|' }]) tailstrict
-          else if c == ' ' then
-            lexInsideAction(str, i + 1, out) tailstrict
+          else if isSpace(c) then
+            lexInsideAction(str, findNonSpace(str, i + 1, 1), out + [{ t: ' ' }]) tailstrict
           else if c == '"' then
             local res = lexString(str, i), j = res[0], v = res[1];
             lexInsideAction(str, j, out + [{ t: 'string', v: v }]) tailstrict
@@ -307,7 +310,12 @@ local helmhammer = {
         else
           lexText(str, i, out, skipLeadingSpaces),
 
-      local parseTerm(toks, i) =
+      local findNonSpaceToken(toks, i) =
+        if toks[i].t == ' ' then i + 1
+        else i,
+
+      local parseTerm(toks, i0) =
+        local i = findNonSpaceToken(toks, i0);
         local tok = toks[i];
         if tok.t == 'field' then
           [i + 1, { t: 'field', v: tok.v }]
@@ -333,7 +341,8 @@ local helmhammer = {
         else [j, node],
 
       local parseCommand(toks, i) =
-        local loop(i, operands) =
+        local loop(i0, operands) =
+          local i = findNonSpaceToken(toks, i0);
           if toks[i].t == '}}' then
             [i, { t: 'command', v: operands }]
           else if toks[i].t == '|' then
@@ -344,7 +353,8 @@ local helmhammer = {
         loop(i, []),
 
       local parsePipeline(toks, i) =
-        local loop(i, commands) =
+        local loop(i0, commands) =
+          local i = findNonSpaceToken(toks, i0);
           if toks[i].t == '}}' then [i + 1, { t: 'pipeline', v: commands }]
           else
             local res = parseCommand(toks, i), j = res[0], node = res[1];
@@ -353,17 +363,19 @@ local helmhammer = {
 
       local parseControl(toks, i) =
         local res = parsePipeline(toks, i), j = res[0], pipe = res[1];
-        local res = parseList(toks, j), k = res[0], list = res[1];
+        local res = parseList(toks, j), k0 = res[0], list = res[1];
         local
           res =
-            if toks[k].t == 'else' && toks[k + 1].t == '}}' then parseList(toks, k + 2)
-            else [k, null],
-          l = res[0],
+            local k1 = findNonSpaceToken(toks, k0), k2 = findNonSpaceToken(toks, k1 + 1);
+            if toks[k1].t == 'else' && toks[k2].t == '}}' then parseList(toks, k2 + 1)
+            else [k0, null],
+          l0 = res[0],
           elseList = res[1];
-        if toks[l].t != 'end' || toks[l + 1].t != '}}' then
+        local l1 = findNonSpaceToken(toks, l0), l2 = findNonSpaceToken(toks, l1+1);
+        if toks[l1].t != 'end' || toks[l2].t != '}}' then
           error 'parseControl: end not found'
         else
-          [l + 2, { pipe: pipe.v, list: list, elseList: elseList }],
+          [l2 + 1, { pipe: pipe.v, list: list, elseList: elseList }],
 
       local parseList(toks, i) =
         local loop(i, root) =
@@ -373,14 +385,18 @@ local helmhammer = {
             local tok = toks[i];
             if tok.t == 'text' then
               loop(i + 1, root { v+: [{ t: 'text', v: tok.v }] }) tailstrict
-            else if tok.t == 'with' || tok.t == 'if' then
-              local res = parseControl(toks, i + 1), j = res[0], node = res[1];
-              loop(j, root { v+: [{ t: tok.t, v: node }] }) tailstrict
-            else if tok.t == 'else' || tok.t == 'end' then
-              [i, root]
-            else
-              local res = parsePipeline(toks, i), j = res[0], node = res[1];
-              loop(j, root { v+: [{ t: 'action', v: node }] }) tailstrict;
+            else if tok.t == '{{' then
+              local i0 = i;
+              local i = findNonSpaceToken(toks, i0 + 1);
+              local tok = toks[i];
+              if tok.t == 'with' || tok.t == 'if' then
+                local res = parseControl(toks, i + 1), j = res[0], node = res[1];
+                loop(j, root { v+: [{ t: tok.t, v: node }] }) tailstrict
+              else if tok.t == 'else' || tok.t == 'end' then
+                [i, root]
+              else
+                local res = parsePipeline(toks, i), j = res[0], node = res[1];
+                loop(j, root { v+: [{ t: 'action', v: node }] }) tailstrict;
         loop(i, { t: 'list', v: [] }),
 
       local parse(toks/* tokens */, i) =
@@ -533,25 +549,25 @@ assert tpl_.findNonSpace('a ', 1, -1) == 0;
 assert tpl_.findNonSpace(' ', 0, -1) == -1;
 assert tpl_.findNonSpace(' ', 0, 1) == 1;
 assert tpl_.lex('aa', 0, []) == [{ t: 'text', v: 'aa' }];
-assert tpl_.lex('{{}}', 0, []) == [{ t: '}}' }];
-assert tpl_.lex('a{{}}', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }];
-assert tpl_.lex('a {{}}', 0, []) == [{ t: 'text', v: 'a ' }, { t: '}}' }];
-assert tpl_.lex('{{- }}', 0, []) == [{ t: '}}' }];
-assert tpl_.lex('a{{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }];
-assert tpl_.lex('a {{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }];
-assert tpl_.lex('{{ -}}', 0, []) == [{ t: '}}' }];
-assert tpl_.lex('{{ -}}a', 0, []) == [{ t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl_.lex('{{ -}} a', 0, []) == [{ t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl_.lex('{{- -}}', 0, []) == [{ t: '}}' }];
-assert tpl_.lex('a{{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl_.lex('a {{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl_.lex('a{{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl_.lex('a {{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl_.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: '}}' }, { t: 'text', v: 'b' }];
-assert tpl_.lex('{{ . }}', 0, []) == [{ t: 'field', v: '' }, { t: '}}' }];
-assert tpl_.lex('{{ .A }}', 0, []) == [{ t: 'field', v: 'A' }, { t: '}}' }];
-assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: '}}' }];
-assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: '}}' }];
+assert tpl_.lex('{{}}', 0, []) == [{ t: '{{' }, { t: '}}' }];
+assert tpl_.lex('a{{}}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: '}}' }];
+assert tpl_.lex('a {{}}', 0, []) == [{ t: 'text', v: 'a ' }, { t: '{{' }, { t: '}}' }];
+assert tpl_.lex('{{- }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
+assert tpl_.lex('a{{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }];
+assert tpl_.lex('a {{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }];
+assert tpl_.lex('{{ -}}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
+assert tpl_.lex('{{ -}}a', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('{{ -}} a', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('{{- -}}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
+assert tpl_.lex('a{{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a {{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a{{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a {{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+assert tpl_.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: '}}' }, { t: 'text', v: 'b' }];
+assert tpl_.lex('{{ . }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: '' }, { t: ' ' }, { t: '}}' }];
+assert tpl_.lex('{{ .A }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: ' ' }, { t: '}}' }];
+assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: ' ' }, { t: '}}' }];
+assert tpl_.lex('{{ .A.b }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: ' ' }, { t: '}}' }];
 assert tpl_.parse(tpl_.lex('', 0, []), 0) == { t: 'list', v: [] };
 assert tpl_.parse(tpl_.lex('a', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }] };
 assert tpl_.parse(tpl_.lex('a{{}}b', 0, []), 0) == {
@@ -586,6 +602,7 @@ assert tpl(['a{{$}}b', 3]) == 'a3b';
 assert tpl(['a{{$.A}}b', { A: 3 }]) == 'a3b';
 assert tpl(['a{{$.A.b}}b', { A: { b: 'c' } }]) == 'acb';
 assert tpl(['{{ include "tpl0" $ }}', { valueTpl0: 'here' }]) == 'here';
+assert tpl(['{{ include "tpl0" . }}', { valueTpl0: 'here' }]) == 'here';
 assert tpl(['>{{ with $ }}1{{ end }}<', true]) == '>1<';
 assert tpl(['>{{ with $ }}1{{ end }}<', false]) == '><';
 assert tpl(['{{ with .A }}{{.B}}{{ end }}', { A: { B: 1 } }]) == '1';
