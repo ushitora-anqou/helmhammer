@@ -1,6 +1,6 @@
 local helmhammer = {
   field(receiver, fieldName, args):
-    if !std.objectHas(receiver, fieldName) then null
+    if receiver == null || !std.objectHas(receiver, fieldName) then null
     else if std.isFunction(receiver[fieldName]) then receiver[fieldName](args)
     else receiver[fieldName],
 
@@ -154,8 +154,19 @@ local helmhammer = {
     args[0] != args[1],
 
   print(args):
-    assert std.length(args) == 1;
-    std.toString(args[0]),
+    // Equivalent to fmt.Sprint of Go.
+    //
+    // > Sprint formats using the default formats for its operands and
+    // > returns the resulting string. Spaces are added between operands
+    // > when neither is a string.
+    local aux(i, out) =
+      if i >= std.length(args) then out
+      else if std.isString(args[i]) then aux(i + 1, out + args[i])
+      else if i >= 1 && !std.isString(args[i - 1]) then
+        aux(i + 1, out + ' ' + std.toString(args[i]))
+      else
+        aux(i + 1, out + std.toString(args[i]));
+    aux(0, ''),
 
   concat(args):
     std.join([], args),
@@ -525,6 +536,10 @@ local helmhammer = {
             Name: releaseName,
             Namespace: namespace,
             Service: releaseService,
+          },
+          Template: {
+            Name: key,
+            BasePath: std.join('/', std.split(key, '/')[0:-1]),
           },
         });
       std.filter(
