@@ -190,6 +190,10 @@ local helmhammer = {
   toYaml(args):
     std.manifestYamlDoc(args[0], quote_keys=false),
 
+  dir(args):
+    assert std.length(args) == 1;
+    std.join('/', std.split(args[0], '/')[1:-1]),
+
   tpl_(templates):
     {
       local strIndex(pat, str, start) =
@@ -525,29 +529,38 @@ local helmhammer = {
     files,
   ):
     function(values={}, namespace='', includeCrds=false)
-      local aux(key) =
-        files[key]({
-          Values: std.mergePatch(defaultValues, values),
-          Chart: {
-            Name: chartName,
-            Version: chartVersion,
-            AppVersion: chartAppVersion,
-          },
-          Release: {
-            Name: releaseName,
-            Namespace: namespace,
-            Service: releaseService,
-          },
-          Template: {
-            Name: key,
-            BasePath: templateBasePath,
-          },
-        });
+      local
+        aux(key) =
+          files[key]({
+            Values: std.mergePatch(defaultValues, values),
+            Chart: {
+              Name: chartName,
+              Version: chartVersion,
+              AppVersion: chartAppVersion,
+            },
+            Release: {
+              Name: releaseName,
+              Namespace: namespace,
+              Service: releaseService,
+            },
+            Template: {
+              Name: key,
+              BasePath: templateBasePath,
+            },
+          }),
+        flatten(ary) =
+          local loop(i, out) =
+            if i >= std.length(ary) then out
+            else if std.isArray(ary[i]) then loop(i + 1, out + ary[i])
+            else loop(i + 1, out + [ary[i]]);
+          loop(0, []);
       std.filter(
         function(x) x != null,
-        std.map(
-          std.parseYaml,
-          (if includeCrds then crds else []) + std.map(aux, keys),
+        flatten(
+          std.map(
+            std.parseYaml,
+            (if includeCrds then crds else []) + std.map(aux, keys),
+          ),
         ),
       ),
 };
