@@ -388,7 +388,11 @@ func TestCompileChartValid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sortManifests := func(parsed []map[string]any) {
+			finalizeManifests := func(src []byte, patch jsonpatch.Patch) []map[string]any {
+				var parsed []map[string]any
+				err := json.Unmarshal(src, &parsed)
+				require.NoError(t, err)
+
 				slices.SortFunc(parsed, func(a map[string]any, b map[string]any) int {
 					aMetadata := a["metadata"].(map[string]any)
 					bMetadata := b["metadata"].(map[string]any)
@@ -397,14 +401,7 @@ func TestCompileChartValid(t *testing.T) {
 						fmt.Sprintf("%s-%s-%s-%s", b["apiVersion"], b["kind"], bMetadata["namespace"], bMetadata["name"]),
 					)
 				})
-			}
 
-			finalizeManifests := func(src []byte, patch jsonpatch.Patch) []map[string]any {
-				var parsed []map[string]any
-				err := json.Unmarshal(src, &parsed)
-				require.NoError(t, err)
-
-				sortManifests(parsed)
 				sorted, err := json.Marshal(parsed)
 				require.NoError(t, err)
 
