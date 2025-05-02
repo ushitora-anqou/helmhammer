@@ -82,3 +82,4 @@ local
 - limited support for `tpl` function in Helm.
 - output of `toYaml` function in Helm may be different from authentic one.
   - cf. https://github.com/helm/helm/issues/4262
+- `Capabilities.APIVersions` in Helm is an object that has only `Has` field.

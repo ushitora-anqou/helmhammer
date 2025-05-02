@@ -606,7 +606,7 @@ local helmhammer = {
               BasePath: templateBasePath,
             },
             Capabilities: capabilities {
-              APIVersions: {  // FIXME: APIVersions should behave as array, too.
+              APIVersions: {  // FIXME: APIVersions should behave as an array, too.
                 Has(args):
                   assert std.length(args) == 1;
                   assert std.isString(args[0]);
