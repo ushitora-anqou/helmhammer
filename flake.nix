@@ -24,11 +24,9 @@
       vendorHash = "sha256-Uh2rAXdye9QmmZuEqx1qeokE9Z9domyHsSFlU7YZsZw=";
     });
   in {
-    formatter."${system}" = pkgs.alejandra;
-
     devShells."${system}" = rec {
       default = pkgs.mkShell {
-        packages = [go-jsonnet];
+        packages = [go-jsonnet] ++ (with pkgs; [alejandra kubernetes-helm jq yq-go]);
       };
     };
   };

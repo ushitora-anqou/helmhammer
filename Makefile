@@ -5,6 +5,7 @@ test: prepare-test
 
 .PHONY: fmt
 fmt:
+	alejandra .
 	gofmt -w .
 	jsonnetfmt -i jsonnet/prologue.jsonnet
 

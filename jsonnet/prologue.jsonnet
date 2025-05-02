@@ -576,7 +576,7 @@ assert helmhammer.and([1, 0]) == 0;
 assert helmhammer.and([0, true]) == 0;
 assert helmhammer.and([1, 1]) == 1;
 
-assert helmhammer.dir(["/run/topolvm/lvmd.sock"]) == "/run/topolvm";
+assert helmhammer.dir(['/run/topolvm/lvmd.sock']) == '/run/topolvm';
 
 local tpl_ = helmhammer.tpl_({});
 assert tpl_.strIndex('', '', 0) == -1;
