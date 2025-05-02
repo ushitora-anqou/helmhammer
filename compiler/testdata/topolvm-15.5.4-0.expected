@@ -1,102 +1,12 @@
 [
   {
-    "apiVersion": "scheduling.k8s.io/v1",
-    "kind": "PriorityClass",
+    "apiVersion": "admissionregistration.k8s.io/v1",
+    "kind": "MutatingWebhookConfiguration",
     "metadata": {
-      "name": "topolvm"
-    },
-    "value": 1000000,
-    "globalDefault": false,
-    "description": "Pods using TopoLVM volumes should use this class."
-  },
-  {
-    "apiVersion": "policy/v1",
-    "kind": "PodDisruptionBudget",
-    "metadata": {
-      "name": "topolvm-controller",
-      "namespace": "default"
-    },
-    "spec": {
-      "maxUnavailable": 1,
-      "selector": {
-        "matchLabels": {
-          "app.kubernetes.io/component": "controller",
-          "app.kubernetes.io/name": "topolvm",
-          "app.kubernetes.io/instance": "topolvm"
-        }
-      }
-    }
-  },
-  {
-    "apiVersion": "v1",
-    "kind": "ServiceAccount",
-    "metadata": {
-      "name": "topolvm-controller",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    }
-  },
-  {
-    "apiVersion": "v1",
-    "kind": "ServiceAccount",
-    "metadata": {
-      "name": "topolvm-lvmd",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    }
-  },
-  {
-    "apiVersion": "v1",
-    "kind": "ServiceAccount",
-    "metadata": {
-      "name": "topolvm-node",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    }
-  },
-  {
-    "apiVersion": "v1",
-    "kind": "ConfigMap",
-    "metadata": {
-      "name": "topolvm-lvmd-0",
-      "namespace": "default",
-      "labels": {
-        "idx": "0",
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "data": {
-      "lvmd.yaml": "socket-name: /run/topolvm/lvmd.sock\ndevice-classes: \n  - default: true\n    name: ssd\n    spare-gb: 10\n    volume-group: myvg1\n"
-    }
-  },
-  {
-    "apiVersion": "storage.k8s.io/v1",
-    "kind": "StorageClass",
-    "metadata": {
-      "name": "topolvm-provisioner",
-      "annotations": null,
+      "name": "topolvm-hook",
+      "annotations": {
+        "cert-manager.io/inject-ca-from": "default/topolvm-mutatingwebhook"
+      },
       "labels": {
         "helm.sh/chart": "topolvm-15.5.4",
         "app.kubernetes.io/name": "topolvm",
@@ -105,12 +15,52 @@
         "app.kubernetes.io/managed-by": "Helm"
       }
     },
-    "provisioner": "topolvm.io",
-    "parameters": {
-      "csi.storage.k8s.io/fstype": "xfs"
-    },
-    "volumeBindingMode": "WaitForFirstConsumer",
-    "allowVolumeExpansion": true
+    "webhooks": [
+      {
+        "name": "pvc-hook.topolvm.io",
+        "admissionReviewVersions": [
+          "v1",
+          "v1beta1"
+        ],
+        "namespaceSelector": {
+          "matchExpressions": [
+            {
+              "key": "topolvm.io/webhook",
+              "operator": "NotIn",
+              "values": [
+                "ignore"
+              ]
+            }
+          ]
+        },
+        "failurePolicy": "Fail",
+        "matchPolicy": "Equivalent",
+        "clientConfig": {
+          "service": {
+            "namespace": "default",
+            "name": "topolvm-controller",
+            "path": "/pvc/mutate"
+          }
+        },
+        "rules": [
+          {
+            "apiGroups": [
+              ""
+            ],
+            "apiVersions": [
+              "v1"
+            ],
+            "operations": [
+              "CREATE"
+            ],
+            "resources": [
+              "persistentvolumeclaims"
+            ]
+          }
+        ],
+        "sideEffects": "None"
+      }
+    ]
   },
   {
     "apiVersion": "apiextensions.k8s.io/v1",
@@ -230,956 +180,6 @@
           "subresources": {
             "status": {}
           }
-        }
-      ]
-    }
-  },
-  {
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "kind": "ClusterRole",
-    "metadata": {
-      "name": "default:controller",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "rules": [
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "nodes"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "patch",
-          "update",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "persistentvolumeclaims",
-          "pods"
-        ],
-        "verbs": [
-          "delete",
-          "get",
-          "list",
-          "update",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "storage.k8s.io"
-        ],
-        "resources": [
-          "csidrivers",
-          "storageclasses"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "topolvm.io"
-        ],
-        "resources": [
-          "logicalvolumes"
-        ],
-        "verbs": [
-          "create",
-          "delete",
-          "get",
-          "list",
-          "patch",
-          "update",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "topolvm.io"
-        ],
-        "resources": [
-          "logicalvolumes/status"
-        ],
-        "verbs": [
-          "get",
-          "patch",
-          "update"
-        ]
-      }
-    ]
-  },
-  {
-    "kind": "ClusterRole",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "default-external-provisioner-runner",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "rules": [
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "persistentvolumes"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch",
-          "create",
-          "patch",
-          "delete"
-        ]
-      },
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "persistentvolumeclaims"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch",
-          "update"
-        ]
-      },
-      {
-        "apiGroups": [
-          "storage.k8s.io"
-        ],
-        "resources": [
-          "storageclasses"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "events"
-        ],
-        "verbs": [
-          "list",
-          "watch",
-          "create",
-          "update",
-          "patch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "snapshot.storage.k8s.io"
-        ],
-        "resources": [
-          "volumesnapshots"
-        ],
-        "verbs": [
-          "get",
-          "list"
-        ]
-      },
-      {
-        "apiGroups": [
-          "snapshot.storage.k8s.io"
-        ],
-        "resources": [
-          "volumesnapshotcontents"
-        ],
-        "verbs": [
-          "get",
-          "list"
-        ]
-      },
-      {
-        "apiGroups": [
-          "storage.k8s.io"
-        ],
-        "resources": [
-          "csinodes"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "nodes"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "storage.k8s.io"
-        ],
-        "resources": [
-          "volumeattachments"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      }
-    ]
-  },
-  {
-    "kind": "ClusterRole",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "default-external-resizer-runner",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "rules": [
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "persistentvolumes"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch",
-          "patch"
-        ]
-      },
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "persistentvolumeclaims"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "pods"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "persistentvolumeclaims/status"
-        ],
-        "verbs": [
-          "patch"
-        ]
-      },
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "events"
-        ],
-        "verbs": [
-          "list",
-          "watch",
-          "create",
-          "update",
-          "patch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "storage.k8s.io"
-        ],
-        "resources": [
-          "volumeattributesclasses"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      }
-    ]
-  },
-  {
-    "kind": "ClusterRole",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "default-external-snapshotter-runner",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "rules": [
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "events"
-        ],
-        "verbs": [
-          "list",
-          "watch",
-          "create",
-          "update",
-          "patch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "snapshot.storage.k8s.io"
-        ],
-        "resources": [
-          "volumesnapshotclasses"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "snapshot.storage.k8s.io"
-        ],
-        "resources": [
-          "volumesnapshotcontents"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch",
-          "update",
-          "patch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "snapshot.storage.k8s.io"
-        ],
-        "resources": [
-          "volumesnapshotcontents/status"
-        ],
-        "verbs": [
-          "update",
-          "patch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "groupsnapshot.storage.k8s.io"
-        ],
-        "resources": [
-          "volumegroupsnapshotclasses"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "groupsnapshot.storage.k8s.io"
-        ],
-        "resources": [
-          "volumegroupsnapshotcontents"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch",
-          "update",
-          "patch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "groupsnapshot.storage.k8s.io"
-        ],
-        "resources": [
-          "volumegroupsnapshotcontents/status"
-        ],
-        "verbs": [
-          "update",
-          "patch"
-        ]
-      }
-    ]
-  },
-  {
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "kind": "ClusterRole",
-    "metadata": {
-      "name": "default:node",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "rules": [
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "nodes"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch",
-          "update",
-          "patch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "topolvm.io"
-        ],
-        "resources": [
-          "logicalvolumes",
-          "logicalvolumes/status"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch",
-          "create",
-          "update",
-          "delete",
-          "patch"
-        ]
-      },
-      {
-        "apiGroups": [
-          "storage.k8s.io"
-        ],
-        "resources": [
-          "csidrivers"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch"
-        ]
-      }
-    ]
-  },
-  {
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "kind": "ClusterRoleBinding",
-    "metadata": {
-      "name": "default:controller",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "subjects": [
-      {
-        "kind": "ServiceAccount",
-        "namespace": "default",
-        "name": "topolvm-controller"
-      }
-    ],
-    "roleRef": {
-      "apiGroup": "rbac.authorization.k8s.io",
-      "kind": "ClusterRole",
-      "name": "default:controller"
-    }
-  },
-  {
-    "kind": "ClusterRoleBinding",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "default-csi-provisioner-role",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "subjects": [
-      {
-        "kind": "ServiceAccount",
-        "namespace": "default",
-        "name": "topolvm-controller"
-      }
-    ],
-    "roleRef": {
-      "kind": "ClusterRole",
-      "name": "default-external-provisioner-runner",
-      "apiGroup": "rbac.authorization.k8s.io"
-    }
-  },
-  {
-    "kind": "ClusterRoleBinding",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "default-csi-resizer-role",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "subjects": [
-      {
-        "kind": "ServiceAccount",
-        "namespace": "default",
-        "name": "topolvm-controller"
-      }
-    ],
-    "roleRef": {
-      "kind": "ClusterRole",
-      "name": "default-external-resizer-runner",
-      "apiGroup": "rbac.authorization.k8s.io"
-    }
-  },
-  {
-    "kind": "ClusterRoleBinding",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "default-csi-snapshotter-role",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "subjects": [
-      {
-        "kind": "ServiceAccount",
-        "namespace": "default",
-        "name": "topolvm-controller"
-      }
-    ],
-    "roleRef": {
-      "kind": "ClusterRole",
-      "name": "default-external-snapshotter-runner",
-      "apiGroup": "rbac.authorization.k8s.io"
-    }
-  },
-  {
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "kind": "ClusterRoleBinding",
-    "metadata": {
-      "name": "default:node",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "subjects": [
-      {
-        "kind": "ServiceAccount",
-        "name": "topolvm-node",
-        "namespace": "default"
-      }
-    ],
-    "roleRef": {
-      "apiGroup": "rbac.authorization.k8s.io",
-      "kind": "ClusterRole",
-      "name": "default:node"
-    }
-  },
-  {
-    "kind": "Role",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "leader-election",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "rules": [
-      {
-        "apiGroups": [
-          "",
-          "coordination.k8s.io"
-        ],
-        "resources": [
-          "configmaps",
-          "leases"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch",
-          "create",
-          "update",
-          "patch",
-          "delete"
-        ]
-      },
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "events"
-        ],
-        "verbs": [
-          "create",
-          "patch"
-        ]
-      }
-    ]
-  },
-  {
-    "kind": "Role",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "external-provisioner-cfg",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "rules": [
-      {
-        "apiGroups": [
-          "coordination.k8s.io"
-        ],
-        "resources": [
-          "leases"
-        ],
-        "verbs": [
-          "get",
-          "watch",
-          "list",
-          "delete",
-          "update",
-          "create"
-        ]
-      },
-      {
-        "apiGroups": [
-          "storage.k8s.io"
-        ],
-        "resources": [
-          "csistoragecapacities"
-        ],
-        "verbs": [
-          "get",
-          "list",
-          "watch",
-          "create",
-          "update",
-          "patch",
-          "delete"
-        ]
-      },
-      {
-        "apiGroups": [
-          ""
-        ],
-        "resources": [
-          "pods"
-        ],
-        "verbs": [
-          "get"
-        ]
-      },
-      {
-        "apiGroups": [
-          "apps"
-        ],
-        "resources": [
-          "replicasets"
-        ],
-        "verbs": [
-          "get"
-        ]
-      }
-    ]
-  },
-  {
-    "kind": "Role",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "external-resizer-cfg",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "rules": [
-      {
-        "apiGroups": [
-          "coordination.k8s.io"
-        ],
-        "resources": [
-          "leases"
-        ],
-        "verbs": [
-          "get",
-          "watch",
-          "list",
-          "delete",
-          "update",
-          "create"
-        ]
-      }
-    ]
-  },
-  {
-    "kind": "Role",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "external-snapshotter-leaderelection",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "rules": [
-      {
-        "apiGroups": [
-          "coordination.k8s.io"
-        ],
-        "resources": [
-          "leases"
-        ],
-        "verbs": [
-          "get",
-          "watch",
-          "list",
-          "delete",
-          "update",
-          "create"
-        ]
-      }
-    ]
-  },
-  {
-    "kind": "RoleBinding",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "leader-election",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "subjects": [
-      {
-        "kind": "ServiceAccount",
-        "namespace": "default",
-        "name": "topolvm-controller"
-      }
-    ],
-    "roleRef": {
-      "kind": "Role",
-      "name": "leader-election",
-      "apiGroup": "rbac.authorization.k8s.io"
-    }
-  },
-  {
-    "kind": "RoleBinding",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "csi-provisioner-role-cfg",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "subjects": [
-      {
-        "kind": "ServiceAccount",
-        "namespace": "default",
-        "name": "topolvm-controller"
-      }
-    ],
-    "roleRef": {
-      "kind": "Role",
-      "name": "external-provisioner-cfg",
-      "apiGroup": "rbac.authorization.k8s.io"
-    }
-  },
-  {
-    "kind": "RoleBinding",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "csi-resizer-role-cfg",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "subjects": [
-      {
-        "kind": "ServiceAccount",
-        "name": "topolvm-controller",
-        "namespace": "default"
-      }
-    ],
-    "roleRef": {
-      "kind": "Role",
-      "name": "external-resizer-cfg",
-      "apiGroup": "rbac.authorization.k8s.io"
-    }
-  },
-  {
-    "kind": "RoleBinding",
-    "apiVersion": "rbac.authorization.k8s.io/v1",
-    "metadata": {
-      "name": "external-snapshotter-leaderelection",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "subjects": [
-      {
-        "kind": "ServiceAccount",
-        "name": "topolvm-controller",
-        "namespace": "default"
-      }
-    ],
-    "roleRef": {
-      "kind": "Role",
-      "name": "external-snapshotter-leaderelection",
-      "apiGroup": "rbac.authorization.k8s.io"
-    }
-  },
-  {
-    "apiVersion": "v1",
-    "kind": "Service",
-    "metadata": {
-      "name": "topolvm-controller",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "spec": {
-      "selector": {
-        "app.kubernetes.io/component": "controller",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm"
-      },
-      "ports": [
-        {
-          "name": "webhook",
-          "port": 443,
-          "protocol": "TCP",
-          "targetPort": "webhook"
         }
       ]
     }
@@ -1752,59 +752,6 @@
     }
   },
   {
-    "apiVersion": "storage.k8s.io/v1",
-    "kind": "CSIDriver",
-    "metadata": {
-      "name": "topolvm.io",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "spec": {
-      "storageCapacity": true,
-      "attachRequired": false,
-      "podInfoOnMount": true,
-      "volumeLifecycleModes": [
-        "Persistent"
-      ]
-    }
-  },
-  {
-    "apiVersion": "cert-manager.io/v1",
-    "kind": "Certificate",
-    "metadata": {
-      "name": "topolvm-webhook-ca",
-      "namespace": "default",
-      "labels": {
-        "helm.sh/chart": "topolvm-15.5.4",
-        "app.kubernetes.io/name": "topolvm",
-        "app.kubernetes.io/instance": "topolvm",
-        "app.kubernetes.io/version": "0.36.4",
-        "app.kubernetes.io/managed-by": "Helm"
-      }
-    },
-    "spec": {
-      "secretName": "topolvm-webhook-ca",
-      "duration": "87600h",
-      "issuerRef": {
-        "group": "cert-manager.io",
-        "kind": "Issuer",
-        "name": "topolvm-webhook-selfsign"
-      },
-      "commonName": "ca.webhook.topolvm",
-      "isCA": true,
-      "usages": [
-        "digital signature",
-        "key encipherment",
-        "cert sign"
-      ]
-    }
-  },
-  {
     "apiVersion": "cert-manager.io/v1",
     "kind": "Certificate",
     "metadata": {
@@ -1841,9 +788,9 @@
   },
   {
     "apiVersion": "cert-manager.io/v1",
-    "kind": "Issuer",
+    "kind": "Certificate",
     "metadata": {
-      "name": "topolvm-webhook-selfsign",
+      "name": "topolvm-webhook-ca",
       "namespace": "default",
       "labels": {
         "helm.sh/chart": "topolvm-15.5.4",
@@ -1854,7 +801,20 @@
       }
     },
     "spec": {
-      "selfSigned": {}
+      "secretName": "topolvm-webhook-ca",
+      "duration": "87600h",
+      "issuerRef": {
+        "group": "cert-manager.io",
+        "kind": "Issuer",
+        "name": "topolvm-webhook-selfsign"
+      },
+      "commonName": "ca.webhook.topolvm",
+      "isCA": true,
+      "usages": [
+        "digital signature",
+        "key encipherment",
+        "cert sign"
+      ]
     }
   },
   {
@@ -1878,13 +838,11 @@
     }
   },
   {
-    "apiVersion": "admissionregistration.k8s.io/v1",
-    "kind": "MutatingWebhookConfiguration",
+    "apiVersion": "cert-manager.io/v1",
+    "kind": "Issuer",
     "metadata": {
-      "name": "topolvm-hook",
-      "annotations": {
-        "cert-manager.io/inject-ca-from": "default/topolvm-mutatingwebhook"
-      },
+      "name": "topolvm-webhook-selfsign",
+      "namespace": "default",
       "labels": {
         "helm.sh/chart": "topolvm-15.5.4",
         "app.kubernetes.io/name": "topolvm",
@@ -1893,51 +851,1093 @@
         "app.kubernetes.io/managed-by": "Helm"
       }
     },
-    "webhooks": [
+    "spec": {
+      "selfSigned": {}
+    }
+  },
+  {
+    "apiVersion": "policy/v1",
+    "kind": "PodDisruptionBudget",
+    "metadata": {
+      "name": "topolvm-controller",
+      "namespace": "default"
+    },
+    "spec": {
+      "maxUnavailable": 1,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/component": "controller",
+          "app.kubernetes.io/name": "topolvm",
+          "app.kubernetes.io/instance": "topolvm"
+        }
+      }
+    }
+  },
+  {
+    "kind": "ClusterRole",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "default-external-provisioner-runner",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
       {
-        "name": "pvc-hook.topolvm.io",
-        "admissionReviewVersions": [
-          "v1",
-          "v1beta1"
+        "apiGroups": [
+          ""
         ],
-        "namespaceSelector": {
-          "matchExpressions": [
-            {
-              "key": "topolvm.io/webhook",
-              "operator": "NotIn",
-              "values": [
-                "ignore"
-              ]
-            }
-          ]
-        },
-        "failurePolicy": "Fail",
-        "matchPolicy": "Equivalent",
-        "clientConfig": {
-          "service": {
-            "namespace": "default",
-            "name": "topolvm-controller",
-            "path": "/pvc/mutate"
-          }
-        },
-        "rules": [
-          {
-            "apiGroups": [
-              ""
-            ],
-            "apiVersions": [
-              "v1"
-            ],
-            "operations": [
-              "CREATE"
-            ],
-            "resources": [
-              "persistentvolumeclaims"
-            ]
-          }
+        "resources": [
+          "persistentvolumes"
         ],
-        "sideEffects": "None"
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "create",
+          "patch",
+          "delete"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "persistentvolumeclaims"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "update"
+        ]
+      },
+      {
+        "apiGroups": [
+          "storage.k8s.io"
+        ],
+        "resources": [
+          "storageclasses"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "events"
+        ],
+        "verbs": [
+          "list",
+          "watch",
+          "create",
+          "update",
+          "patch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "snapshot.storage.k8s.io"
+        ],
+        "resources": [
+          "volumesnapshots"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      },
+      {
+        "apiGroups": [
+          "snapshot.storage.k8s.io"
+        ],
+        "resources": [
+          "volumesnapshotcontents"
+        ],
+        "verbs": [
+          "get",
+          "list"
+        ]
+      },
+      {
+        "apiGroups": [
+          "storage.k8s.io"
+        ],
+        "resources": [
+          "csinodes"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "nodes"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "storage.k8s.io"
+        ],
+        "resources": [
+          "volumeattachments"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
       }
     ]
+  },
+  {
+    "kind": "ClusterRole",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "default-external-resizer-runner",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "persistentvolumes"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "patch"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "persistentvolumeclaims"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "pods"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "persistentvolumeclaims/status"
+        ],
+        "verbs": [
+          "patch"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "events"
+        ],
+        "verbs": [
+          "list",
+          "watch",
+          "create",
+          "update",
+          "patch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "storage.k8s.io"
+        ],
+        "resources": [
+          "volumeattributesclasses"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      }
+    ]
+  },
+  {
+    "kind": "ClusterRole",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "default-external-snapshotter-runner",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "events"
+        ],
+        "verbs": [
+          "list",
+          "watch",
+          "create",
+          "update",
+          "patch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "snapshot.storage.k8s.io"
+        ],
+        "resources": [
+          "volumesnapshotclasses"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "snapshot.storage.k8s.io"
+        ],
+        "resources": [
+          "volumesnapshotcontents"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "update",
+          "patch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "snapshot.storage.k8s.io"
+        ],
+        "resources": [
+          "volumesnapshotcontents/status"
+        ],
+        "verbs": [
+          "update",
+          "patch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "groupsnapshot.storage.k8s.io"
+        ],
+        "resources": [
+          "volumegroupsnapshotclasses"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "groupsnapshot.storage.k8s.io"
+        ],
+        "resources": [
+          "volumegroupsnapshotcontents"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "update",
+          "patch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "groupsnapshot.storage.k8s.io"
+        ],
+        "resources": [
+          "volumegroupsnapshotcontents/status"
+        ],
+        "verbs": [
+          "update",
+          "patch"
+        ]
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "ClusterRole",
+    "metadata": {
+      "name": "default:controller",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "nodes"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "persistentvolumeclaims",
+          "pods"
+        ],
+        "verbs": [
+          "delete",
+          "get",
+          "list",
+          "update",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "storage.k8s.io"
+        ],
+        "resources": [
+          "csidrivers",
+          "storageclasses"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "topolvm.io"
+        ],
+        "resources": [
+          "logicalvolumes"
+        ],
+        "verbs": [
+          "create",
+          "delete",
+          "get",
+          "list",
+          "patch",
+          "update",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "topolvm.io"
+        ],
+        "resources": [
+          "logicalvolumes/status"
+        ],
+        "verbs": [
+          "get",
+          "patch",
+          "update"
+        ]
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "ClusterRole",
+    "metadata": {
+      "name": "default:node",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "nodes"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "update",
+          "patch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "topolvm.io"
+        ],
+        "resources": [
+          "logicalvolumes",
+          "logicalvolumes/status"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "create",
+          "update",
+          "delete",
+          "patch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "storage.k8s.io"
+        ],
+        "resources": [
+          "csidrivers"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      }
+    ]
+  },
+  {
+    "kind": "ClusterRoleBinding",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "default-csi-provisioner-role",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "namespace": "default",
+        "name": "topolvm-controller"
+      }
+    ],
+    "roleRef": {
+      "kind": "ClusterRole",
+      "name": "default-external-provisioner-runner",
+      "apiGroup": "rbac.authorization.k8s.io"
+    }
+  },
+  {
+    "kind": "ClusterRoleBinding",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "default-csi-resizer-role",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "namespace": "default",
+        "name": "topolvm-controller"
+      }
+    ],
+    "roleRef": {
+      "kind": "ClusterRole",
+      "name": "default-external-resizer-runner",
+      "apiGroup": "rbac.authorization.k8s.io"
+    }
+  },
+  {
+    "kind": "ClusterRoleBinding",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "default-csi-snapshotter-role",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "namespace": "default",
+        "name": "topolvm-controller"
+      }
+    ],
+    "roleRef": {
+      "kind": "ClusterRole",
+      "name": "default-external-snapshotter-runner",
+      "apiGroup": "rbac.authorization.k8s.io"
+    }
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "ClusterRoleBinding",
+    "metadata": {
+      "name": "default:controller",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "namespace": "default",
+        "name": "topolvm-controller"
+      }
+    ],
+    "roleRef": {
+      "apiGroup": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "default:controller"
+    }
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "ClusterRoleBinding",
+    "metadata": {
+      "name": "default:node",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "name": "topolvm-node",
+        "namespace": "default"
+      }
+    ],
+    "roleRef": {
+      "apiGroup": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "default:node"
+    }
+  },
+  {
+    "kind": "Role",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "external-provisioner-cfg",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          "coordination.k8s.io"
+        ],
+        "resources": [
+          "leases"
+        ],
+        "verbs": [
+          "get",
+          "watch",
+          "list",
+          "delete",
+          "update",
+          "create"
+        ]
+      },
+      {
+        "apiGroups": [
+          "storage.k8s.io"
+        ],
+        "resources": [
+          "csistoragecapacities"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "create",
+          "update",
+          "patch",
+          "delete"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "pods"
+        ],
+        "verbs": [
+          "get"
+        ]
+      },
+      {
+        "apiGroups": [
+          "apps"
+        ],
+        "resources": [
+          "replicasets"
+        ],
+        "verbs": [
+          "get"
+        ]
+      }
+    ]
+  },
+  {
+    "kind": "Role",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "external-resizer-cfg",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          "coordination.k8s.io"
+        ],
+        "resources": [
+          "leases"
+        ],
+        "verbs": [
+          "get",
+          "watch",
+          "list",
+          "delete",
+          "update",
+          "create"
+        ]
+      }
+    ]
+  },
+  {
+    "kind": "Role",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "external-snapshotter-leaderelection",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          "coordination.k8s.io"
+        ],
+        "resources": [
+          "leases"
+        ],
+        "verbs": [
+          "get",
+          "watch",
+          "list",
+          "delete",
+          "update",
+          "create"
+        ]
+      }
+    ]
+  },
+  {
+    "kind": "Role",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "leader-election",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          "",
+          "coordination.k8s.io"
+        ],
+        "resources": [
+          "configmaps",
+          "leases"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "create",
+          "update",
+          "patch",
+          "delete"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "events"
+        ],
+        "verbs": [
+          "create",
+          "patch"
+        ]
+      }
+    ]
+  },
+  {
+    "kind": "RoleBinding",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "csi-provisioner-role-cfg",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "namespace": "default",
+        "name": "topolvm-controller"
+      }
+    ],
+    "roleRef": {
+      "kind": "Role",
+      "name": "external-provisioner-cfg",
+      "apiGroup": "rbac.authorization.k8s.io"
+    }
+  },
+  {
+    "kind": "RoleBinding",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "csi-resizer-role-cfg",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "name": "topolvm-controller",
+        "namespace": "default"
+      }
+    ],
+    "roleRef": {
+      "kind": "Role",
+      "name": "external-resizer-cfg",
+      "apiGroup": "rbac.authorization.k8s.io"
+    }
+  },
+  {
+    "kind": "RoleBinding",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "external-snapshotter-leaderelection",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "name": "topolvm-controller",
+        "namespace": "default"
+      }
+    ],
+    "roleRef": {
+      "kind": "Role",
+      "name": "external-snapshotter-leaderelection",
+      "apiGroup": "rbac.authorization.k8s.io"
+    }
+  },
+  {
+    "kind": "RoleBinding",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "leader-election",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "namespace": "default",
+        "name": "topolvm-controller"
+      }
+    ],
+    "roleRef": {
+      "kind": "Role",
+      "name": "leader-election",
+      "apiGroup": "rbac.authorization.k8s.io"
+    }
+  },
+  {
+    "apiVersion": "scheduling.k8s.io/v1",
+    "kind": "PriorityClass",
+    "metadata": {
+      "name": "topolvm"
+    },
+    "value": 1000000,
+    "globalDefault": false,
+    "description": "Pods using TopoLVM volumes should use this class."
+  },
+  {
+    "apiVersion": "storage.k8s.io/v1",
+    "kind": "CSIDriver",
+    "metadata": {
+      "name": "topolvm.io",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "spec": {
+      "storageCapacity": true,
+      "attachRequired": false,
+      "podInfoOnMount": true,
+      "volumeLifecycleModes": [
+        "Persistent"
+      ]
+    }
+  },
+  {
+    "apiVersion": "storage.k8s.io/v1",
+    "kind": "StorageClass",
+    "metadata": {
+      "name": "topolvm-provisioner",
+      "annotations": null,
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "provisioner": "topolvm.io",
+    "parameters": {
+      "csi.storage.k8s.io/fstype": "xfs"
+    },
+    "volumeBindingMode": "WaitForFirstConsumer",
+    "allowVolumeExpansion": true
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ConfigMap",
+    "metadata": {
+      "name": "topolvm-lvmd-0",
+      "namespace": "default",
+      "labels": {
+        "idx": "0",
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "data": {
+      "lvmd.yaml": "socket-name: /run/topolvm/lvmd.sock\ndevice-classes: \n  - default: true\n    name: ssd\n    spare-gb: 10\n    volume-group: myvg1\n"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "name": "topolvm-controller",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "spec": {
+      "selector": {
+        "app.kubernetes.io/component": "controller",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm"
+      },
+      "ports": [
+        {
+          "name": "webhook",
+          "port": 443,
+          "protocol": "TCP",
+          "targetPort": "webhook"
+        }
+      ]
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+      "name": "topolvm-controller",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+      "name": "topolvm-lvmd",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+      "name": "topolvm-node",
+      "namespace": "default",
+      "labels": {
+        "helm.sh/chart": "topolvm-15.5.4",
+        "app.kubernetes.io/name": "topolvm",
+        "app.kubernetes.io/instance": "topolvm",
+        "app.kubernetes.io/version": "0.36.4",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    }
   }
 ]

@@ -26,7 +26,21 @@ $(TESTDATA_THIRDPARTY)/topolvm-15.5.4:
 	mv topolvm topolvm-15.5.4 ; \
 	rm topolvm-15.5.4.tgz
 
+define generate-expected-file
+cd compiler/testdata; $(2) | yq ea -o=json '[.]' | jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | .[] | select(. != null)' | jq -s > $(1)
+endef
+
 .PHONY: generate-test-expected
 generate-test-expected:
-	cd compiler/testdata; \
-		helm template topolvm thirdparty/topolvm-15.5.4 --namespace topolvm-system --values topolvm-15.5.4-1.values.yaml | yq ea -o=json '[.]' | jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | .[] | select(. != null)' | jq -s > topolvm-15.5.4-1.expected
+	$(call generate-expected-file, \
+		hello.expected, \
+		helm template hello hello \
+	)
+	$(call generate-expected-file, \
+		topolvm-15.5.4-0.expected, \
+		helm template topolvm thirdparty/topolvm-15.5.4 \
+	)
+	$(call generate-expected-file, \
+		topolvm-15.5.4-1.expected, \
+		helm template topolvm thirdparty/topolvm-15.5.4 --namespace topolvm-system --values topolvm-15.5.4-1.values.yaml \
+	)
