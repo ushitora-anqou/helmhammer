@@ -1,7 +1,6 @@
 TESTDATA=compiler/testdata
 TESTDATA_THIRDPARTY=$(TESTDATA)/thirdparty
 
-
 .PHONY: test
 test: prepare-test
 	jsonnet jsonnet/prologue.jsonnet >/dev/null
