@@ -74,7 +74,7 @@ local
 }
 ```
 
-## Limitations by design
+## Limitations (partially by design)
 
 - no support for `break` and `continue`.
 - no support for channels.
