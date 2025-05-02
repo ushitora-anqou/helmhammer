@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -360,50 +361,59 @@ func TestCompileValidTemplates(t *testing.T) {
 }
 
 func TestCompileChartValid(t *testing.T) {
-	chartDir := "testdata/hello"
-	expectedOutput := "testdata/hello.expected"
+	testdataDir := "testdata"
 
-	sortManifests := func(parsed []map[string]any) {
-		slices.SortFunc(parsed, func(a map[string]any, b map[string]any) int {
-			aMetadata := a["metadata"].(map[string]any)
-			bMetadata := b["metadata"].(map[string]any)
-			return strings.Compare(
-				fmt.Sprintf("%s-%s-%s-%s", a["apiVersion"], a["kind"], aMetadata["namespace"], aMetadata["name"]),
-				fmt.Sprintf("%s-%s-%s-%s", b["apiVersion"], b["kind"], bMetadata["namespace"], bMetadata["name"]),
+	tests := []struct {
+		name, chartDir, expectedOutput string
+	}{
+		{name: "hello", chartDir: "hello", expectedOutput: "hello.expected"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sortManifests := func(parsed []map[string]any) {
+				slices.SortFunc(parsed, func(a map[string]any, b map[string]any) int {
+					aMetadata := a["metadata"].(map[string]any)
+					bMetadata := b["metadata"].(map[string]any)
+					return strings.Compare(
+						fmt.Sprintf("%s-%s-%s-%s", a["apiVersion"], a["kind"], aMetadata["namespace"], aMetadata["name"]),
+						fmt.Sprintf("%s-%s-%s-%s", b["apiVersion"], b["kind"], bMetadata["namespace"], bMetadata["name"]),
+					)
+				})
+			}
+
+			chart, err := helm.Load(filepath.Join(testdataDir, tt.chartDir))
+			require.NoError(t, err)
+			compiledChart, err := compiler.CompileChart(chart)
+			require.NoError(t, err)
+			jsonnetExpr := &jsonnet.Expr{
+				Kind:     jsonnet.ECall,
+				CallFunc: compiledChart,
+				CallArgs: []*jsonnet.Expr{},
+				CallNamedArgs: map[string]*jsonnet.Expr{
+					"includeCrds": {Kind: jsonnet.ETrue},
+				},
+			}
+			vm := gojsonnet.MakeVM()
+			got, err := vm.EvaluateAnonymousSnippet(
+				"file.jsonnet",
+				jsonnetExpr.StringWithPrologue(),
 			)
+			require.NoError(t, err)
+			got = strings.Trim(got, "\n")
+			var gotParsed []map[string]any
+			err = json.Unmarshal([]byte(got), &gotParsed)
+			require.NoError(t, err)
+			sortManifests(gotParsed)
+
+			expected, err := os.ReadFile(filepath.Join(testdataDir, tt.expectedOutput))
+			require.NoError(t, err)
+			var expectedParsed []map[string]any
+			err = json.Unmarshal([]byte(expected), &expectedParsed)
+			require.NoError(t, err)
+			sortManifests(expectedParsed)
+
+			assert.Equal(t, expectedParsed, gotParsed)
 		})
 	}
-
-	chart, err := helm.Load(chartDir)
-	require.NoError(t, err)
-	compiledChart, err := compiler.CompileChart(chart)
-	require.NoError(t, err)
-	jsonnetExpr := &jsonnet.Expr{
-		Kind:     jsonnet.ECall,
-		CallFunc: compiledChart,
-		CallArgs: []*jsonnet.Expr{},
-		CallNamedArgs: map[string]*jsonnet.Expr{
-			"includeCrds": {Kind: jsonnet.ETrue},
-		},
-	}
-	vm := gojsonnet.MakeVM()
-	got, err := vm.EvaluateAnonymousSnippet(
-		"file.jsonnet",
-		jsonnetExpr.StringWithPrologue(),
-	)
-	require.NoError(t, err)
-	got = strings.Trim(got, "\n")
-	var gotParsed []map[string]any
-	err = json.Unmarshal([]byte(got), &gotParsed)
-	require.NoError(t, err)
-	sortManifests(gotParsed)
-
-	expected, err := os.ReadFile(expectedOutput)
-	require.NoError(t, err)
-	var expectedParsed []map[string]any
-	err = json.Unmarshal([]byte(expected), &expectedParsed)
-	require.NoError(t, err)
-	sortManifests(expectedParsed)
-
-	assert.Equal(t, expectedParsed, gotParsed)
 }
