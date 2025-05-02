@@ -194,6 +194,60 @@ local helmhammer = {
     assert std.length(args) == 1;
     std.join('/', std.split(args[0], '/')[0:-1]),
 
+  toInt(v):
+    if std.isNumber(v) then v
+    else if std.isString(v) then std.parseInt(v)
+    else error 'toInt: not number nor string',
+
+  min(args):
+    assert std.length(args) >= 1;
+    std.minArray(std.map($.toInt, args)),
+
+  empty(args):
+    assert std.length(args) == 1;
+    local v = args[0];
+    v == null ||
+    ((std.isArray(v) || std.isObject(v) || std.isString(v)) && std.length(v) == 0) ||
+    (std.isBoolean(v) && !v) ||
+    (std.isNumber(v) && v == 0),
+
+  hasKey(args):
+    assert std.length(args) == 2;
+    assert std.isObject(args[0]);
+    assert std.isString(args[1]);
+    std.objectHas(args[0], args[1]),
+
+  b64enc(args):
+    assert std.length(args) == 1;
+    assert std.isString(args[0]);
+    std.base64(args[0]),
+
+  dict(args):
+    local loop(i, out) =
+      if i >= std.length(args) then out
+      else
+        local key = std.toString(args[i]);
+        if i + 1 >= std.length(args) then
+          loop(i + 2, out { [key]: '' })
+        else
+          loop(i + 2, out { [key]: args[i + 1] });
+    loop(0, []),
+
+  gt(args):
+    assert std.length(args) == 2;
+    args[0] > args[1],
+
+  int(args):
+    assert std.length(args) == 1;
+    $.toInt(args[0]),
+
+  set(args): error "set: not implemented",
+  //set(vs, dname, key, value):
+  //  assert std.isObject(vs[dname]);
+  //  assert std.isString(key);
+  //  local vs1 = vs { [dname]: vs[dname] { [key]: value } };
+  //  [vs1, vs1[dname]],
+
   tpl_(templates):
     {
       local strIndex(pat, str, start) =

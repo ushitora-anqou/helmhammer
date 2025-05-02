@@ -314,6 +314,8 @@ func compileArg(env *envT, arg parse.Node) (*jsonnet.Expr, error) {
 		return vExpr, nil
 
 	case *parse.IdentifierNode:
+		return compileFunction(env, node, nil, nil)
+
 	case *parse.ChainNode:
 
 	case *parse.BoolNode:
@@ -363,16 +365,11 @@ func compileField(
 }
 
 func compileVariable(env *envT, node *parse.VariableNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
-	if node.Ident[0] == "include" {
+	if builtin := compileBuiltinFunctions(node.Ident[0]); builtin != nil {
 		if len(node.Ident) != 1 {
-			return nil, errors.New("include is not a map")
+			return nil, errors.New("compileVariable: unexpected map")
 		}
-		return compileInclude(), nil
-	} else if node.Ident[0] == "tpl" {
-		if len(node.Ident) != 1 {
-			return nil, errors.New("tpl is not a map")
-		}
-		return compileTpl(), nil
+		return builtin, nil
 	}
 
 	_, ok := env.getVariable(node.Ident[0])
@@ -387,12 +384,8 @@ func compileVariable(env *envT, node *parse.VariableNode, args []parse.Node, fin
 }
 
 func compileFunction(env *envT, node *parse.IdentifierNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
-	var function *jsonnet.Expr
-	if node.Ident == "include" {
-		function = compileInclude()
-	} else if node.Ident == "tpl" {
-		function = compileTpl()
-	} else {
+	function := compileBuiltinFunctions(node.Ident)
+	if function == nil {
 		_, ok := env.getVariable(node.Ident)
 		if !ok {
 			return nil, fmt.Errorf("function not found: %s", node.Ident)
@@ -658,16 +651,28 @@ func compileIfOrWith(env *envT, typ parse.NodeType, pipe *parse.PipeNode, list *
 	)
 }
 
-func compileInclude() *jsonnet.Expr {
-	return &jsonnet.Expr{
-		Kind: jsonnet.ERaw,
-		Raw:  `helmhammer.include($)`,
+func compileBuiltinFunctions(ident string) *jsonnet.Expr {
+	if ident == "include" {
+		return &jsonnet.Expr{
+			Kind: jsonnet.ERaw,
+			Raw:  `helmhammer.include($)`,
+		}
 	}
-}
 
-func compileTpl() *jsonnet.Expr {
-	return &jsonnet.Expr{
-		Kind: jsonnet.ERaw,
-		Raw:  `helmhammer.tpl($)`,
+	if ident == "tpl" {
+		return &jsonnet.Expr{
+			Kind: jsonnet.ERaw,
+			Raw:  `helmhammer.tpl($)`,
+		}
 	}
+
+	// FIXME: support set
+	if ident == "set" {
+		return &jsonnet.Expr{
+			Kind: jsonnet.ERaw,
+			Raw:  `helmhammer.set`,
+		}
+	}
+
+	return nil
 }

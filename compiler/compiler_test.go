@@ -405,6 +405,12 @@ func TestCompileChartValid(t *testing.T) {
 					{"op": "remove", "path": "/4/spec/template/spec/securityContext"}
 				]`),
 		},
+
+		{
+			name:           "reloader 0: empty",
+			chartDir:       "thirdparty/reloader-2.1.3",
+			expectedOutput: "reloader-2.1.3-0.expected",
+		},
 	}
 
 	for _, tt := range tests {
