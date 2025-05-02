@@ -367,6 +367,7 @@ func TestCompileChartValid(t *testing.T) {
 		name, chartDir, expectedOutput string
 	}{
 		{name: "hello", chartDir: "hello", expectedOutput: "hello.expected"},
+		{name: "topolvm empty values", chartDir: "thirdparty/topolvm-15.5.4", expectedOutput: "topolvm-15.5.4-empty-values.expected"},
 	}
 
 	for _, tt := range tests {
