@@ -49,7 +49,7 @@ $(eval $(call generate-expected-file,topolvm-15.5.4-0.expected, \
 	helm template topolvm thirdparty/topolvm-15.5.4 \
 ))
 $(eval $(call generate-expected-file,topolvm-15.5.4-1.expected, \
-	helm template topolvm thirdparty/topolvm-15.5.4 --namespace topolvm-system --values topolvm-15.5.4-1.values.yaml \
+	helm template topolvm thirdparty/topolvm-15.5.4 --include-crds --namespace topolvm-system --values topolvm-15.5.4-1.values.yaml \
 ))
 
 .PHONY: generate-all-expected-files
