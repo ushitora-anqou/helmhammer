@@ -1,0 +1,40 @@
+controller:
+  replicaCount: 1
+  affinity: ""
+scheduler:
+  deployment:
+    replicaCount: 1
+node:
+  nodeSelector:
+    ket.anqou.net/lvmd-enabled: "true"
+lvmd:
+  nodeSelector:
+    ket.anqou.net/lvmd-enabled: "true"
+  deviceClasses:
+    - name: ssd
+      volume-group: ket
+      default: true
+      spare-gb: 1
+      lvcreate-options:
+        - "--type=raid1"
+storageClasses:
+  - name: topolvm-xfs
+    storageClass:
+      fsType: xfs
+      reclaimPolicy: null
+      annotations: {}
+      isDefaultClass: false
+      volumeBindingMode: WaitForFirstConsumer
+      allowVolumeExpansion: true,
+      additionalParameters: {}
+      mountOptions: []
+  - name: topolvm-ext4
+    storageClass:
+      fsType: ext4
+      reclaimPolicy: null
+      annotations: {}
+      isDefaultClass: false
+      volumeBindingMode: WaitForFirstConsumer
+      allowVolumeExpansion: true
+      additionalParameters: {}
+      mountOptions: []

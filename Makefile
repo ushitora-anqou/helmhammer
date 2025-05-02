@@ -25,3 +25,8 @@ $(TESTDATA_THIRDPARTY)/topolvm-15.5.4:
 	tar xf topolvm-15.5.4.tgz ; \
 	mv topolvm topolvm-15.5.4 ; \
 	rm topolvm-15.5.4.tgz
+
+.PHONY: generate-test-expected
+generate-test-expected:
+	cd compiler/testdata; \
+		helm template topolvm thirdparty/topolvm-15.5.4 --namespace topolvm-system --values topolvm-15.5.4-1.values.yaml | yq ea -o=json '[.]' | jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | .[] | select(. != null)' | jq -s > topolvm-15.5.4-1.expected

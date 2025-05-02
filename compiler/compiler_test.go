@@ -17,6 +17,7 @@ import (
 	"github.com/ushitora-anqou/helmhammer/compiler"
 	"github.com/ushitora-anqou/helmhammer/helm"
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
+	"sigs.k8s.io/yaml"
 )
 
 type U struct {
@@ -364,23 +365,43 @@ func TestCompileChartValid(t *testing.T) {
 	testdataDir := "testdata"
 
 	tests := []struct {
-		name, chartDir, expectedOutput string
-		patch                          []byte
+		name, chartDir, namespace, valuesYaml, expectedOutput string
+		patch                                                 []byte
 	}{
 		{name: "hello", chartDir: "hello", expectedOutput: "hello.expected"},
 
 		{
-			name:           "topolvm empty values",
+			name:           "topolvm 0: empty values",
 			chartDir:       "thirdparty/topolvm-15.5.4",
-			expectedOutput: "topolvm-15.5.4-empty-values.expected",
+			expectedOutput: "topolvm-15.5.4-0.expected",
 			patch: []byte(
 				// Some fields won't be equal due to toYaml's different behaviour.
 				// cf. https://github.com/helm/helm/issues/4262
-				//
-				// cat compiler/testdata/topolvm-15.5.4-empty-values.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-lvmd-0" and .kind == "DaemonSet") | index(true)'
 				`[
 					{"op": "remove", "path": "/2/spec/template/metadata/annotations/checksum~1config"},
 					{"op": "remove", "path": "/31/data/lvmd.yaml"},
+					{"op": "remove", "path": "/4/spec/template/spec/securityContext"}
+				]`),
+		},
+
+		{
+			name:           "topolvm 1: some values",
+			chartDir:       "thirdparty/topolvm-15.5.4",
+			namespace:      "topolvm-system",
+			valuesYaml:     "topolvm-15.5.4-1.values.yaml",
+			expectedOutput: "topolvm-15.5.4-1.expected",
+			patch: []byte(
+				// ❯ cat topolvm-15.5.4-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-controller" and .kind == "Deployment") | index(true)'
+				// 4
+				//
+				// ❯ cat topolvm-15.5.4-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-lvmd-0" and .kind == "DaemonSet") | index(true)'
+				// 2
+				//
+				// ❯ cat topolvm-15.5.4-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-lvmd-0" and .kind == "ConfigMap") | index(true)'
+				// 32
+				`[
+					{"op": "remove", "path": "/2/spec/template/metadata/annotations/checksum~1config"},
+					{"op": "remove", "path": "/32/data/lvmd.yaml"},
 					{"op": "remove", "path": "/4/spec/template/spec/securityContext"}
 				]`),
 		},
@@ -432,6 +453,17 @@ func TestCompileChartValid(t *testing.T) {
 				CallNamedArgs: map[string]*jsonnet.Expr{
 					"includeCrds": {Kind: jsonnet.ETrue},
 				},
+			}
+			if tt.namespace != "" {
+				jsonnetExpr.CallNamedArgs["namespace"] = jsonnet.ConvertIntoJsonnet(tt.namespace)
+			}
+			if tt.valuesYaml != "" {
+				valuesYaml, err := os.ReadFile(filepath.Join(testdataDir, tt.valuesYaml))
+				require.NoError(t, err)
+				var values any
+				err = yaml.Unmarshal(valuesYaml, &values)
+				require.NoError(t, err)
+				jsonnetExpr.CallNamedArgs["values"] = jsonnet.ConvertIntoJsonnet(values)
 			}
 			vm := gojsonnet.MakeVM()
 			gotString, err := vm.EvaluateAnonymousSnippet(
