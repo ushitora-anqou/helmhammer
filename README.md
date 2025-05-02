@@ -79,5 +79,6 @@ local
 - no support for `break` and `continue`.
 - no support for channels.
 - no support for `lookup` function in Helm.
-- no support for `tpl` function in Helm.
-  - It seems this limitation will not be accepted by most of existing Helm Charts.
+- limited support for `tpl` function in Helm.
+- output of `toYaml` function in Helm may be different from authentic one.
+  - cf. https://github.com/helm/helm/issues/4262
