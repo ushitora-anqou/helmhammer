@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
+	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/google/go-jsonnet v0.21.0-rc2
 	github.com/stretchr/testify v1.10.0
 	helm.sh/helm/v4 v4.0.0-20250423224735-ecf1730689e0

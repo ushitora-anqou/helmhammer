@@ -10,6 +10,7 @@ import (
 	"testing"
 	"text/template"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	gojsonnet "github.com/google/go-jsonnet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -364,9 +365,25 @@ func TestCompileChartValid(t *testing.T) {
 
 	tests := []struct {
 		name, chartDir, expectedOutput string
+		patch                          []byte
 	}{
 		{name: "hello", chartDir: "hello", expectedOutput: "hello.expected"},
-		{name: "topolvm empty values", chartDir: "thirdparty/topolvm-15.5.4", expectedOutput: "topolvm-15.5.4-empty-values.expected"},
+
+		{
+			name:           "topolvm empty values",
+			chartDir:       "thirdparty/topolvm-15.5.4",
+			expectedOutput: "topolvm-15.5.4-empty-values.expected",
+			patch: []byte(
+				// Some fields won't be equal due to toYaml's different behaviour.
+				// cf. https://github.com/helm/helm/issues/4262
+				//
+				// cat compiler/testdata/topolvm-15.5.4-empty-values.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-lvmd-0" and .kind == "DaemonSet") | index(true)'
+				`[
+					{"op": "remove", "path": "/2/spec/template/metadata/annotations/checksum~1config"},
+					{"op": "remove", "path": "/31/data/lvmd.yaml"},
+					{"op": "remove", "path": "/4/spec/template/spec/securityContext"}
+				]`),
+		},
 	}
 
 	for _, tt := range tests {
@@ -382,6 +399,31 @@ func TestCompileChartValid(t *testing.T) {
 				})
 			}
 
+			finalizeManifests := func(src []byte, patch jsonpatch.Patch) []map[string]any {
+				var parsed []map[string]any
+				err := json.Unmarshal(src, &parsed)
+				require.NoError(t, err)
+
+				sortManifests(parsed)
+				sorted, err := json.Marshal(parsed)
+				require.NoError(t, err)
+
+				patched, err := patch.Apply(sorted)
+				require.NoError(t, err)
+
+				err = json.Unmarshal(patched, &parsed)
+				require.NoError(t, err)
+
+				return parsed
+			}
+
+			var patch jsonpatch.Patch
+			if tt.patch != nil {
+				var err error
+				patch, err = jsonpatch.DecodePatch(tt.patch)
+				require.NoError(t, err)
+			}
+
 			chart, err := helm.Load(filepath.Join(testdataDir, tt.chartDir))
 			require.NoError(t, err)
 			compiledChart, err := compiler.CompileChart(chart)
@@ -395,25 +437,18 @@ func TestCompileChartValid(t *testing.T) {
 				},
 			}
 			vm := gojsonnet.MakeVM()
-			got, err := vm.EvaluateAnonymousSnippet(
+			gotString, err := vm.EvaluateAnonymousSnippet(
 				"file.jsonnet",
 				jsonnetExpr.StringWithPrologue(),
 			)
 			require.NoError(t, err)
-			got = strings.Trim(got, "\n")
-			var gotParsed []map[string]any
-			err = json.Unmarshal([]byte(got), &gotParsed)
-			require.NoError(t, err)
-			sortManifests(gotParsed)
+			got := finalizeManifests([]byte(strings.Trim(gotString, "\n")), patch)
 
-			expected, err := os.ReadFile(filepath.Join(testdataDir, tt.expectedOutput))
+			expectedSrc, err := os.ReadFile(filepath.Join(testdataDir, tt.expectedOutput))
 			require.NoError(t, err)
-			var expectedParsed []map[string]any
-			err = json.Unmarshal([]byte(expected), &expectedParsed)
-			require.NoError(t, err)
-			sortManifests(expectedParsed)
+			expected := finalizeManifests(expectedSrc, patch)
 
-			assert.Equal(t, expectedParsed, gotParsed)
+			assert.Equal(t, expected, got)
 		})
 	}
 }
