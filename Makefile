@@ -1,3 +1,7 @@
+TESTDATA=compiler/testdata
+TESTDATA_THIRDPARTY=$(TESTDATA)/thirdparty
+
+
 .PHONY: test
 test: prepare-test
 	jsonnet jsonnet/prologue.jsonnet >/dev/null
@@ -12,8 +16,6 @@ fmt:
 .PHONY: build
 build:
 	go build main.go
-
-TESTDATA_THIRDPARTY=compiler/testdata/thirdparty
 
 .PHONY: prepare-test
 prepare-test:
@@ -37,8 +39,8 @@ download-all-charts: \
 	$(TESTDATA_THIRDPARTY)/topolvm-15.5.4
 
 define generate-expected-file
-compiler/testdata/$(1):
-	cd compiler/testdata; $(2) | yq ea -o=json '[.]' | jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | .[] | select(. != null)' | jq -s > $(1)
+$$(TESTDATA)/$(1):
+	cd $$(TESTDATA); $(2) | yq ea -o=json '[.]' | jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | .[] | select(. != null)' | jq -s > $(1)
 endef
 
 $(eval $(call generate-expected-file,hello.expected, \
@@ -53,6 +55,6 @@ $(eval $(call generate-expected-file,topolvm-15.5.4-1.expected, \
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
-	compiler/testdata/hello.expected \
-	compiler/testdata/topolvm-15.5.4-0.expected \
-	compiler/testdata/topolvm-15.5.4-1.expected
+	$(TESTDATA)/hello.expected \
+	$(TESTDATA)/topolvm-15.5.4-0.expected \
+	$(TESTDATA)/topolvm-15.5.4-1.expected
