@@ -3,7 +3,6 @@ package compiler_test
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -186,7 +185,7 @@ func testCompile(t *testing.T, tmpl0 *template.Template, tests []compileTest) {
 				CallArgs: []*jsonnet.Expr{jsonnet.ConvertIntoJsonnet(tt.data)},
 			}
 
-			log.Printf("%s", jsonnetExpr.StringWithPrologue())
+			//log.Printf("%s", jsonnetExpr.StringWithPrologue())
 
 			sb := strings.Builder{}
 			tmpl.Option("missingkey=zero")
