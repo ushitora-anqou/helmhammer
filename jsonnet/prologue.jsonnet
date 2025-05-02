@@ -1,7 +1,10 @@
 local helmhammer = {
   field(receiver, fieldName, args):
-    if receiver == null || !std.objectHas(receiver, fieldName) then null
+    if !std.isObject(receiver) || !std.objectHas(receiver, fieldName) then
+      if std.length(args) != 0 then error 'field: invalid arguments: %s: %s' % [fieldName, args[0]]
+      else null
     else if std.isFunction(receiver[fieldName]) then receiver[fieldName](args)
+    else if std.length(args) != 0 then error 'field: invalid arguments: %s: %s: %s' % [receiver, fieldName, args[0]]
     else receiver[fieldName],
 
   join(ary):
@@ -241,7 +244,7 @@ local helmhammer = {
     assert std.length(args) == 1;
     $.toInt(args[0]),
 
-  set(args): error "set: not implemented",
+  set(args): error 'set: not implemented',
   //set(vs, dname, key, value):
   //  assert std.isObject(vs[dname]);
   //  assert std.isString(key);
@@ -577,6 +580,7 @@ local helmhammer = {
     releaseName,
     releaseService,
     templateBasePath,
+    capabilities,
     keys,
     defaultValues,
     crds,
@@ -600,6 +604,15 @@ local helmhammer = {
             Template: {
               Name: key,
               BasePath: templateBasePath,
+            },
+            Capabilities: capabilities {
+              APIVersions: {  // FIXME: APIVersions should behave as array, too.
+                Has(args):
+                  assert std.length(args) == 1;
+                  assert std.isString(args[0]);
+                  // FIXME: support resource name like "apps/v1/Deployment"
+                  std.member(capabilities.APIVersions, args[0]),
+              },
             },
           }),
         flatten(ary) =

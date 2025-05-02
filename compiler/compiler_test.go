@@ -410,6 +410,10 @@ func TestCompileChartValid(t *testing.T) {
 			name:           "reloader 0: empty",
 			chartDir:       "thirdparty/reloader-2.1.3",
 			expectedOutput: "reloader-2.1.3-0.expected",
+			patch: []byte(
+				`[
+				{"op": "remove", "path": "/0/spec/template/spec/securityContext/runAsUser"}
+			]`),
 		},
 	}
 

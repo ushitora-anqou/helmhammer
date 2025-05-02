@@ -504,6 +504,7 @@ func CallChartMain(
 	chartName, chartVersion, chartAppVersion string,
 	releaseName, releaseService string,
 	templateBasePath string,
+	capabilities *Expr,
 	keys []string, defaultValues *Expr,
 	crds [][]byte, body *Expr) *Expr {
 	exprKeys := []*Expr{}
@@ -532,6 +533,7 @@ func CallChartMain(
 			{Kind: EStringLiteral, StringLiteral: releaseName},
 			{Kind: EStringLiteral, StringLiteral: releaseService},
 			{Kind: EStringLiteral, StringLiteral: templateBasePath},
+			capabilities,
 			{Kind: EList, List: exprKeys},
 			defaultValues,
 			{Kind: EList, List: crdsList},
