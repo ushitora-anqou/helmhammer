@@ -18,30 +18,41 @@ TESTDATA_THIRDPARTY=compiler/testdata/thirdparty
 .PHONY: prepare-test
 prepare-test:
 	mkdir -p $(TESTDATA_THIRDPARTY)
-	$(MAKE) $(TESTDATA_THIRDPARTY)/topolvm-15.5.4
+	$(MAKE) download-all-charts
+	$(MAKE) generate-all-expected-files
 
-$(TESTDATA_THIRDPARTY)/topolvm-15.5.4:
-	cd $(TESTDATA_THIRDPARTY) ; \
-	wget https://github.com/topolvm/topolvm/releases/download/topolvm-chart-v15.5.4/topolvm-15.5.4.tgz ; \
-	tar xf topolvm-15.5.4.tgz ; \
-	mv topolvm topolvm-15.5.4 ; \
-	rm topolvm-15.5.4.tgz
-
-define generate-expected-file
-cd compiler/testdata; $(2) | yq ea -o=json '[.]' | jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | .[] | select(. != null)' | jq -s > $(1)
+define download-chart
+$$(TESTDATA_THIRDPARTY)/$(1):
+	cd $$(TESTDATA_THIRDPARTY) ; \
+	wget $(2) ; \
+	tar xf $(1).tgz ; \
+	mv $(3) $(1) ; \
+	rm $(1).tgz
 endef
 
-.PHONY: generate-test-expected
-generate-test-expected:
-	$(call generate-expected-file, \
-		hello.expected, \
-		helm template hello hello \
-	)
-	$(call generate-expected-file, \
-		topolvm-15.5.4-0.expected, \
-		helm template topolvm thirdparty/topolvm-15.5.4 \
-	)
-	$(call generate-expected-file, \
-		topolvm-15.5.4-1.expected, \
-		helm template topolvm thirdparty/topolvm-15.5.4 --namespace topolvm-system --values topolvm-15.5.4-1.values.yaml \
-	)
+$(eval $(call download-chart,topolvm-15.5.4,https://github.com/topolvm/topolvm/releases/download/topolvm-chart-v15.5.4/topolvm-15.5.4.tgz,topolvm))
+
+.PHONY: download-all-charts
+download-all-charts: \
+	$(TESTDATA_THIRDPARTY)/topolvm-15.5.4
+
+define generate-expected-file
+compiler/testdata/$(1):
+	cd compiler/testdata; $(2) | yq ea -o=json '[.]' | jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | .[] | select(. != null)' | jq -s > $(1)
+endef
+
+$(eval $(call generate-expected-file,hello.expected, \
+	helm template hello hello \
+))
+$(eval $(call generate-expected-file,topolvm-15.5.4-0.expected, \
+	helm template topolvm thirdparty/topolvm-15.5.4 \
+))
+$(eval $(call generate-expected-file,topolvm-15.5.4-1.expected, \
+	helm template topolvm thirdparty/topolvm-15.5.4 --namespace topolvm-system --values topolvm-15.5.4-1.values.yaml \
+))
+
+.PHONY: generate-all-expected-files
+generate-all-expected-files: \
+	compiler/testdata/hello.expected \
+	compiler/testdata/topolvm-15.5.4-0.expected \
+	compiler/testdata/topolvm-15.5.4-1.expected
