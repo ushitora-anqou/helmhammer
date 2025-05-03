@@ -376,11 +376,9 @@ func TestCompileChartValid(t *testing.T) {
 			expectedOutput: "topolvm-15.5.4-0.expected",
 			patch: []byte(
 				// Some fields won't be equal due to toYaml's different behaviour.
-				// cf. https://github.com/helm/helm/issues/4262
 				`[
 					{"op": "remove", "path": "/2/spec/template/metadata/annotations/checksum~1config"},
-					{"op": "remove", "path": "/31/data/lvmd.yaml"},
-					{"op": "remove", "path": "/4/spec/template/spec/securityContext"}
+					{"op": "remove", "path": "/31/data/lvmd.yaml"}
 				]`),
 		},
 
@@ -391,9 +389,6 @@ func TestCompileChartValid(t *testing.T) {
 			valuesYaml:     "topolvm-15.5.4-1.values.yaml",
 			expectedOutput: "topolvm-15.5.4-1.expected",
 			patch: []byte(
-				// ❯ cat topolvm-15.5.4-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-controller" and .kind == "Deployment") | index(true)'
-				// 4
-				//
 				// ❯ cat topolvm-15.5.4-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-lvmd-0" and .kind == "DaemonSet") | index(true)'
 				// 2
 				//
@@ -401,8 +396,7 @@ func TestCompileChartValid(t *testing.T) {
 				// 32
 				`[
 					{"op": "remove", "path": "/2/spec/template/metadata/annotations/checksum~1config"},
-					{"op": "remove", "path": "/32/data/lvmd.yaml"},
-					{"op": "remove", "path": "/4/spec/template/spec/securityContext"}
+					{"op": "remove", "path": "/32/data/lvmd.yaml"}
 				]`),
 		},
 
@@ -410,7 +404,6 @@ func TestCompileChartValid(t *testing.T) {
 			name:           "reloader 0: empty",
 			chartDir:       "thirdparty/reloader-2.1.3",
 			expectedOutput: "reloader-2.1.3-0.expected",
-			patch:          []byte(`[{"op": "remove", "path": "/0/spec/template/spec/securityContext/runAsUser"}]`),
 		},
 
 		{
@@ -419,7 +412,6 @@ func TestCompileChartValid(t *testing.T) {
 			namespace:      "reloader",
 			valuesYaml:     "reloader-2.1.3-1.values.yaml",
 			expectedOutput: "reloader-2.1.3-1.expected",
-			patch:          []byte(`[{"op": "remove", "path": "/0/spec/template/spec/securityContext/runAsUser"}]`),
 		},
 
 		{
