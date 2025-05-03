@@ -601,59 +601,38 @@ local helmhammer = {
 
   splitManifests(src):
     // split by "(?:^|\\s*\n)---\\s*"
-    /*
-           ^  \s  \n  ---  other
-      s0  s1  s2  s1
-      s1               s3
-      s2      s2  s1
-      s3      s3
-    */
     local
       isSpace(c) =
         c == ' ' || c == '\n' || c == '\r' || c == '\t',
-      loop(start, i, states, manifests) =
+      skipSpace(i) =
+        if i >= std.length(src) then i
+        else if isSpace(src[i]) then skipSpace(i + 1)
+        else i,
+      loop(start, i, manifests) =
         if i >= std.length(src) then
           manifests + (if start == i then [] else [src[start:i]])
         else
-          local newStates = std.set(
-            std.foldl(
-              function(out0, state)
-                if state == 0 then
-                  local out1 = out0 + [0];
-                  local out2 = if i == 0 then out1 + [1] else out1;
-                  local out3 = if src[i] == '\n' then out2 + [1] else out2;
-                  local out4 = if isSpace(src[i]) then out3 + [2] else out3;
-                  out4
-                else if state == 1 then
-                  if
-                    i + 2 < std.length(src) &&
-                    src[i] == '-' &&
-                    src[i + 1] == '-' &&
-                    src[i + 2] == '-'
-                  then
-                    out0 + [3]
-                  else
-                    out0
-                else if state == 2 then
-                  local out1 = if isSpace(src[i]) then out0 + [2] else out0;
-                  local out2 = if src[i] == '\n' then out1 + [1] else out1;
-                  out2
-                else
-                  error 'unknown state',
-              states,
-              [],
-            ),
-          );
-          if !std.member(newStates, 3) then
-            loop(start, i + 1, newStates, manifests) tailstrict
-          else
-            local skipSpace(i) =
-              if i >= std.length(src) then i
-              else if isSpace(src[i]) then skipSpace(i + 1)
-              else i;
+          if
+            (
+              i == 0 &&
+              2 < std.length(src) &&
+              src[0] == '-' && src[1] == '-' && src[2] == '-'
+            )
+          then
             local j = skipSpace(i + 3);
-            loop(j, j, [0], manifests + [src[start:i]]) tailstrict;
-    loop(0, 0, [0], []),
+            loop(j, j, manifests)
+          else if
+            (
+              src[i] == '\n' &&
+              i + 3 < std.length(src) &&
+              src[i + 1] == '-' && src[i + 2] == '-' && src[i + 3] == '-'
+            )
+          then
+            local j = skipSpace(i + 4);
+            loop(j, j, manifests + [src[start:i]]) tailstrict
+          else
+            loop(start, i + 1, manifests) tailstrict;
+    loop(0, 0, []),
 
   chartMain(
     chartName,
@@ -705,12 +684,12 @@ local helmhammer = {
           loop(0, []),
         parseManifests(src) =
           local manifests = std.join(
-              '\n---\n',
-              std.map(std.trim, $.splitManifests(src)),
-            );
+            '\n---\n',
+            std.map(std.trim, $.splitManifests(src)),
+          );
           // avoid a go-jsonnet's known issue:
           // https://github.com/google/go-jsonnet/issues/714
-          if manifests == "" then null
+          if manifests == '' then null
           else std.parseYaml(manifests);
       std.filter(
         function(x) x != null,
