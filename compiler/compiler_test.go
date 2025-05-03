@@ -412,6 +412,15 @@ func TestCompileChartValid(t *testing.T) {
 			expectedOutput: "reloader-2.1.3-0.expected",
 			patch:          []byte(`[{"op": "remove", "path": "/0/spec/template/spec/securityContext/runAsUser"}]`),
 		},
+
+		{
+			name:           "reloader 1: some values",
+			chartDir:       "thirdparty/reloader-2.1.3",
+			namespace:      "reloader",
+			valuesYaml:     "reloader-2.1.3-1.values.yaml",
+			expectedOutput: "reloader-2.1.3-1.expected",
+			patch:          []byte(`[{"op": "remove", "path": "/0/spec/template/spec/securityContext/runAsUser"}]`),
+		},
 	}
 
 	for _, tt := range tests {

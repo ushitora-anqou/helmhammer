@@ -56,10 +56,14 @@ $(eval $(call generate-expected-file,topolvm-15.5.4-1.expected, \
 $(eval $(call generate-expected-file,reloader-2.1.3-0.expected, \
 	helm template reloader thirdparty/reloader-2.1.3 \
 ))
+$(eval $(call generate-expected-file,reloader-2.1.3-1.expected, \
+	helm template reloader thirdparty/reloader-2.1.3 --include-crds --namespace reloader --values reloader-2.1.3-1.values.yaml \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
 	$(TESTDATA)/hello.expected \
 	$(TESTDATA)/topolvm-15.5.4-0.expected \
 	$(TESTDATA)/topolvm-15.5.4-1.expected \
-	$(TESTDATA)/reloader-2.1.3-0.expected
+	$(TESTDATA)/reloader-2.1.3-0.expected \
+	$(TESTDATA)/reloader-2.1.3-1.expected
