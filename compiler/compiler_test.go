@@ -421,6 +421,12 @@ func TestCompileChartValid(t *testing.T) {
 			expectedOutput: "reloader-2.1.3-1.expected",
 			patch:          []byte(`[{"op": "remove", "path": "/0/spec/template/spec/securityContext/runAsUser"}]`),
 		},
+
+		{
+			name:           "cloudflare-tunnel-ingress-controller 0: empty",
+			chartDir:       "thirdparty/cloudflare-tunnel-ingress-controller-0.0.18",
+			expectedOutput: "cloudflare-tunnel-ingress-controller-0.0.18-0.expected",
+		},
 	}
 
 	for _, tt := range tests {

@@ -33,11 +33,15 @@ endef
 
 $(eval $(call download-chart,topolvm-15.5.4,https://github.com/topolvm/topolvm/releases/download/topolvm-chart-v15.5.4/topolvm-15.5.4.tgz,topolvm))
 $(eval $(call download-chart,reloader-2.1.3,https://stakater.github.io/stakater-charts/reloader-2.1.3.tgz,reloader))
+$(eval $(call download-chart,cloudflare-tunnel-ingress-controller-0.0.18,https://helm.strrl.dev/cloudflare-tunnel-ingress-controller-0.0.18.tgz,cloudflare-tunnel-ingress-controller))
+
+https://helm.strrl.dev/cloudflare-tunnel-ingress-controller-0.0.18.tgz
 
 .PHONY: download-all-charts
 download-all-charts: \
 	$(TESTDATA_THIRDPARTY)/topolvm-15.5.4 \
-	$(TESTDATA_THIRDPARTY)/reloader-2.1.3
+	$(TESTDATA_THIRDPARTY)/reloader-2.1.3 \
+	$(TESTDATA_THIRDPARTY)/cloudflare-tunnel-ingress-controller-0.0.18
 
 define generate-expected-file
 $$(TESTDATA)/$(1):
@@ -59,6 +63,9 @@ $(eval $(call generate-expected-file,reloader-2.1.3-0.expected, \
 $(eval $(call generate-expected-file,reloader-2.1.3-1.expected, \
 	helm template reloader thirdparty/reloader-2.1.3 --include-crds --namespace reloader --values reloader-2.1.3-1.values.yaml \
 ))
+$(eval $(call generate-expected-file,cloudflare-tunnel-ingress-controller-0.0.18-0.expected, \
+	helm template cloudflare-tunnel-ingress-controller thirdparty/cloudflare-tunnel-ingress-controller-0.0.18 \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -66,4 +73,5 @@ generate-all-expected-files: \
 	$(TESTDATA)/topolvm-15.5.4-0.expected \
 	$(TESTDATA)/topolvm-15.5.4-1.expected \
 	$(TESTDATA)/reloader-2.1.3-0.expected \
-	$(TESTDATA)/reloader-2.1.3-1.expected
+	$(TESTDATA)/reloader-2.1.3-1.expected \
+	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-0.expected
