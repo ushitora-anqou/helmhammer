@@ -73,18 +73,9 @@ local helmhammer = {
     std.findSubstr(args[0], args[1]) != [],
 
   default(args):
-    local v = args[0];
-    if
-      v == null ||
-      std.isNumber(v) && v == 0 ||
-      std.isString(v) && v == '' ||
-      std.isArray(v) && v == [] ||
-      std.isObject(v) && v == {} ||
-      std.isBoolean(v) && v == false
-    then
-      args[1]
-    else
-      v,
+    assert std.length(args) >= 1;
+    if std.length(args) == 1 || $.empty([args[1]]) then args[0]
+    else args[1],
 
   trimSuffix(args):
     if std.endsWith(args[1], args[0]) then
@@ -234,7 +225,7 @@ local helmhammer = {
           loop(i + 2, out { [key]: '' })
         else
           loop(i + 2, out { [key]: args[i + 1] });
-    loop(0, []),
+    loop(0, {}),
 
   gt(args):
     assert std.length(args) == 2;
