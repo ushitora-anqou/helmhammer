@@ -427,6 +427,14 @@ func TestCompileChartValid(t *testing.T) {
 			chartDir:       "thirdparty/cloudflare-tunnel-ingress-controller-0.0.18",
 			expectedOutput: "cloudflare-tunnel-ingress-controller-0.0.18-0.expected",
 		},
+
+		{
+			name:           "cloudflare-tunnel-ingress-controller 1: some values",
+			chartDir:       "thirdparty/cloudflare-tunnel-ingress-controller-0.0.18",
+			namespace:      "ctic",
+			valuesYaml:     "cloudflare-tunnel-ingress-controller-0.0.18-1.values.yaml",
+			expectedOutput: "cloudflare-tunnel-ingress-controller-0.0.18-1.expected",
+		},
 	}
 
 	for _, tt := range tests {

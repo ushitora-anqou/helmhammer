@@ -1,0 +1,339 @@
+[
+  {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+      "name": "cloudflare-tunnel-ingress-controller",
+      "labels": {
+        "helm.sh/chart": "cloudflare-tunnel-ingress-controller-0.0.18",
+        "app.kubernetes.io/name": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/instance": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/version": "0.0.18",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "spec": {
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "cloudflare-tunnel-ingress-controller",
+          "app.kubernetes.io/instance": "cloudflare-tunnel-ingress-controller"
+        }
+      },
+      "template": {
+        "metadata": {
+          "labels": {
+            "app.kubernetes.io/name": "cloudflare-tunnel-ingress-controller",
+            "app.kubernetes.io/instance": "cloudflare-tunnel-ingress-controller"
+          }
+        },
+        "spec": {
+          "serviceAccountName": "cloudflare-tunnel-ingress-controller",
+          "securityContext": {},
+          "containers": [
+            {
+              "name": "cloudflare-tunnel-ingress-controller",
+              "securityContext": {},
+              "image": "cr.strrl.dev/strrl/cloudflare-tunnel-ingress-controller:0.0.18",
+              "imagePullPolicy": "IfNotPresent",
+              "command": [
+                "cloudflare-tunnel-ingress-controller",
+                "--ingress-class=cloudflare-tunnel",
+                "--controller-class=strrl.dev/cloudflare-tunnel-ingress-controller",
+                "--cloudflare-api-token=$(CLOUDFLARE_API_TOKEN)",
+                "--cloudflare-account-id=$(CLOUDFLARE_ACCOUNT_ID)",
+                "--cloudflare-tunnel-name=$(CLOUDFLARE_TUNNEL_NAME)",
+                "--namespace=$(NAMESPACE)",
+                "--cloudflared-protocol=http2"
+              ],
+              "env": [
+                {
+                  "name": "CLOUDFLARE_API_TOKEN",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "name": "cloudflare-api",
+                      "key": "api-token"
+                    }
+                  }
+                },
+                {
+                  "name": "CLOUDFLARE_ACCOUNT_ID",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "name": "cloudflare-api",
+                      "key": "cloudflare-account-id"
+                    }
+                  }
+                },
+                {
+                  "name": "CLOUDFLARE_TUNNEL_NAME",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "name": "cloudflare-api",
+                      "key": "cloudflare-tunnel-name"
+                    }
+                  }
+                },
+                {
+                  "name": "NAMESPACE",
+                  "valueFrom": {
+                    "fieldRef": {
+                      "fieldPath": "metadata.namespace"
+                    }
+                  }
+                },
+                {
+                  "name": "CLOUDFLARED_IMAGE",
+                  "value": "mirror.gcr.io/cloudflare/cloudflared:2025.4.2"
+                },
+                {
+                  "name": "CLOUDFLARED_IMAGE_PULL_POLICY",
+                  "value": "IfNotPresent"
+                },
+                {
+                  "name": "CLOUDFLARED_REPLICA_COUNT",
+                  "value": "1"
+                }
+              ],
+              "resources": {
+                "limits": {
+                  "cpu": "100m",
+                  "memory": "128Mi"
+                },
+                "requests": {
+                  "cpu": "100m",
+                  "memory": "128Mi"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "apiVersion": "networking.k8s.io/v1",
+    "kind": "IngressClass",
+    "metadata": {
+      "annotations": {
+        "ingressclass.kubernetes.io/is-default-class": "false"
+      },
+      "name": "cloudflare-tunnel"
+    },
+    "spec": {
+      "controller": "strrl.dev/cloudflare-tunnel-ingress-controller"
+    }
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "ClusterRole",
+    "metadata": {
+      "name": "cloudflare-tunnel-ingress-controller-watch-ingress",
+      "labels": {
+        "helm.sh/chart": "cloudflare-tunnel-ingress-controller-0.0.18",
+        "app.kubernetes.io/name": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/instance": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/version": "0.0.18",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "services"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch"
+        ]
+      },
+      {
+        "apiGroups": [
+          "networking.k8s.io"
+        ],
+        "resources": [
+          "ingresses",
+          "ingressclasses"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "update"
+        ]
+      },
+      {
+        "apiGroups": [
+          "networking.k8s.io"
+        ],
+        "resources": [
+          "ingresses/status"
+        ],
+        "verbs": [
+          "update"
+        ]
+      },
+      {
+        "apiGroups": [
+          "apps"
+        ],
+        "resources": [
+          "deployments"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "update",
+          "create"
+        ]
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "ClusterRoleBinding",
+    "metadata": {
+      "name": "cloudflare-tunnel-ingress-controller-watch-ingress",
+      "labels": {
+        "helm.sh/chart": "cloudflare-tunnel-ingress-controller-0.0.18",
+        "app.kubernetes.io/name": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/instance": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/version": "0.0.18",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "roleRef": {
+      "apiGroup": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "cloudflare-tunnel-ingress-controller-watch-ingress"
+    },
+    "subjects": [
+      {
+        "name": "cloudflare-tunnel-ingress-controller",
+        "kind": "ServiceAccount",
+        "namespace": "ctic"
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "Role",
+    "metadata": {
+      "name": "cloudflare-tunnel-ingress-controller-controlled-cloudflared-connector",
+      "labels": {
+        "helm.sh/chart": "cloudflare-tunnel-ingress-controller-0.0.18",
+        "app.kubernetes.io/name": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/instance": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/version": "0.0.18",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          "apps"
+        ],
+        "resources": [
+          "deployments"
+        ],
+        "verbs": [
+          "get",
+          "list",
+          "watch",
+          "update",
+          "create"
+        ]
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "RoleBinding",
+    "metadata": {
+      "name": "cloudflare-tunnel-ingress-controller-controlled-cloudflared-connector",
+      "labels": {
+        "helm.sh/chart": "cloudflare-tunnel-ingress-controller-0.0.18",
+        "app.kubernetes.io/name": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/instance": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/version": "0.0.18",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    },
+    "roleRef": {
+      "apiGroup": "rbac.authorization.k8s.io",
+      "kind": "ClusterRole",
+      "name": "cloudflare-tunnel-ingress-controller-controlled-cloudflared-connector"
+    },
+    "subjects": [
+      {
+        "name": "cloudflare-tunnel-ingress-controller",
+        "kind": "ServiceAccount",
+        "namespace": "ctic"
+      }
+    ]
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+      "name": "cloudflare-api"
+    },
+    "stringData": {
+      "api-token": "XXX",
+      "cloudflare-account-id": "YYY",
+      "cloudflare-tunnel-name": "ZZZ"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "name": "controlled-cloudflared-connector-headless",
+      "labels": {
+        "app.kubernetes.io/component": "controlled-cloudflared",
+        "helm.sh/chart": "cloudflare-tunnel-ingress-controller-0.0.18",
+        "app.kubernetes.io/name": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/instance": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/version": "0.0.18",
+        "app.kubernetes.io/managed-by": "Helm"
+      },
+      "annotations": {
+        "prometheus.io/scrape": "true",
+        "prometheus.io/port": "44483"
+      }
+    },
+    "spec": {
+      "ports": [
+        {
+          "name": "metrics",
+          "port": 44483,
+          "protocol": "TCP"
+        }
+      ],
+      "clusterIP": "None",
+      "selector": {
+        "app": "controlled-cloudflared-connector",
+        "strrl.dev/cloudflare-tunnel-ingress-controller": "controlled-cloudflared-connector"
+      }
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+      "name": "cloudflare-tunnel-ingress-controller",
+      "labels": {
+        "helm.sh/chart": "cloudflare-tunnel-ingress-controller-0.0.18",
+        "app.kubernetes.io/name": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/instance": "cloudflare-tunnel-ingress-controller",
+        "app.kubernetes.io/version": "0.0.18",
+        "app.kubernetes.io/managed-by": "Helm"
+      }
+    }
+  }
+]

@@ -66,6 +66,10 @@ $(eval $(call generate-expected-file,reloader-2.1.3-1.expected, \
 $(eval $(call generate-expected-file,cloudflare-tunnel-ingress-controller-0.0.18-0.expected, \
 	helm template cloudflare-tunnel-ingress-controller thirdparty/cloudflare-tunnel-ingress-controller-0.0.18 \
 ))
+$(eval $(call generate-expected-file,cloudflare-tunnel-ingress-controller-0.0.18-1.expected, \
+	helm template cloudflare-tunnel-ingress-controller thirdparty/cloudflare-tunnel-ingress-controller-0.0.18 --include-crds --namespace ctic --values cloudflare-tunnel-ingress-controller-0.0.18-1.values.yaml \
+))
+
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -74,4 +78,5 @@ generate-all-expected-files: \
 	$(TESTDATA)/topolvm-15.5.4-1.expected \
 	$(TESTDATA)/reloader-2.1.3-0.expected \
 	$(TESTDATA)/reloader-2.1.3-1.expected \
-	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-0.expected
+	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-0.expected \
+	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-1.expected
