@@ -22,7 +22,7 @@ func doMain() error {
 
 	expr, err := compiler.CompileChart(chart)
 	if err != nil {
-		return fmt.Errorf("faield to compile chart: %w", err)
+		return fmt.Errorf("failed to compile chart: %w", err)
 	}
 
 	fmt.Print(expr.StringWithPrologue())
