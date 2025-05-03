@@ -8,9 +8,9 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
-	helmv2 "helm.sh/helm/v4/pkg/chart/v2"
-	"helm.sh/helm/v4/pkg/chart/v2/loader"
-	helmutil "helm.sh/helm/v4/pkg/chart/v2/util"
+	helmchart "helm.sh/helm/v3/pkg/chart"
+	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/chartutil"
 )
 
 type Chart struct {
@@ -20,9 +20,9 @@ type Chart struct {
 	Name             string
 	Version          string
 	AppVersion       string
-	CRDObjects       []helmv2.CRD
+	CRDObjects       []helmchart.CRD
 	TemplateBasePath string
-	Capabilities     *helmutil.Capabilities
+	Capabilities     *chartutil.Capabilities
 }
 
 func Load(chartDir string) (*Chart, error) {
@@ -63,7 +63,7 @@ func Load(chartDir string) (*Chart, error) {
 		AppVersion:       chart.Metadata.AppVersion,
 		CRDObjects:       chart.CRDObjects(),
 		TemplateBasePath: path.Join(chart.ChartFullPath(), "templates"),
-		Capabilities:     helmutil.DefaultCapabilities.Copy(),
+		Capabilities:     chartutil.DefaultCapabilities.Copy(),
 	}, nil
 }
 
