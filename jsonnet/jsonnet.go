@@ -571,6 +571,7 @@ func PredefinedFunctions() map[string]*Expr {
 		"replace",
 		"required",
 		"sha256sum",
+		"toString",
 		"toYaml",
 		"trimSuffix",
 		"trunc",

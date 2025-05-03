@@ -244,6 +244,10 @@ local helmhammer = {
     assert std.length(args) == 1;
     $.toInt(args[0]),
 
+  toString(args):
+    assert std.length(args) == 1;
+    std.toString(args[0]),
+
   set(args): error 'set: not implemented',
   //set(vs, dname, key, value):
   //  assert std.isObject(vs[dname]);

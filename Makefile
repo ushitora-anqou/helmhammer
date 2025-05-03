@@ -34,6 +34,7 @@ endef
 $(eval $(call download-chart,topolvm-15.5.4,https://github.com/topolvm/topolvm/releases/download/topolvm-chart-v15.5.4/topolvm-15.5.4.tgz,topolvm))
 $(eval $(call download-chart,reloader-2.1.3,https://stakater.github.io/stakater-charts/reloader-2.1.3.tgz,reloader))
 $(eval $(call download-chart,cloudflare-tunnel-ingress-controller-0.0.18,https://helm.strrl.dev/cloudflare-tunnel-ingress-controller-0.0.18.tgz,cloudflare-tunnel-ingress-controller))
+$(eval $(call download-chart,sidekiq-prometheus-exporter-0.2.1,https://github.com/Strech/sidekiq-prometheus-exporter/releases/download/v0.2.0-4/sidekiq-prometheus-exporter-0.2.1.tgz,sidekiq-prometheus-exporter))
 
 https://helm.strrl.dev/cloudflare-tunnel-ingress-controller-0.0.18.tgz
 
@@ -41,7 +42,8 @@ https://helm.strrl.dev/cloudflare-tunnel-ingress-controller-0.0.18.tgz
 download-all-charts: \
 	$(TESTDATA_THIRDPARTY)/topolvm-15.5.4 \
 	$(TESTDATA_THIRDPARTY)/reloader-2.1.3 \
-	$(TESTDATA_THIRDPARTY)/cloudflare-tunnel-ingress-controller-0.0.18
+	$(TESTDATA_THIRDPARTY)/cloudflare-tunnel-ingress-controller-0.0.18 \
+	$(TESTDATA_THIRDPARTY)/sidekiq-prometheus-exporter-0.2.1
 
 define generate-expected-file
 $$(TESTDATA)/$(1):
@@ -69,7 +71,9 @@ $(eval $(call generate-expected-file,cloudflare-tunnel-ingress-controller-0.0.18
 $(eval $(call generate-expected-file,cloudflare-tunnel-ingress-controller-0.0.18-1.expected, \
 	helm template cloudflare-tunnel-ingress-controller thirdparty/cloudflare-tunnel-ingress-controller-0.0.18 --include-crds --namespace ctic --values cloudflare-tunnel-ingress-controller-0.0.18-1.values.yaml \
 ))
-
+$(eval $(call generate-expected-file,sidekiq-prometheus-exporter-0.2.1-0.expected, \
+	helm template sidekiq-prometheus-exporter thirdparty/sidekiq-prometheus-exporter-0.2.1 \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -79,4 +83,5 @@ generate-all-expected-files: \
 	$(TESTDATA)/reloader-2.1.3-0.expected \
 	$(TESTDATA)/reloader-2.1.3-1.expected \
 	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-0.expected \
-	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-1.expected
+	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-1.expected \
+	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-0.expected

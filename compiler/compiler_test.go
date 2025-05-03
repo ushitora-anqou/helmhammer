@@ -435,6 +435,12 @@ func TestCompileChartValid(t *testing.T) {
 			valuesYaml:     "cloudflare-tunnel-ingress-controller-0.0.18-1.values.yaml",
 			expectedOutput: "cloudflare-tunnel-ingress-controller-0.0.18-1.expected",
 		},
+
+		{
+			name:           "sidekiq-prometheus-exporter 0: empty",
+			chartDir:       "thirdparty/sidekiq-prometheus-exporter-0.2.1",
+			expectedOutput: "sidekiq-prometheus-exporter-0.2.1-0.expected",
+		},
 	}
 
 	for _, tt := range tests {
