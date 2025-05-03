@@ -35,15 +35,15 @@ $(eval $(call download-chart,topolvm-15.5.4,https://github.com/topolvm/topolvm/r
 $(eval $(call download-chart,reloader-2.1.3,https://stakater.github.io/stakater-charts/reloader-2.1.3.tgz,reloader))
 $(eval $(call download-chart,cloudflare-tunnel-ingress-controller-0.0.18,https://helm.strrl.dev/cloudflare-tunnel-ingress-controller-0.0.18.tgz,cloudflare-tunnel-ingress-controller))
 $(eval $(call download-chart,sidekiq-prometheus-exporter-0.2.1,https://github.com/Strech/sidekiq-prometheus-exporter/releases/download/v0.2.0-4/sidekiq-prometheus-exporter-0.2.1.tgz,sidekiq-prometheus-exporter))
-
-https://helm.strrl.dev/cloudflare-tunnel-ingress-controller-0.0.18.tgz
+$(eval $(call download-chart,cert-manager-v1.17.2,https://charts.jetstack.io/charts/cert-manager-v1.17.2.tgz,cert-manager))
 
 .PHONY: download-all-charts
 download-all-charts: \
 	$(TESTDATA_THIRDPARTY)/topolvm-15.5.4 \
 	$(TESTDATA_THIRDPARTY)/reloader-2.1.3 \
 	$(TESTDATA_THIRDPARTY)/cloudflare-tunnel-ingress-controller-0.0.18 \
-	$(TESTDATA_THIRDPARTY)/sidekiq-prometheus-exporter-0.2.1
+	$(TESTDATA_THIRDPARTY)/sidekiq-prometheus-exporter-0.2.1 \
+	$(TESTDATA_THIRDPARTY)/cert-manager-v1.17.2
 
 define generate-expected-file
 $$(TESTDATA)/$(1):
@@ -79,6 +79,9 @@ $(eval $(call generate-expected-file,sidekiq-prometheus-exporter-0.2.1-1.expecte
 		--include-crds --namespace sidekiq-prometheus-exporter \
 		--values sidekiq-prometheus-exporter-0.2.1-1.values.yaml \
 ))
+$(eval $(call generate-expected-file,cert-manager-v1.17.2-0.expected, \
+	helm template cert-manager thirdparty/cert-manager-v1.17.2 \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -90,4 +93,5 @@ generate-all-expected-files: \
 	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-0.expected \
 	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-1.expected \
 	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-0.expected \
-	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-1.expected
+	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-1.expected \
+	$(TESTDATA)/cert-manager-v1.17.2-0.expected

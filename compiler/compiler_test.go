@@ -255,6 +255,7 @@ func TestCompileValidTemplates(t *testing.T) {
 			data: nil,
 		},
 		{"templates", `{{define "foo"}}{{.}}{{end}}{{template "foo" 3}}`, nil},
+		{"skip space", "abc\n\n{{- \"hello\" -}}\n\ndef", nil},
 
 		{"empty", "", nil},
 		{"text", "some text", nil},
@@ -440,6 +441,12 @@ func TestCompileChartValid(t *testing.T) {
 			namespace:      "sidekiq-prometheus-exporter",
 			valuesYaml:     "sidekiq-prometheus-exporter-0.2.1-1.values.yaml",
 			expectedOutput: "sidekiq-prometheus-exporter-0.2.1-1.expected",
+		},
+
+		{
+			name:           "cert-manager 0: empty",
+			chartDir:       "thirdparty/cert-manager-v1.17.2",
+			expectedOutput: "cert-manager-v1.17.2-0.expected",
 		},
 	}
 
