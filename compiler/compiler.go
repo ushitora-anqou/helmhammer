@@ -223,6 +223,9 @@ func compilePipeline(env *envT, pipe *parse.PipeNode) (*jsonnet.Expr, *jsonnet.E
 	if err != nil {
 		return nil, nil, fmt.Errorf("compilePipeline: %w", err)
 	}
+	if pipe == nil {
+		return expr, jsonnet.Index(env.preStateName, stateVS), err
+	}
 
 	assignments := map[*jsonnet.Expr]*jsonnet.Expr{}
 	for _, variable := range pipe.Decl {
