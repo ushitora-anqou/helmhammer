@@ -187,7 +187,7 @@ func compileNode(env *envT, node parse.Node) (*state, error) {
 		}
 		vExpr, vsExpr, err := compilePipeline(env, node.Pipe)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("template node: %s: %w", node.Name, err)
 		}
 		return newState(
 			&jsonnet.Expr{
@@ -203,7 +203,7 @@ func compileNode(env *envT, node parse.Node) (*state, error) {
 
 func compilePipelineWithoutDecls(env *envT, pipe *parse.PipeNode) (*jsonnet.Expr, error) {
 	if pipe == nil {
-		return nil, errors.New("pipe is nil")
+		return &jsonnet.Expr{Kind: jsonnet.ENull}, nil
 	}
 
 	var expr *jsonnet.Expr
@@ -221,7 +221,7 @@ func compilePipelineWithoutDecls(env *envT, pipe *parse.PipeNode) (*jsonnet.Expr
 func compilePipeline(env *envT, pipe *parse.PipeNode) (*jsonnet.Expr, *jsonnet.Expr, error) {
 	expr, err := compilePipelineWithoutDecls(env, pipe)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("compilePipeline: %w", err)
 	}
 
 	assignments := map[*jsonnet.Expr]*jsonnet.Expr{}
@@ -477,7 +477,7 @@ func compileNil() *jsonnet.Expr {
 func compileRange(env *envT, node *parse.RangeNode) (*state, error) {
 	vExpr, err := compilePipelineWithoutDecls(env, node.Pipe)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("compileRange: %w", err)
 	}
 	nestedPreStateName := generateStateName()
 
