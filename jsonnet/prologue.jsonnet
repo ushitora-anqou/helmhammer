@@ -650,7 +650,13 @@ local helmhammer = {
         parseManifests(src) =
           local manifests = std.join(
             '\n---\n',
-            std.map(std.trim, std.split(src, "---")),
+            std.map(
+              std.trim,
+              std.split(
+                if std.startsWith(src, '---') then src[3:] else src,
+                '\n---',
+              ),
+            ),
           );
           // avoid a go-jsonnet's known issue:
           // https://github.com/google/go-jsonnet/issues/714
