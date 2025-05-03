@@ -82,6 +82,11 @@ $(eval $(call generate-expected-file,sidekiq-prometheus-exporter-0.2.1-1.expecte
 $(eval $(call generate-expected-file,cert-manager-v1.17.2-0.expected, \
 	helm template cert-manager thirdparty/cert-manager-v1.17.2 \
 ))
+$(eval $(call generate-expected-file,cert-manager-v1.17.2-1.expected, \
+	helm template cert-manager thirdparty/cert-manager-v1.17.2 \
+		--include-crds --namespace cert-manager \
+		--values cert-manager-v1.17.2-1.values.yaml \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -94,4 +99,5 @@ generate-all-expected-files: \
 	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-1.expected \
 	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-0.expected \
 	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-1.expected \
-	$(TESTDATA)/cert-manager-v1.17.2-0.expected
+	$(TESTDATA)/cert-manager-v1.17.2-0.expected \
+	$(TESTDATA)/cert-manager-v1.17.2-1.expected

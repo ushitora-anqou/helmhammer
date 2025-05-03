@@ -448,6 +448,14 @@ func TestCompileChartValid(t *testing.T) {
 			chartDir:       "thirdparty/cert-manager-v1.17.2",
 			expectedOutput: "cert-manager-v1.17.2-0.expected",
 		},
+
+		{
+			name:           "cert-manager 1: some values",
+			chartDir:       "thirdparty/cert-manager-v1.17.2",
+			namespace:      "cert-manager",
+			valuesYaml:     "cert-manager-v1.17.2-1.values.yaml",
+			expectedOutput: "cert-manager-v1.17.2-1.expected",
+		},
 	}
 
 	for _, tt := range tests {
