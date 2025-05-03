@@ -554,9 +554,12 @@ func PredefinedFunctions() map[string]*Expr {
 		"dir",
 		"empty",
 		"eq",
+		"fail",
 		"gt",
+		"has",
 		"hasKey",
 		"indent",
+		"index",
 		"int",
 		"list",
 		"lower",
@@ -575,6 +578,7 @@ func PredefinedFunctions() map[string]*Expr {
 		"toYaml",
 		"trimSuffix",
 		"trunc",
+		"tuple",
 	} {
 		m[name] = Index("helmhammer", name)
 	}

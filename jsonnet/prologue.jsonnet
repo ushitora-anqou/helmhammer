@@ -239,6 +239,37 @@ local helmhammer = {
     assert std.length(args) == 1;
     std.toString(args[0]),
 
+  has(args):
+    assert std.length(args) == 2;
+    local needle = args[0], haystack = args[1];
+    assert std.isArray(haystack);
+    std.member(haystack, needle),
+
+  tuple(args):
+    $.list(args),
+
+  fail(args):
+    assert std.length(args) == 1;
+    assert std.isString(args[0]);
+    error ('fail: %s' % [args[0]]),
+
+  index(args):
+    assert std.length(args) >= 2;
+    std.foldl(
+      function(v, arg)
+        if std.isObject(v) then
+          if !std.isString(arg) then error "index: key is not a string"
+          else if std.objectHas(v, arg) then v[arg]
+          else null
+        else if std.isArray(v) then
+          if !std.isNumber(arg) then error "index: key is not an integer"
+          else if arg < std.length(v) then v[arg]
+          else null
+        else null,
+      args[1:],
+      args[0],
+    ),
+
   set(args): error 'set: not implemented',
   //set(vs, dname, key, value):
   //  assert std.isObject(vs[dname]);
@@ -639,6 +670,11 @@ assert helmhammer.and([0, true]) == 0;
 assert helmhammer.and([1, 1]) == 1;
 
 assert helmhammer.dir(['/run/topolvm/lvmd.sock']) == '/run/topolvm';
+
+assert helmhammer.index([
+  [0, [0, 0, [0, 0, 0, 1]]],
+  1, 2, 3,
+]) == 1;
 
 local tpl_ = helmhammer.tpl_({});
 assert tpl_.strIndex('', '', 0) == -1;
