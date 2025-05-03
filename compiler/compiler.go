@@ -251,6 +251,7 @@ func compileCommand(env *envT, cmd *parse.CommandNode, final *jsonnet.Expr) (*js
 		return compileField(env, compileDot(), node.Ident, cmd.Args, final)
 
 	case *parse.ChainNode:
+		return compileChain(env, node, cmd.Args, final)
 
 	case *parse.IdentifierNode:
 		return compileFunction(env, node, cmd.Args, final)
@@ -321,6 +322,7 @@ func compileArg(env *envT, arg parse.Node) (*jsonnet.Expr, error) {
 		return compileFunction(env, node, nil, nil)
 
 	case *parse.ChainNode:
+		return compileChain(env, node, nil, nil)
 
 	case *parse.BoolNode:
 		return compileBool(node)
@@ -333,6 +335,27 @@ func compileArg(env *envT, arg parse.Node) (*jsonnet.Expr, error) {
 	}
 
 	return nil, fmt.Errorf("compile Arg: not implemented: %v", reflect.TypeOf(arg))
+}
+
+func compileChain(
+	env *envT,
+	chain *parse.ChainNode,
+	args []parse.Node,
+	final *jsonnet.Expr,
+) (*jsonnet.Expr, error) {
+	if len(chain.Field) == 0 {
+		return nil, errors.New("compileChain: no fields")
+	}
+	if chain.Node.Type() == parse.NodeNil {
+		return nil, errors.New("nil indirection")
+	}
+
+	pipe, err := compileArg(env, chain.Node)
+	if err != nil {
+		return nil, err
+	}
+
+	return compileField(env, pipe, chain.Field, args, final)
 }
 
 func compileField(
