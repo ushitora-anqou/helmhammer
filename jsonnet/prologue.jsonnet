@@ -258,11 +258,11 @@ local helmhammer = {
     std.foldl(
       function(v, arg)
         if std.isObject(v) then
-          if !std.isString(arg) then error "index: key is not a string"
+          if !std.isString(arg) then error 'index: key is not a string'
           else if std.objectHas(v, arg) then v[arg]
           else null
         else if std.isArray(v) then
-          if !std.isNumber(arg) then error "index: key is not an integer"
+          if !std.isNumber(arg) then error 'index: key is not an integer'
           else if arg < std.length(v) then v[arg]
           else null
         else null,
@@ -599,6 +599,62 @@ local helmhammer = {
         },
       ).out,
 
+  splitManifests(src):
+    // split by "(?:^|\\s*\n)---\\s*"
+    /*
+           ^  \s  \n  ---  other
+      s0  s1  s2  s1
+      s1               s3
+      s2      s2  s1
+      s3      s3
+    */
+    local
+      isSpace(c) =
+        c == ' ' || c == '\n' || c == '\r' || c == '\t',
+      loop(start, i, states, manifests) =
+        if i >= std.length(src) then
+          manifests + (if start == i then [] else [src[start:i]])
+        else
+          local newStates = std.set(
+            std.foldl(
+              function(out0, state)
+                if state == 0 then
+                  local out1 = out0 + [0];
+                  local out2 = if i == 0 then out1 + [1] else out1;
+                  local out3 = if src[i] == '\n' then out2 + [1] else out2;
+                  local out4 = if isSpace(src[i]) then out3 + [2] else out3;
+                  out4
+                else if state == 1 then
+                  if
+                    i + 2 < std.length(src) &&
+                    src[i] == '-' &&
+                    src[i + 1] == '-' &&
+                    src[i + 2] == '-'
+                  then
+                    out0 + [3]
+                  else
+                    out0
+                else if state == 2 then
+                  local out1 = if isSpace(src[i]) then out0 + [2] else out0;
+                  local out2 = if src[i] == '\n' then out1 + [1] else out1;
+                  out2
+                else
+                  error 'unknown state',
+              states,
+              [],
+            ),
+          );
+          if !std.member(newStates, 3) then
+            loop(start, i + 1, newStates, manifests) tailstrict
+          else
+            local skipSpace(i) =
+              if i >= std.length(src) then i
+              else if isSpace(src[i]) then skipSpace(i + 1)
+              else i;
+            local j = skipSpace(i + 3);
+            loop(j, j, [0], manifests + [src[start:i]]) tailstrict;
+    loop(0, 0, [0], []),
+
   chartMain(
     chartName,
     chartVersion,
@@ -614,7 +670,7 @@ local helmhammer = {
   ):
     function(values={}, namespace='default', includeCrds=false)
       local
-        aux(key) =
+        runFile(key) =
           files[key]({
             Values: std.mergePatch(defaultValues, values),
             Chart: {
@@ -646,13 +702,22 @@ local helmhammer = {
             if i >= std.length(ary) then out
             else if std.isArray(ary[i]) then loop(i + 1, out + ary[i])
             else loop(i + 1, out + [ary[i]]);
-          loop(0, []);
+          loop(0, []),
+        parseManifests(src) =
+          local manifests = std.join(
+              '\n---\n',
+              std.map(std.trim, $.splitManifests(src)),
+            );
+          // avoid a go-jsonnet's known issue:
+          // https://github.com/google/go-jsonnet/issues/714
+          if manifests == "" then null
+          else std.parseYaml(manifests);
       std.filter(
         function(x) x != null,
         flatten(
           std.map(
-            std.parseYaml,
-            (if includeCrds then crds else []) + std.map(aux, keys),
+            parseManifests,
+            (if includeCrds then crds else []) + std.map(runFile, keys),
           ),
         ),
       ),
@@ -673,8 +738,18 @@ assert helmhammer.dir(['/run/topolvm/lvmd.sock']) == '/run/topolvm';
 
 assert helmhammer.index([
   [0, [0, 0, [0, 0, 0, 1]]],
-  1, 2, 3,
+  1,
+  2,
+  3,
 ]) == 1;
+
+assert std.map(std.trim, helmhammer.splitManifests(
+  |||
+    a
+    ---
+    b
+  |||
+)) == ['a', 'b'];
 
 local tpl_ = helmhammer.tpl_({});
 assert tpl_.strIndex('', '', 0) == -1;
