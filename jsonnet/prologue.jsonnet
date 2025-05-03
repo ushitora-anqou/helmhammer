@@ -599,41 +599,6 @@ local helmhammer = {
         },
       ).out,
 
-  splitManifests(src):
-    // split by "(?:^|\\s*\n)---\\s*"
-    local
-      isSpace(c) =
-        c == ' ' || c == '\n' || c == '\r' || c == '\t',
-      skipSpace(i) =
-        if i >= std.length(src) then i
-        else if isSpace(src[i]) then skipSpace(i + 1)
-        else i,
-      loop(start, i, manifests) =
-        if i >= std.length(src) then
-          manifests + (if start == i then [] else [src[start:i]])
-        else
-          if
-            (
-              i == 0 &&
-              2 < std.length(src) &&
-              src[0] == '-' && src[1] == '-' && src[2] == '-'
-            )
-          then
-            local j = skipSpace(i + 3);
-            loop(j, j, manifests)
-          else if
-            (
-              src[i] == '\n' &&
-              i + 3 < std.length(src) &&
-              src[i + 1] == '-' && src[i + 2] == '-' && src[i + 3] == '-'
-            )
-          then
-            local j = skipSpace(i + 4);
-            loop(j, j, manifests + [src[start:i]]) tailstrict
-          else
-            loop(start, i + 1, manifests) tailstrict;
-    loop(0, 0, []),
-
   chartMain(
     chartName,
     chartVersion,
@@ -685,7 +650,7 @@ local helmhammer = {
         parseManifests(src) =
           local manifests = std.join(
             '\n---\n',
-            std.map(std.trim, $.splitManifests(src)),
+            std.map(std.trim, std.split(src, "---")),
           );
           // avoid a go-jsonnet's known issue:
           // https://github.com/google/go-jsonnet/issues/714
@@ -721,14 +686,6 @@ assert helmhammer.index([
   2,
   3,
 ]) == 1;
-
-assert std.map(std.trim, helmhammer.splitManifests(
-  |||
-    a
-    ---
-    b
-  |||
-)) == ['a', 'b'];
 
 local tpl_ = helmhammer.tpl_({});
 assert tpl_.strIndex('', '', 0) == -1;
