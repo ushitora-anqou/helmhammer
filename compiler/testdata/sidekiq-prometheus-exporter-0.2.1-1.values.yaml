@@ -1,0 +1,8 @@
+envFrom:
+  type: secretRef
+  name: secret-env
+securityContext:
+  runAsNonRoot: true,
+  runAsUser: 1000,
+  seccompProfile:
+    type: "RuntimeDefault"

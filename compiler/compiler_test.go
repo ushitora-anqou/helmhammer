@@ -433,6 +433,14 @@ func TestCompileChartValid(t *testing.T) {
 			chartDir:       "thirdparty/sidekiq-prometheus-exporter-0.2.1",
 			expectedOutput: "sidekiq-prometheus-exporter-0.2.1-0.expected",
 		},
+
+		{
+			name:           "sidekiq-prometheus-exporter 1: some values",
+			chartDir:       "thirdparty/sidekiq-prometheus-exporter-0.2.1",
+			namespace:      "sidekiq-prometheus-exporter",
+			valuesYaml:     "sidekiq-prometheus-exporter-0.2.1-1.values.yaml",
+			expectedOutput: "sidekiq-prometheus-exporter-0.2.1-1.expected",
+		},
 	}
 
 	for _, tt := range tests {

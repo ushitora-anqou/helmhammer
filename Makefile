@@ -74,6 +74,11 @@ $(eval $(call generate-expected-file,cloudflare-tunnel-ingress-controller-0.0.18
 $(eval $(call generate-expected-file,sidekiq-prometheus-exporter-0.2.1-0.expected, \
 	helm template sidekiq-prometheus-exporter thirdparty/sidekiq-prometheus-exporter-0.2.1 \
 ))
+$(eval $(call generate-expected-file,sidekiq-prometheus-exporter-0.2.1-1.expected, \
+	helm template sidekiq-prometheus-exporter thirdparty/sidekiq-prometheus-exporter-0.2.1 \
+		--include-crds --namespace sidekiq-prometheus-exporter \
+		--values sidekiq-prometheus-exporter-0.2.1-1.values.yaml \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -84,4 +89,5 @@ generate-all-expected-files: \
 	$(TESTDATA)/reloader-2.1.3-1.expected \
 	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-0.expected \
 	$(TESTDATA)/cloudflare-tunnel-ingress-controller-0.0.18-1.expected \
-	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-0.expected
+	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-0.expected \
+	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-1.expected
