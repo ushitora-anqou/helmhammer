@@ -393,10 +393,7 @@ func compileField(
 
 func compileVariable(env *envT, node *parse.VariableNode, args []parse.Node, final *jsonnet.Expr) (*jsonnet.Expr, error) {
 	if builtin := compileBuiltinFunctions(node.Ident[0]); builtin != nil {
-		if len(node.Ident) != 1 {
-			return nil, errors.New("compileVariable: unexpected map")
-		}
-		return builtin, nil
+		return nil, errors.New("builtins can't be used as variables")
 	}
 
 	_, ok := env.getVariable(node.Ident[0])
