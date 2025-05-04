@@ -78,8 +78,11 @@ local
 
 - no support for `break` and `continue`.
 - no support for channels.
-- no support for `lookup` function in Helm.
 - limited support for `tpl` function in Helm.
 - output of `toYaml` function in Helm may be different from authentic one.
 - `Capabilities.APIVersions` in Helm is an object that has only `Has` field.
-- no support for `set` function in Helm.
+- no support for the following functions in Helm:
+  - `lookup`
+  - `now`
+  - `regexReplaceAll`
+  - `set`

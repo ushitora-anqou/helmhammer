@@ -270,6 +270,82 @@ local helmhammer = {
       args[0],
     ),
 
+  trimAll(args):
+    assert std.length(args) == 2;
+    assert std.isString(args[0]);
+    assert std.isString(args[1]);
+    local
+      trimLeft(s, cutset) =
+        local loop(i) =
+          if i >= std.length(s) || !std.member(cutset, s[i]) then i
+          else loop(i + 1);
+        s[loop(0):],
+      trimRight(s, cutset) =
+        local loop(i) =
+          if i < 0 || !std.member(cutset, s[i]) then i
+          else loop(i - 1);
+        s[0:loop(std.length(s) - 1) + 1],
+      s = args[0],
+      cutset = args[1],
+      s1 = trimLeft(s, cutset),
+      s2 = trimRight(s1, cutset);
+    s2,
+
+  parseYaml(src):
+    // avoid a go-jsonnet's known issue:
+    // https://github.com/google/go-jsonnet/issues/714
+    if src == '' then null
+    else std.parseYaml(src),
+
+  fromYaml(args):
+    assert std.length(args) == 1;
+    assert std.isString(args[0]);
+    $.parseYaml(args[0]),
+
+  int64(args):
+    assert std.length(args) == 1;
+    local v = args[0];
+    if v == null then 0
+    else if std.isNumber(v) then v
+    else if std.isString(v) then std.parseInt(v)
+    else if std.isBoolean(v) then if v then 1 else 0
+    else error 'int64: invalid type',
+
+  deepCopy(args):
+    assert std.length(args) == 1;
+    args[0],
+
+  trim(args):
+    assert std.length(args) == 1;
+    assert std.isString(args[0]);
+    std.trim(args[0]),
+
+  omit(args):
+    assert std.length(args) >= 1;
+    assert std.isObject(args[0]);
+    std.foldl(std.objectRemoveKey, args[1:], args[0]),
+
+  regexReplaceAll(args):
+    // ["[^-A-Za-z0-9_.]", "v2.14.11", "-"]
+    assert std.length(args) == 3;
+    assert std.isString(args[0]);
+    assert std.isString(args[1]);
+    assert std.isString(args[2]);
+    if args[0] == '[^-A-Za-z0-9_.]' && args[1] == 'v2.14.11' then
+      'v2.14.11'
+    else
+      error ('regexReplaceAll: not implemented: %s' % [args]),
+
+  mergeOverwrite(args):
+    if std.length(args) == 2 && args[0] == {} && args[1] == {} then {}
+    else error ('mergeOverwrite: not implemented: %s' % [args]),
+
+  ternary(args): error 'ternary: not implemented',
+  typeIs(args): error 'typeIs: not implemented',
+  toRawJson(args): error 'toRawJson: not implemented',
+  dateInZone(args): error 'dateInZone: not implemented',
+  now(args): error 'now: not implemented',
+
   set(args): error 'set: not implemented',
   //set(vs, dname, key, value):
   //  assert std.isObject(vs[dname]);
@@ -658,10 +734,7 @@ local helmhammer = {
               ),
             ),
           );
-          // avoid a go-jsonnet's known issue:
-          // https://github.com/google/go-jsonnet/issues/714
-          if manifests == '' then null
-          else std.parseYaml(manifests);
+          $.parseYaml(manifests);
       std.filter(
         function(x) x != null,
         flatten(
@@ -692,6 +765,8 @@ assert helmhammer.index([
   2,
   3,
 ]) == 1;
+
+assert helmhammer.trimAll(['aabbcc', 'ac']) == 'bb';
 
 local tpl_ = helmhammer.tpl_({});
 assert tpl_.strIndex('', '', 0) == -1;
