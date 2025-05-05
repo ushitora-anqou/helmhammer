@@ -326,7 +326,15 @@ func CallIsTrue(v *Expr) *Expr {
 	}
 }
 
-func CallJoin(list []*Expr) *Expr {
+func CallIsTrueOnHeap(heap *Expr, v *Expr) *Expr {
+	return &Expr{
+		Kind:     ECall,
+		CallFunc: Index("helmhammer", "isTrueOnHeap"),
+		CallArgs: []*Expr{heap, v},
+	}
+}
+
+func CallJoin(heap *Expr, list []*Expr) *Expr {
 	return &Expr{
 		Kind: ECall,
 		CallFunc: &Expr{
@@ -335,6 +343,7 @@ func CallJoin(list []*Expr) *Expr {
 			IndexListTail: []string{"join"},
 		},
 		CallArgs: []*Expr{
+			heap,
 			{Kind: EList, List: list},
 		},
 	}
@@ -361,6 +370,17 @@ func CallField(args ...*Expr) *Expr {
 			IndexListTail: []string{"field"},
 		},
 		CallArgs: args,
+	}
+}
+
+func CallFromConst(heap *Expr, v *Expr) *Expr {
+	return &Expr{
+		Kind: ECall,
+		CallFunc: &Expr{
+			Kind: ERaw,
+			Raw:  `helmhammer.value.fromConst`,
+		},
+		CallArgs: []*Expr{heap, v},
 	}
 }
 
@@ -607,5 +627,42 @@ func Map(src map[string]*Expr) *Expr {
 	return &Expr{
 		Kind: EMap,
 		Map:  m,
+	}
+}
+
+func EmptyMap() *Expr {
+	return Map(map[string]*Expr{})
+}
+
+func IndexInt(lhs string, rhs int) *Expr {
+	return &Expr{
+		Kind:     EIndex,
+		BinOpLHS: Index(lhs),
+		BinOpRHS: &Expr{
+			Kind:       EIntLiteral,
+			IntLiteral: rhs,
+		},
+	}
+}
+
+func CallDeref(heap *Expr, v *Expr) *Expr {
+	return &Expr{
+		Kind: ECall,
+		CallFunc: &Expr{
+			Kind: ERaw,
+			Raw:  "helmhammer.value.deref",
+		},
+		CallArgs: []*Expr{heap, v},
+	}
+}
+
+func CallToConst(heap *Expr, v *Expr) *Expr {
+	return &Expr{
+		Kind: ECall,
+		CallFunc: &Expr{
+			Kind: ERaw,
+			Raw:  "helmhammer.value.toConst",
+		},
+		CallArgs: []*Expr{heap, v},
 	}
 }

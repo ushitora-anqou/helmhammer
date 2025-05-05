@@ -126,7 +126,11 @@ func withScope(
 	}
 
 	// local [nestedPostState.name] = [nestedPostState.body];
-	// { v: [nestedPostState.v], vs: [preStateName].vs + [assignedVars] }
+	// {
+	//   v: [nestedPostState.v],
+	//   vs: [preStateName].vs + [assignedVars],
+	//   h: [nestedPostState.h],
+	// }
 	expr := &jsonnet.Expr{
 		Kind: jsonnet.ELocal,
 		LocalBinds: []*jsonnet.LocalBind{
@@ -135,6 +139,7 @@ func withScope(
 		LocalBody: newState(
 			jsonnet.Index(nestedPostStateName, stateV),
 			jsonnet.AddMap(jsonnet.Index(nestedPreStateName, stateVS), assignedVars),
+			jsonnet.Index(nestedPostStateName, stateH),
 		).body,
 	}
 

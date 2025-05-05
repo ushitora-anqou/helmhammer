@@ -1,16 +1,183 @@
 local helmhammer = {
-  field(receiver, fieldName, args):
-    if !std.isObject(receiver) || !std.objectHas(receiver, fieldName) then
-      if std.length(args) != 0 then error 'field: invalid arguments: %s: %s' % [fieldName, args[0]]
-      else null
-    else if std.isFunction(receiver[fieldName]) then receiver[fieldName](args)
-    else if std.length(args) != 0 then error 'field: invalid arguments: %s: %s: %s' % [receiver, fieldName, args[0]]
-    else receiver[fieldName],
+  local trimFunctions(x) =
+    if std.isNumber(x) || std.isString(x) || std.isBoolean(x) || x == null then x
+    else if std.isFunction(x) then null
+    else if std.isArray(x) then std.map(trimFunctions, x)
+    else if std.isObject(x) then std.mapWithKey(function(k, v) trimFunctions(v), x),
 
-  join(ary):
-    std.join('', std.map(std.toString, ary)),
+  value: {
+    local allocate(heap, v) =
+      local
+        pointer = std.toString(std.length(heap)),
+        heap1 = heap { [pointer]: v };
+      [heap1, { p: pointer }],
 
-  isTrue(v):
+    local isAddr(v) =
+      std.isObject(v) && std.objectHas(v, 'p'),
+
+    local deref(heap, addr) =
+      if isAddr(addr) then heap[addr.p] else error 'deref: not addr',
+
+    local assign(heap, addr, v) =
+      if isAddr(addr) then
+        heap { [addr.p]: v }
+      else
+        error ('assign: invalid addr: %s' % [trimFunctions(addr)]),
+
+    local arrayReplace(ary, index, newItem) =
+      std.mapWithIndex(
+        function(i, item) if i == index then newItem else item,
+        ary,
+      ),
+
+    local fromConst(heap, src) =
+      local aux(heap, queue0, out) =
+        local
+          first = queue0[0],
+          queue = queue0[1:],
+          src = first[0],
+          k = first[1];
+        if std.length(queue0) == 0 then [heap, out]
+        else if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
+          local res = k(heap, src, out), heap1 = res[0], out1 = res[1];
+          aux(heap1, queue, out1) tailstrict
+        else if std.isFunction(src) then
+          local res = allocate(heap, src), heap1 = res[0], v = res[1];
+          local res = k(heap1, v, out), heap2 = res[0], out1 = res[1];
+          aux(heap2, queue, out1) tailstrict
+        else if std.isArray(src) then
+          local res = allocate(heap, src), heap1 = res[0], aryp = res[1];
+          local res = k(heap1, aryp, out), heap2 = res[0], out1 = res[1];
+          local queue1 = queue + std.mapWithIndex(
+            function(index, item)
+              [
+                item,
+                function(heap, itemv, out)
+                  [
+                    assign(
+                      heap,
+                      aryp,
+                      arrayReplace(deref(heap, aryp), index, itemv),
+                    ),
+                    out,
+                  ],
+              ],
+            src,
+          );
+          aux(heap2, queue1, out1) tailstrict
+        else if std.isObject(src) then
+          local res = allocate(heap, src), heap1 = res[0], objp = res[1];
+          local res = k(heap1, objp, out), heap2 = res[0], out1 = res[1];
+          local queue1 = queue + std.map(
+            function(key)
+              [
+                src[key],
+                function(heap, value, out)
+                  if src[key] == value then [heap, out]
+                  else [
+                    assign(
+                      heap,
+                      objp,
+                      deref(heap, objp) + { [key]: value },
+                    ),
+                    out,
+                  ],
+              ],
+            std.objectFields(src),
+          );
+          aux(heap2, queue1, out1) tailstrict
+        else
+          error 'helmhammer.value.fromConst: unknown type';
+      aux(
+        heap,
+        [
+          [
+            src,
+            function(heap, itemv, _out) [
+              heap,
+              itemv,  // set out
+            ],
+          ],
+        ],
+        null,
+      ) tailstrict,
+
+    local toConst(heap, src) =
+      local aux(heap, src) =
+        if isAddr(src) then
+          local v = deref(heap, src);
+          if std.isFunction(v) then
+            v
+          else if std.isArray(v) then
+            std.map(function(item) aux(heap, item), v)
+          else if std.isObject(v) then
+            std.mapWithKey(function(_, src) aux(heap, src), v)
+          else
+            error 'helmhammer.value.toConst: invalid addr'
+        else if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
+          src
+        else
+          error 'helmhammer.value.toConst: invalid value. maybe already const?';
+      aux(heap, src) tailstrict,
+
+    assign:: assign,
+    allocate:: allocate,
+    isAddr:: isAddr,
+    deref:: deref,
+    fromConst:: fromConst,
+    toConst:: toConst,
+  },
+
+  field(heap, receiver0, fieldName, args):
+    local receiver =
+      if $.value.isAddr(receiver0)
+      then $.value.deref(heap, receiver0)
+      else receiver0;
+    assert !$.value.isAddr(receiver);
+    if std.isObject(receiver) && std.objectHas(receiver, fieldName) then
+      if $.value.isAddr(receiver[fieldName]) &&
+         std.isFunction($.value.deref(heap, receiver[fieldName]))
+      then
+        // FIXME: allow to return allocated pointer
+        $.value.deref(heap, receiver[fieldName])(heap, args)
+      else if std.length(args) != 0 then
+        error ('field: invalid arguments: %s' % [fieldName])
+      else
+        receiver[fieldName]  // return non-dereferenced value
+    else
+      if std.length(args) != 0 then
+        error ('field: invalid arguments: %s' % [fieldName])
+      else
+        null,
+  //std.trace('%s %s' % [trimFunctions(receiver), fieldName], null),
+
+  join(heap, ary):
+    std.join(
+      '',
+      std.map(
+        function(x)
+          if x == null then error 'join: not expected null'
+          else if std.isString(x) then x
+          else if std.isNumber(x) || std.isBoolean(x) then std.toString(x)
+          //else if std.isArray(x) || std.isObject(x) then error 'join: stringifing arrays or objects is not implemented yet'
+          else error 'join: unexpected type of value',
+        ary,
+      ),
+    ),
+
+  isTrueOnHeap(heap, v):
+    if $.value.isAddr(v) then
+      local w = $.value.deref(heap, v);
+      if std.isArray(w) || std.isObject(w) then std.length(w) > 0
+      else if std.isFunction(v) then true
+      else error 'isTrueOnHeap: invalid type of address'
+    else if v == null then false
+    else if std.isString(v) then std.length(v) > 0
+    else if std.isBoolean(v) then v
+    else if std.isNumber(v) then v != 0
+    else error 'isTrueOnHeap: invalid type of value',
+
+  isTrue(v/* should be const */):
     if v == null then false
     else if std.isArray(v) || std.isObject(v) || std.isString(v) then std.length(v) > 0
     else if std.isBoolean(v) then v
@@ -18,56 +185,62 @@ local helmhammer = {
     else if std.isNumber(v) then v != 0
     else true,
 
-  range(state, values, fthen, felse):
-    if values == null then felse(state { v: '' })
-    else if std.isNumber(values) then
-      self.range(state, std.makeArray(values, function(x) x), fthen, felse)
-    else if std.isArray(values) then
-      if std.length(values) == 0 then felse(state { v: '' })
-      else
-        std.foldl(
-          function(acc, value)
-            local postState = fthen(acc.state, acc.i, value);
-            {
-              i: acc.i + 1,
-              state: {
-                v: acc.state.v + postState.v,
-                vs: postState.vs,
+  range(state, values0, fthen, felse):
+    if values0 == null then felse(state { v: '' })
+    else if std.isNumber(values0) then
+      local
+        res = $.value.allocate(state.h, std.makeArray(values0, function(x) x)),
+        heap = res[0],
+        aryp = res[1];
+      self.range(state { h: heap }, aryp, fthen, felse)
+    else if $.value.isAddr(values0) then
+      local values = $.value.deref(state.h, values0);
+      if std.isArray(values) then
+        if std.length(values) == 0 then felse(state { v: '' })
+        else
+          std.foldl(
+            function(acc, value)
+              local postState = fthen(acc.state, acc.i, value);
+              {
+                i: acc.i + 1,
+                state: postState {
+                  v: acc.state.v + postState.v,
+                },
               },
-            },
-          values,
-          {
-            i: 0,
-            state: state { v: '' },
-          },
-        ).state
-    else if std.isObject(values) then
-      if std.length(values) == 0 then felse(state { v: '' })
-      else
-        std.foldl(
-          function(acc, kv)
-            local postState = fthen(acc.state, kv.key, kv.value);
+            values,
             {
-              i: acc.i + 1,
-              state: {
-                v: acc.state.v + postState.v,
-                vs: postState.vs,
-              },
+              i: 0,
+              state: state { v: '' },
             },
-          std.objectKeysValues(values),
-          {
-            i: 0,
-            state: state { v: '' },
-          },
-        ).state
-    else error 'range: not implemented',
+          ).state
+      else if std.isObject(values) then
+        if std.length(values) == 0 then felse(state { v: '' })
+        else
+          std.foldl(
+            function(acc, kv)
+              local postState = fthen(acc.state, kv.key, kv.value);
+              {
+                i: acc.i + 1,
+                state: postState {
+                  v: acc.state.v + postState.v,
+                },
+              },
+            std.objectKeysValues(values),
+            {
+              i: 0,
+              state: state { v: '' },
+            },
+          ).state
+      else error ('range: not implemented: %s' % [values0])
+    else error ('range: not implemented: %s' % [values0]),
 
   printf(args):
     std.format(args[0], args[1:]),
 
   include(args0):
-    local templates = args0['$'], args = args0.args, vs = args0.vs;
-    { v: templates[args[0]](args[1]), vs: vs },
+    local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.heap;
+    local resultState = templates[args[0]](heap, args[1]);
+    resultState { vs: vs },
 
   contains(args):
     std.findSubstr(args[0], args[1]) != [],
@@ -311,7 +484,7 @@ local helmhammer = {
     else if std.isBoolean(v) then if v then 1 else 0
     else error 'int64: invalid type',
 
-  deepCopy(args):
+  deepCopy(args): // FIXME
     assert std.length(args) == 1;
     args[0],
 
@@ -352,6 +525,16 @@ local helmhammer = {
   //  assert std.isString(key);
   //  local vs1 = vs { [dname]: vs[dname] { [key]: value } };
   //  [vs1, vs1[dname]],
+
+  callBuiltin(state, ident, args):
+    local
+      res = $.value.fromConst(
+        state.h,
+        $[ident](std.map(function(arg) $.value.toConst(state.h, arg), args)),
+      ),
+      heap = res[0],
+      addr = res[1];
+    state { v: addr, h: heap },
 
   tpl_(templates):
     {
@@ -612,11 +795,13 @@ local helmhammer = {
           else if op0.v == 'include' then
             local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
             local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
-            [s2, $.include({ '$': templates, args: [name, newDot], vs: {} }).v]
+            local res = $.value.fromConst({}, newDot), heap = res[0], newDotOnHeap = res[1];
+            [s2, $.include({ '$': templates, args: [name, newDotOnHeap], vs: {}, heap: heap }).v]
           else if op0.v == 'tpl' then
             local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
             local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
-            [s2, $.tpl({ '$': templates, args: [name, newDot], vs: {} }).v]
+            local res = $.value.fromConst({}, newDot), heap = res[0], newDotOnHeap = res[1];
+            [s2, $.tpl({ '$': templates, args: [name, newDotOnHeap], vs: {}, heap: heap }).v]
           else
             error ('evalCommand: unknown id: %s' % [op0.v])
         else
@@ -661,10 +846,10 @@ local helmhammer = {
     },
 
   tpl(args0):
-    local templates = args0['$'], args = args0.args, vs = args0.vs;
-    local tpl_ = self.tpl_(templates), src = args[0], dot = args[1];
-    {
-      v: tpl_.eval(
+    local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.heap;
+    local tpl_ = self.tpl_(templates), src = args[0], dot = $.value.toConst(heap, args[1]);
+    local evalResult =
+      tpl_.eval(
         tpl_.parse(
           tpl_.lex(src, 0, []),
           0,
@@ -674,8 +859,12 @@ local helmhammer = {
           out: '',
           vars: { ''/* $ */: dot },
         },
-      ).out,
+      ).out;
+    assert std.isString(evalResult);
+    {
+      v: evalResult,
       vs: vs,
+      h: heap,
     },
 
   chartMain(
@@ -693,8 +882,8 @@ local helmhammer = {
   ):
     function(values={}, namespace='default', includeCrds=false)
       local
-        runFile(key) =
-          files[key]({
+        vals =
+          $.value.fromConst({}, {
             Values: std.mergePatch(defaultValues, values),
             Chart: {
               Name: chartName,
@@ -706,26 +895,32 @@ local helmhammer = {
               Namespace: namespace,
               Service: releaseService,
             },
-            Template: {
-              Name: key,
-              BasePath: templateBasePath,
-            },
             Capabilities: capabilities {
               APIVersions: {  // FIXME: APIVersions should behave as an array, too.
-                Has(args):
+                Has(heap, args):
                   assert std.length(args) == 1;
                   assert std.isString(args[0]);
                   // FIXME: support resource name like "apps/v1/Deployment"
                   std.member(capabilities.APIVersions, args[0]),
               },
             },
+            Template: {},  // filled in runFile
           }),
+        runFile(key) =
+          local
+            heap0 = vals[0],
+            heap1 = $.value.assign(
+              heap0,
+              $.value.deref(heap0, vals[1]).Template,
+              { Name: key, BasePath: templateBasePath },
+            );
+          files[key](heap1, vals[1]).v,
         flatten(ary) =
           local loop(i, out) =
             if i >= std.length(ary) then out
-            else if std.isArray(ary[i]) then loop(i + 1, out + ary[i])
-            else loop(i + 1, out + [ary[i]]);
-          loop(0, []),
+            else if std.isArray(ary[i]) then loop(i + 1, out + ary[i]) tailstrict
+            else loop(i + 1, out + [ary[i]]) tailstrict;
+          loop(0, []) tailstrict,
         parseManifests(src) =
           local manifests = std.join(
             '\n---\n',
@@ -823,7 +1018,13 @@ assert tpl_.parse(tpl_.lex('a{{.}}b', 0, []), 0) == { t: 'list', v: [
 ] };
 
 local tpl(args) =
-  helmhammer.tpl({ '$': { tpl0(dot): dot.valueTpl0 }, args: args, vs: {} }).v;
+  local res = helmhammer.value.fromConst({}, args[1]), heap = res[0], dot = res[1];
+  helmhammer.tpl({
+    '$': { tpl0(heap, dot): { v: helmhammer.value.deref(heap, dot).valueTpl0 } },
+    args: [args[0], dot],
+    vs: {},
+    heap: heap,
+  }).v;
 assert tpl(['', {}]) == '';
 assert tpl(['a', {}]) == 'a';
 assert tpl(['{', {}]) == '{';
@@ -851,4 +1052,35 @@ assert tpl(['{{ if .A }}{{.B}}{{ end }}', { A: { B: 1 }, B: 0 }]) == '0';
 assert tpl(['>{{ if $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
 assert tpl(['>{{ if $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
 assert tpl(['{{ tpl "{{.A}}" $ }}', { A: 10 }]) == '10';
+
+local
+  fromConst = helmhammer.value.fromConst,
+  deref = helmhammer.value.deref,
+  toConst = helmhammer.value.toConst;
+assert fromConst({}, 10) == [{}, 10];
+assert fromConst({}, true) == [{}, true];
+assert fromConst({}, 'a') == [{}, 'a'];
+assert
+  local res = fromConst({}, function() 42), heap = res[0], v = res[1];
+  deref(heap, v)() == 42;
+assert
+  local res = fromConst({}, [1]), heap = res[0], v = res[1];
+  deref(heap, v)[0] == 1;
+assert
+  local res = fromConst({}, [0, [1]]), heap = res[0], v = res[1];
+  deref(heap, deref(heap, v)[1])[0] == 1;
+assert
+  local res = fromConst({}, { a: 1 }), heap = res[0], v = res[1];
+  deref(heap, v).a == 1;
+assert
+  local res = fromConst({}, { a: 0, b: { c: 1 } }), heap = res[0], v = res[1];
+  deref(heap, deref(heap, v).b).c == 1;
+assert
+  local res = fromConst({}, { a: 0, b: [1] }), heap = res[0], v = res[1];
+  deref(heap, deref(heap, v).b)[0] == 1;
+assert local res = fromConst({}, 1); toConst(res[0], res[1]) == 1;
+assert local res = fromConst({}, function() 42); toConst(res[0], res[1])() == 42;
+assert local res = fromConst({}, [1, [2]]); toConst(res[0], res[1]) == [1, [2]];
+assert local res = fromConst({}, { a: 0, b: [1] }); toConst(res[0], res[1]) == { a: 0, b: [1] };
+
 'ok'

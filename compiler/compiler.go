@@ -36,7 +36,7 @@ func CompileChart(chart *helm.Chart) (*jsonnet.Expr, error) {
 }
 
 func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
-	globalVariables := jsonnet.PredefinedFunctions()
+	globalVariables := map[string]*jsonnet.Expr{}
 	globalEnv := newEnv(
 		tmpl0,
 		&scope{
@@ -77,6 +77,7 @@ func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
 			Kind: jsonnet.EMap,
 			Map:  compiledGlobalVariables,
 		},
+		jsonnet.EmptyMap(),
 	)
 
 	return initialState.toLocal(globalEnv.preStateName, &jsonnet.Expr{
@@ -106,18 +107,15 @@ func compile(env *envT, node parse.Node) (*jsonnet.Expr, error) {
 		jsonnet.AddMap(
 			jsonnet.Index(env.preStateName, stateVS),
 			map[*jsonnet.Expr]*jsonnet.Expr{
-				{Kind: jsonnet.EStringLiteral, StringLiteral: "$"}: compileDot(),
+				{Kind: jsonnet.EStringLiteral, StringLiteral: "$"}: jsonnet.Index("dot"),
 			}),
+		jsonnet.Index("heap"),
 	)
 
 	return &jsonnet.Expr{
 		Kind:           jsonnet.EFunction,
-		FunctionParams: []string{"dot"},
-		FunctionBody: preState.toLocal(preStateName, &jsonnet.Expr{
-			Kind:          jsonnet.EIndexList,
-			IndexListHead: postState.body,
-			IndexListTail: []string{stateV},
-		}),
+		FunctionParams: []string{"heap", "dot"},
+		FunctionBody:   preState.toLocal(preStateName, postState.body),
 	}, nil
 }
 
@@ -135,10 +133,7 @@ func compileNode(env *envT, node parse.Node) (*state, error) {
 		return &state{
 			body: pipeState.toLocal(
 				pipeStateName,
-				newState(
-					jsonnet.EmptyString(),
-					jsonnet.Index(pipeStateName, stateVS),
-				).body,
+				newStateSameContext(pipeStateName, jsonnet.EmptyString()).body,
 			),
 		}, nil
 
@@ -153,7 +148,7 @@ func compileNode(env *envT, node parse.Node) (*state, error) {
 
 	case *parse.ListNode:
 		if len(node.Nodes) == 0 {
-			return newStateSameVS(env, jsonnet.EmptyString()), nil
+			return newStateSameContext(env.preStateName, jsonnet.EmptyString()), nil
 		}
 		return sequentialStates(
 			env,
@@ -164,11 +159,17 @@ func compileNode(env *envT, node parse.Node) (*state, error) {
 			func(stateNames []stateName) (*state, error) {
 				varsToBeJoined := make([]*jsonnet.Expr, 0, len(stateNames))
 				for _, stateName := range stateNames {
-					varsToBeJoined = append(varsToBeJoined, jsonnet.Index(stateName, stateV))
+					varsToBeJoined = append(
+						varsToBeJoined,
+						jsonnet.Index(stateName, stateV),
+					)
 				}
-				return newState(
-					jsonnet.CallJoin(varsToBeJoined),
-					jsonnet.Index(stateNames[len(stateNames)-1], stateVS),
+				return newStateSameContext(
+					stateNames[len(stateNames)-1],
+					jsonnet.CallJoin(
+						jsonnet.Index(stateNames[len(stateNames)-1], stateH),
+						varsToBeJoined,
+					),
 				), nil
 			},
 		)
@@ -177,8 +178,8 @@ func compileNode(env *envT, node parse.Node) (*state, error) {
 		return compileRange(env, node)
 
 	case *parse.TextNode:
-		return newStateSameVS(
-			env,
+		return newStateSameContext(
+			env.preStateName,
 			&jsonnet.Expr{
 				Kind:          jsonnet.EStringLiteral,
 				StringLiteral: string(node.Text),
@@ -199,14 +200,19 @@ func compileNode(env *envT, node parse.Node) (*state, error) {
 		return &state{
 			body: pipeState.toLocal(
 				pipeStateName,
-				newState(
+				jsonnet.AddMap(
 					&jsonnet.Expr{
 						Kind:     jsonnet.ECall,
 						CallFunc: jsonnet.Index("$", node.Name),
-						CallArgs: []*jsonnet.Expr{jsonnet.Index(pipeStateName, stateV)},
+						CallArgs: []*jsonnet.Expr{
+							jsonnet.Index(pipeStateName, stateH),
+							jsonnet.Index(pipeStateName, stateV),
+						},
 					},
-					jsonnet.Index(pipeStateName, stateVS),
-				).body,
+					map[*jsonnet.Expr]*jsonnet.Expr{
+						stringLiteralStateVS: jsonnet.Index(pipeStateName, stateVS),
+					},
+				),
 			),
 		}, nil
 	}
@@ -215,7 +221,10 @@ func compileNode(env *envT, node parse.Node) (*state, error) {
 
 func compilePipelineWithoutDecls(env *envT, pipe *parse.PipeNode) (*state, error) {
 	if pipe == nil {
-		return newStateSameVS(env, &jsonnet.Expr{Kind: jsonnet.ENull}), nil
+		return newStateSameContext(
+			env.preStateName,
+			&jsonnet.Expr{Kind: jsonnet.ENull},
+		), nil
 	}
 
 	if len(pipe.Cmds) == 0 {
@@ -265,6 +274,7 @@ func compilePipeline(env *envT, pipe *parse.PipeNode) (*state, error) {
 			newState(
 				jsonnet.Index(nestedStateName, stateV),
 				jsonnet.AddMap(jsonnet.Index(nestedStateName, stateVS), assignments),
+				jsonnet.Index(nestedStateName, stateH),
 			).body,
 		),
 	}, nil
@@ -299,7 +309,7 @@ func compileCommand(
 	}
 
 	if vExpr != nil {
-		return newStateSameVS(env, vExpr), nil
+		return newStateSameContext(env.preStateName, vExpr), nil
 	}
 
 	switch node := cmd.Args[0].(type) {
@@ -356,7 +366,7 @@ func compileArg(env *envT, arg parse.Node) (*state, error) {
 	}
 
 	if vExpr != nil {
-		return newStateSameVS(env, vExpr), nil
+		return newStateSameContext(env.preStateName, vExpr), nil
 	}
 
 	switch node := arg.(type) {
@@ -439,6 +449,7 @@ func compileField(
 			compiledArgs = jsonnet.Index(argsStateName, stateV)
 		}
 		receiver = jsonnet.CallField(
+			jsonnet.Index(argsStateName, stateH),
 			receiver,
 			&jsonnet.Expr{
 				Kind:          jsonnet.EStringLiteral,
@@ -451,7 +462,7 @@ func compileField(
 	return &state{
 		body: argsState.toLocal(
 			argsStateName,
-			newState(receiver, jsonnet.Index(argsStateName, stateVS)).body,
+			newStateSameContext(argsStateName, receiver).body,
 		),
 	}, nil
 }
@@ -463,7 +474,7 @@ func compileVariable(env *envT, node *parse.VariableNode, args []parse.Node, fin
 	}
 	receiver := jsonnet.Index(env.preStateName, stateVS, node.Ident[0])
 	if len(node.Ident) == 1 {
-		return newStateSameVS(env, receiver), nil
+		return newStateSameContext(env.preStateName, receiver), nil
 	}
 	return compileField(env, receiver, node.Ident[1:], args, final)
 }
@@ -491,7 +502,8 @@ func compileFunction(env *envT, node *parse.IdentifierNode, args []parse.Node, f
 	return &state{
 		body: argsState.toLocal(
 			argsStateName,
-			newState(
+			newStateSameContext(
+				argsStateName,
 				&jsonnet.Expr{
 					Kind:     jsonnet.ECall,
 					CallFunc: function,
@@ -499,7 +511,6 @@ func compileFunction(env *envT, node *parse.IdentifierNode, args []parse.Node, f
 						jsonnet.Index(argsStateName, stateV),
 					},
 				},
-				jsonnet.Index(argsStateName, stateVS),
 			).body,
 		),
 	}, nil
@@ -518,7 +529,7 @@ func compileArgs(
 		if final != nil {
 			vExpr.List = append(vExpr.List, final)
 		}
-		return newStateSameVS(env, vExpr), nil
+		return newStateSameContext(env.preStateName, vExpr), nil
 	}
 
 	return sequentialStates(
@@ -538,7 +549,7 @@ func compileArgs(
 			if final != nil {
 				vExpr.List = append(vExpr.List, final)
 			}
-			return newState(vExpr, jsonnet.Index(stateNames[len(stateNames)-1], stateVS)), nil
+			return newStateSameContext(stateNames[len(stateNames)-1], vExpr), nil
 		},
 	)
 }
@@ -666,6 +677,7 @@ func compileRange(env *envT, node *parse.RangeNode) (*state, error) {
 			Kind: jsonnet.EMap,
 			Map: map[*jsonnet.Expr]*jsonnet.Expr{
 				stringLiteralStateV: jsonnet.Index(nestedPreStateName0, stateV),
+				stringLiteralStateH: jsonnet.Index(nestedPreStateName0, stateH),
 				stringLiteralStateVS: jsonnet.AddMap(
 					jsonnet.Index(nestedPreStateName0, stateVS),
 					assignments,
@@ -680,7 +692,7 @@ func compileRange(env *envT, node *parse.RangeNode) (*state, error) {
 			jsonnet.CallRange(
 				&jsonnet.Expr{
 					Kind:   jsonnet.EID,
-					IDName: env.preStateName,
+					IDName: pipeStateName,
 				},
 				jsonnet.Index(pipeStateName, stateV),
 				&jsonnet.Expr{
@@ -741,9 +753,9 @@ func compileIfOrWith(env *envT, typ parse.NodeType, pipe *parse.PipeNode, list *
 
 			var nestedPostStateElse *state
 			if elseList == nil {
-				nestedPostStateElse = newState(
+				nestedPostStateElse = newStateSameContext(
+					nestedPreStateName,
 					jsonnet.EmptyString(),
-					jsonnet.Index(nestedPreStateName, stateVS),
 				)
 			} else {
 				nestedPostStateElse, err = withScope(
@@ -760,8 +772,11 @@ func compileIfOrWith(env *envT, typ parse.NodeType, pipe *parse.PipeNode, list *
 
 			return &state{
 				body: nestedPreState.toLocal(nestedPreStateName, &jsonnet.Expr{
-					Kind:   jsonnet.EIf,
-					IfCond: jsonnet.CallIsTrue(jsonnet.Index(nestedPreStateName, stateV)),
+					Kind: jsonnet.EIf,
+					IfCond: jsonnet.CallIsTrueOnHeap(
+						jsonnet.Index(nestedPreStateName, stateH),
+						jsonnet.Index(nestedPreStateName, stateV),
+					),
 					IfThen: nestedPostStateThen.body,
 					IfElse: nestedPostStateElse.body,
 				}),
@@ -775,8 +790,25 @@ func compileBuiltinFunctions(
 	ident string,
 	compiledArgs *jsonnet.Expr,
 ) *state {
-	// FIXME: implement `set`
+	if _, ok := jsonnet.PredefinedFunctions()[ident]; ok {
+		return &state{
+			body: &jsonnet.Expr{
+				Kind: jsonnet.ECall,
+				CallFunc: &jsonnet.Expr{
+					Kind: jsonnet.ERaw,
+					Raw:  `helmhammer.callBuiltin`,
+				},
+				CallArgs: []*jsonnet.Expr{
+					jsonnet.Index(env.preStateName),
+					{Kind: jsonnet.EStringLiteral, StringLiteral: ident},
+					compiledArgs,
+				},
+			},
+		}
+	}
+
 	switch ident {
+	// FIXME: implement `set`
 	case "include", "tpl", "set":
 	default:
 		return nil
@@ -797,6 +829,7 @@ func compileBuiltinFunctions(
 					},
 					"args": compiledArgs,
 					"vs":   jsonnet.Index(env.preStateName, stateVS),
+					"heap": jsonnet.Index(env.preStateName, stateH),
 				}),
 			},
 		},

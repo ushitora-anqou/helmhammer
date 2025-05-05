@@ -8,26 +8,33 @@ import (
 )
 
 // state is output of execution of a text/template's Node.
-// It has a printed value (`v`) and a variable map `vs` (name |-> value)
-// after its execution.
+// It is a map having the following values:
+// - `v`: a printed value
+// - `vs`: a variable map `vs` (name |-> value)
+// - `h`: heap stroing values
 type state struct {
 	body *jsonnet.Expr
 }
 
-func newState(v *jsonnet.Expr, vs *jsonnet.Expr) *state {
+func newState(v *jsonnet.Expr, vs *jsonnet.Expr, h *jsonnet.Expr) *state {
 	return &state{
 		body: &jsonnet.Expr{
 			Kind: jsonnet.EMap,
 			Map: map[*jsonnet.Expr]*jsonnet.Expr{
 				stringLiteralStateV:  v,
 				stringLiteralStateVS: vs,
+				stringLiteralStateH:  h,
 			},
 		},
 	}
 }
 
-func newStateSameVS(env *envT, v *jsonnet.Expr) *state {
-	return newState(v, jsonnet.Index(env.preStateName, stateVS))
+func newStateSameContext(preStateName string, v *jsonnet.Expr) *state {
+	return newState(
+		v,
+		jsonnet.Index(preStateName, stateVS),
+		jsonnet.Index(preStateName, stateH),
+	)
 }
 
 func (s *state) toLocal(stateName stateName, localBody *jsonnet.Expr) *jsonnet.Expr {
@@ -46,11 +53,13 @@ func (s *state) toLocal(stateName stateName, localBody *jsonnet.Expr) *jsonnet.E
 const (
 	stateV  = "v"
 	stateVS = "vs"
+	stateH  = "h"
 )
 
 var (
 	stringLiteralStateV  = &jsonnet.Expr{Kind: jsonnet.EStringLiteral, StringLiteral: stateV}
 	stringLiteralStateVS = &jsonnet.Expr{Kind: jsonnet.EStringLiteral, StringLiteral: stateVS}
+	stringLiteralStateH  = &jsonnet.Expr{Kind: jsonnet.EStringLiteral, StringLiteral: stateH}
 )
 
 type stateName = string

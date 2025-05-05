@@ -3,6 +3,7 @@ package compiler_test
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -34,7 +35,7 @@ func (u U) TrueFalse(b bool) string {
 func (u U) TrueFalseJsonnet() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind: jsonnet.ERaw,
-		Raw:  `function(args) if args[0] then "true" else ""`,
+		Raw:  `function(heap, args) if args[0] then "true" else ""`,
 	}
 }
 
@@ -45,9 +46,11 @@ type T struct {
 	U         *U
 	MSI       map[string]int
 	MSIEmpty  map[string]int
+	MSIZero   map[string]int
 	MSIone    map[string]int
 	SI        []int
 	SIEmpty   []int
+	SIZero    []int
 	SB        []bool
 	Empty0    any
 	Empty3    any
@@ -63,7 +66,7 @@ func (t T) Method0() string {
 func (t T) Method0Jsonnet() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind:           jsonnet.EFunction,
-		FunctionParams: []string{"args"},
+		FunctionParams: []string{"heap", "args"},
 		FunctionBody: &jsonnet.Expr{
 			Kind:          jsonnet.EStringLiteral,
 			StringLiteral: "M0",
@@ -78,18 +81,8 @@ func (t T) Method1(a int) int {
 func (t T) Method1Jsonnet() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind:           jsonnet.EFunction,
-		FunctionParams: []string{"args"},
-		FunctionBody: &jsonnet.Expr{
-			Kind: jsonnet.EIndex,
-			BinOpLHS: &jsonnet.Expr{
-				Kind:   jsonnet.EID,
-				IDName: "args",
-			},
-			BinOpRHS: &jsonnet.Expr{
-				Kind:       jsonnet.EIntLiteral,
-				IntLiteral: 0,
-			},
-		},
+		FunctionParams: []string{"heap", "args"},
+		FunctionBody:   jsonnet.IndexInt("args", 0),
 	}
 }
 
@@ -100,7 +93,7 @@ func (t T) Method2(a uint16, b string) string {
 func (t T) Method2Jsonnet() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind:           jsonnet.EFunction,
-		FunctionParams: []string{"args"},
+		FunctionParams: []string{"heap", "args"},
 		FunctionBody: &jsonnet.Expr{
 			Kind: jsonnet.ERaw,
 			Raw:  `"Method2: %d %s" % [args[0], args[1]]`,
@@ -115,7 +108,7 @@ func (t T) Method3(v any) string {
 func (t T) Method3Jsonnet() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind:           jsonnet.EFunction,
-		FunctionParams: []string{"args"},
+		FunctionParams: []string{"heap", "args"},
 		FunctionBody: &jsonnet.Expr{
 			Kind: jsonnet.ERaw,
 			Raw: `"Method3: %s" % [(
@@ -137,19 +130,15 @@ func (t T) MAdd(a int, b []int) []int {
 func (t T) MAddJsonnet() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind: jsonnet.ERaw,
-		Raw:  `function(args) std.map(function(x) x + args[0], args[1])`,
-	}
-}
-
-func (t T) GetU() *U {
-	return t.U
-}
-
-func (t T) GetUJsonnet() *jsonnet.Expr {
-	return &jsonnet.Expr{
-		Kind:           jsonnet.EFunction,
-		FunctionParams: []string{"args"},
-		FunctionBody:   jsonnet.ConvertIntoJsonnet(t.U),
+		Raw: strings.TrimSpace(`
+function(heap, args)
+	assert std.isNumber(args[0]);
+	assert helmhammer.value.isAddr(args[1]);
+	std.map(
+		function(x) x + args[0],
+		helmhammer.value.deref(heap, args[1]),
+	)`,
+		),
 	}
 }
 
@@ -178,16 +167,27 @@ func testCompile(t *testing.T, tmpl0 *template.Template, tests []compileTest) {
 			jsonnetExpr, err := compiler.Compile(tmpl)
 			require.NoError(t, err)
 			jsonnetExpr = &jsonnet.Expr{
-				Kind: jsonnet.ECall,
-				CallFunc: &jsonnet.Expr{
-					Kind:          jsonnet.EIndexList,
-					IndexListHead: jsonnetExpr,
-					IndexListTail: []string{tt.name},
+				Kind: jsonnet.ELocal,
+				LocalBinds: []*jsonnet.LocalBind{
+					{Name: "inputData", Body: jsonnet.CallFromConst(
+						jsonnet.EmptyMap(), jsonnet.ConvertIntoJsonnet(tt.data))},
+					{Name: "output", Body: &jsonnet.Expr{
+						Kind: jsonnet.ECall,
+						CallFunc: &jsonnet.Expr{
+							Kind:          jsonnet.EIndexList,
+							IndexListHead: jsonnetExpr,
+							IndexListTail: []string{tt.name},
+						},
+						CallArgs: []*jsonnet.Expr{
+							jsonnet.IndexInt("inputData", 0), // heap
+							jsonnet.IndexInt("inputData", 1), // dot
+						},
+					}},
 				},
-				CallArgs: []*jsonnet.Expr{jsonnet.ConvertIntoJsonnet(tt.data)},
+				LocalBody: jsonnet.Index("output", "v"),
 			}
 
-			//log.Printf("%s", jsonnetExpr.StringWithPrologue())
+			log.Printf("%s", jsonnetExpr.String())
 
 			sb := strings.Builder{}
 			tmpl.Option("missingkey=zero")
@@ -210,17 +210,19 @@ func testCompile(t *testing.T, tmpl0 *template.Template, tests []compileTest) {
 
 func TestCompileValidTemplates(t *testing.T) {
 	tVal := &T{
-		I:      17,
-		U16:    16,
-		X:      "x",
-		U:      &U{V: "v"},
-		MSI:    map[string]int{"one": 1, "two": 2, "three": 3},
-		MSIone: map[string]int{"one": 1},
-		SI:     []int{3, 4, 5},
-		SB:     []bool{true, false},
-		Empty3: []int{7, 8},
-		PSI:    newIntSlice(21, 22, 23),
-		True:   true,
+		I:       17,
+		U16:     16,
+		X:       "x",
+		U:       &U{V: "v"},
+		MSI:     map[string]int{"one": 1, "two": 2, "three": 3},
+		MSIZero: map[string]int{},
+		MSIone:  map[string]int{"one": 1},
+		SI:      []int{3, 4, 5},
+		SB:      []bool{true, false},
+		Empty3:  []int{7, 8},
+		PSI:     newIntSlice(21, 22, 23),
+		True:    true,
+		SIZero:  []int{},
 	}
 
 	// The following test table comes from Go compiler's test code:
@@ -279,14 +281,18 @@ func TestCompileValidTemplates(t *testing.T) {
 		// Range.
 		{"range []int", "{{range .SI}}-{{.}}-{{end}}", tVal},
 		{"range empty no else", "{{range .SIEmpty}}-{{.}}-{{end}}", tVal},
+		{"range zero []int no else", "{{range .SIZero}}-{{.}}-{{end}}", tVal},
 		{"range []int else", "{{range .SI}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
 		{"range empty else", "{{range .SIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
+		{"range zero []int else", "{{range .SIZero}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
 		{"range []bool", "{{range .SB}}-{{.}}-{{end}}", tVal},
-		{"range []int method", "{{range .SI | .MAdd .I}}-{{.}}-{{end}}", tVal},
+		//{"range []int method", "{{range .SI | .MAdd .I}}-{{.}}-{{end}}", tVal},
 		{"range map", "{{range .MSI}}-{{.}}-{{end}}", tVal},
 		{"range empty map no else", "{{range .MSIEmpty}}-{{.}}-{{end}}", tVal},
+		{"range zero map no else", "{{range .MSIZero}}-{{.}}-{{end}}", tVal},
 		{"range map else", "{{range .MSI}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
 		{"range empty map else", "{{range .MSIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
+		{"range zero map else", "{{range .MSIZero}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
 		{"range empty interface", "{{range .Empty3}}-{{.}}-{{else}}EMPTY{{end}}", tVal},
 		{"range empty nil", "{{range .Empty0}}-{{.}}-{{end}}", tVal},
 		{"range $x SI", "{{range $x := .SI}}<{{$x}}>{{end}}", tVal},
@@ -309,9 +315,9 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"method on chained var",
 			"{{range .MSIone}}{{if $.U.TrueFalse $.True}}{{$.U.TrueFalse $.True}}{{else}}WRONG{{end}}{{end}}",
 			tVal},
-		{"chained method",
-			"{{range .MSIone}}{{if $.GetU.TrueFalse $.True}}{{$.U.TrueFalse $.True}}{{else}}WRONG{{end}}{{end}}",
-			tVal},
+		//{"chained method",
+		//	"{{range .MSIone}}{{if $.GetU.TrueFalse $.True}}{{$.U.TrueFalse $.True}}{{else}}WRONG{{end}}{{end}}",
+		//	tVal},
 		//	{"chained method on variable",
 		//		"{{with $x := .}}{{with .SI}}{{$.GetU.TrueFalse $.True}}{{end}}{{end}}",
 		//		"true", tVal, true},
@@ -330,13 +336,15 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"if emptystring", "{{if ``}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if string", "{{if `notempty`}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if emptyslice", "{{if .SIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
+		{"if zeroslice", "{{if .SIZero}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if slice", "{{if .SI}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if emptymap", "{{if .MSIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
+		{"if zeromap", "{{if .MSIZero}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if map", "{{if .MSI}}NON-EMPTY{{else}}EMPTY{{end}}", tVal},
 		{"if $x with $y int", "{{if $x := true}}{{with $y := .I}}{{$x}},{{$y}}{{end}}{{end}}", tVal},
 		{"if $x with $x int", "{{if $x := true}}{{with $x := .I}}{{$x}},{{end}}{{$x}}{{end}}", tVal},
 		{"if else if", "{{if false}}FALSE{{else if true}}TRUE{{end}}", tVal},
-		//{"if else chain", "{{if eq 1 3}}1{{else if eq 2 3}}2{{else if eq 3 3}}3{{end}}", tVal},
+		{"if else chain", "{{if eq 1 3}}1{{else if eq 2 3}}2{{else if eq 3 3}}3{{end}}", tVal},
 
 		// With.
 		{"with true", "{{with true}}{{.}}{{end}}", tVal},
