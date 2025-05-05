@@ -153,7 +153,7 @@ func compileNode(env *envT, node parse.Node) (*state, error) {
 
 	case *parse.ListNode:
 		if len(node.Nodes) == 0 {
-			return newState(jsonnet.EmptyString(), jsonnet.Index(env.preStateName)), nil
+			return newStateSameVS(env, jsonnet.EmptyString()), nil
 		}
 		return sequentialStates(
 			env,
@@ -518,7 +518,7 @@ func compileArgs(
 		if final != nil {
 			vExpr.List = append(vExpr.List, final)
 		}
-		return newState(vExpr, jsonnet.Index(env.preStateName, stateVS)), nil
+		return newStateSameVS(env, vExpr), nil
 	}
 
 	return sequentialStates(
