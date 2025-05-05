@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
@@ -64,4 +65,47 @@ var nextGenID = 0
 func genid() int {
 	nextGenID++
 	return nextGenID
+}
+
+func sequentialStates[T any](
+	env *envT,
+	items []T,
+	fIter func(*envT, int, T) (*state, error),
+	fBody func([]stateName) (*state, error),
+) (*state, error) {
+	states := []*state{}
+	stateNames := []string{}
+	stateName := env.preStateName
+	for i, item := range items {
+		newState, err := fIter(env.withPreState(stateName), i, item)
+		if err != nil {
+			return nil, err
+		}
+		newStateName := generateStateName()
+		states = append(states, newState)
+		stateNames = append(stateNames, newStateName)
+		stateName = newStateName
+	}
+
+	if len(states) == 0 {
+		return nil, errors.New("sequentialStates: no available states")
+	}
+
+	if fBody == nil {
+		body := states[len(states)-1].body
+		for i := len(states) - 2; i >= 0; i-- {
+			body = states[i].toLocal(stateNames[i], body)
+		}
+		return &state{body: body}, nil
+	}
+
+	finalState, err := fBody(stateNames)
+	if err != nil {
+		return nil, err
+	}
+	body := finalState.body
+	for i := len(states) - 1; i >= 0; i-- {
+		body = states[i].toLocal(stateNames[i], body)
+	}
+	return &state{body: body}, nil
 }

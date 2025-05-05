@@ -152,29 +152,26 @@ func compileNode(env *envT, node parse.Node) (*state, error) {
 		return compileIfOrWith(env, parse.NodeWith, node.Pipe, node.List, node.ElseList)
 
 	case *parse.ListNode:
-		states := []*state{}
-		stateNames := []string{}
-		varsToBeJoined := []*jsonnet.Expr{}
-		stateName := env.preStateName
-		for _, node := range node.Nodes {
-			newState, err := compileNode(env.withPreState(stateName), node)
-			if err != nil {
-				return nil, err
-			}
-			newStateName := generateStateName()
-			states = append(states, newState)
-			stateNames = append(stateNames, newStateName)
-			varsToBeJoined = append(varsToBeJoined, jsonnet.Index(newStateName, stateV))
-			stateName = newStateName
+		if len(node.Nodes) == 0 {
+			return newState(jsonnet.EmptyString(), jsonnet.Index(env.preStateName)), nil
 		}
-		body := newState(
-			jsonnet.CallJoin(varsToBeJoined),
-			jsonnet.Index(stateName, stateVS),
-		).body
-		for i := len(states) - 1; i >= 0; i-- {
-			body = states[i].toLocal(stateNames[i], body)
-		}
-		return &state{body: body}, nil
+		return sequentialStates(
+			env,
+			node.Nodes,
+			func(env *envT, _ int, node parse.Node) (*state, error) {
+				return compileNode(env, node)
+			},
+			func(stateNames []stateName) (*state, error) {
+				varsToBeJoined := make([]*jsonnet.Expr, 0, len(stateNames))
+				for _, stateName := range stateNames {
+					varsToBeJoined = append(varsToBeJoined, jsonnet.Index(stateName, stateV))
+				}
+				return newState(
+					jsonnet.CallJoin(varsToBeJoined),
+					jsonnet.Index(stateNames[len(stateNames)-1], stateVS),
+				), nil
+			},
+		)
 
 	case *parse.RangeNode:
 		return compileRange(env, node)
@@ -225,34 +222,18 @@ func compilePipelineWithoutDecls(env *envT, pipe *parse.PipeNode) (*state, error
 		return nil, errors.New("pipe.Cmds is empty")
 	}
 
-	states := []*state{}
-	stateNames := []string{}
-	stateName := env.preStateName
-	for i, cmd := range pipe.Cmds {
-		final := jsonnet.Index(stateName, stateV)
-		if i == 0 {
-			final = nil
-		}
-		newState, err := compileCommand(
-			env.withPreState(stateName),
-			cmd,
-			final,
-		)
-		if err != nil {
-			return nil, err
-		}
-		newStateName := generateStateName()
-		states = append(states, newState)
-		stateNames = append(stateNames, newStateName)
-		stateName = newStateName
-	}
-
-	body := states[len(states)-1].body
-	for i := len(states) - 2; i >= 0; i-- {
-		body = states[i].toLocal(stateNames[i], body)
-	}
-
-	return &state{body: body}, nil
+	return sequentialStates(
+		env,
+		pipe.Cmds,
+		func(env *envT, i int, cmd *parse.CommandNode) (*state, error) {
+			final := jsonnet.Index(env.preStateName, stateV)
+			if i == 0 {
+				final = nil
+			}
+			return compileCommand(env, cmd, final)
+		},
+		nil,
+	)
 }
 
 func compilePipeline(env *envT, pipe *parse.PipeNode) (*state, error) {
@@ -529,44 +510,37 @@ func compileArgs(
 	args []parse.Node,
 	final *jsonnet.Expr,
 ) (*state, error) {
-	states := []*state{}
-	stateNames := []string{}
-	stateName := env.preStateName
-	for i, arg := range args {
-		if i == 0 {
-			continue
+	if len(args) <= 1 { // no arguments except `final`
+		vExpr := &jsonnet.Expr{
+			Kind: jsonnet.EList,
+			List: []*jsonnet.Expr{},
 		}
-		argState, err := compileArg(env.withPreState(stateName), arg)
-		if err != nil {
-			return nil, err
+		if final != nil {
+			vExpr.List = append(vExpr.List, final)
 		}
-		states = append(states, argState)
-		stateName = generateStateName()
-		stateNames = append(stateNames, stateName)
+		return newState(vExpr, jsonnet.Index(env.preStateName, stateVS)), nil
 	}
 
-	vExpr := &jsonnet.Expr{
-		Kind: jsonnet.EList,
-		List: []*jsonnet.Expr{},
-	}
-	for _, stateName := range stateNames {
-		vExpr.List = append(vExpr.List, jsonnet.Index(stateName, stateV))
-	}
-	if final != nil {
-		vExpr.List = append(vExpr.List, final)
-	}
-
-	vsExpr := jsonnet.Index(env.preStateName, stateVS)
-	if len(stateNames) > 0 {
-		vsExpr = jsonnet.Index(stateNames[len(stateNames)-1], stateVS)
-	}
-
-	body := newState(vExpr, vsExpr).body
-	for i := len(states) - 1; i >= 0; i-- {
-		body = states[i].toLocal(stateNames[i], body)
-	}
-
-	return &state{body: body}, nil
+	return sequentialStates(
+		env,
+		args[1:],
+		func(env *envT, _ int, arg parse.Node) (*state, error) {
+			return compileArg(env, arg)
+		},
+		func(stateNames []stateName) (*state, error) {
+			vExpr := &jsonnet.Expr{
+				Kind: jsonnet.EList,
+				List: []*jsonnet.Expr{},
+			}
+			for _, stateName := range stateNames {
+				vExpr.List = append(vExpr.List, jsonnet.Index(stateName, stateV))
+			}
+			if final != nil {
+				vExpr.List = append(vExpr.List, final)
+			}
+			return newState(vExpr, jsonnet.Index(stateNames[len(stateNames)-1], stateVS)), nil
+		},
+	)
 }
 
 func compileBool(node *parse.BoolNode) (*jsonnet.Expr, error) {
