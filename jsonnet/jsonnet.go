@@ -598,3 +598,14 @@ func PredefinedFunctions() map[string]*Expr {
 	}
 	return m
 }
+
+func Map(src map[string]*Expr) *Expr {
+	m := map[*Expr]*Expr{}
+	for k, v := range src {
+		m[&Expr{Kind: EStringLiteral, StringLiteral: k}] = v
+	}
+	return &Expr{
+		Kind: EMap,
+		Map:  m,
+	}
+}

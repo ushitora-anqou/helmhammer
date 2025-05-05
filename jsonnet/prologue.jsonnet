@@ -19,11 +19,11 @@ local helmhammer = {
     else true,
 
   range(state, values, fthen, felse):
-    if values == null then felse(state)
+    if values == null then felse(state { v: '' })
     else if std.isNumber(values) then
       self.range(state, std.makeArray(values, function(x) x), fthen, felse)
     else if std.isArray(values) then
-      if std.length(values) == 0 then felse(state)
+      if std.length(values) == 0 then felse(state { v: '' })
       else
         std.foldl(
           function(acc, value)
@@ -38,11 +38,11 @@ local helmhammer = {
           values,
           {
             i: 0,
-            state: state,
+            state: state { v: '' },
           },
         ).state
     else if std.isObject(values) then
-      if std.length(values) == 0 then felse(state)
+      if std.length(values) == 0 then felse(state { v: '' })
       else
         std.foldl(
           function(acc, kv)
@@ -57,7 +57,7 @@ local helmhammer = {
           std.objectKeysValues(values),
           {
             i: 0,
-            state: state,
+            state: state { v: '' },
           },
         ).state
     else error 'range: not implemented',
@@ -65,9 +65,9 @@ local helmhammer = {
   printf(args):
     std.format(args[0], args[1:]),
 
-  include(root):
-    function(args)
-      root[args[0]](args[1]),
+  include(args0):
+    local templates = args0['$'], args = args0.args, vs = args0.vs;
+    { v: templates[args[0]](args[1]), vs: vs },
 
   contains(args):
     std.findSubstr(args[0], args[1]) != [],
@@ -612,11 +612,11 @@ local helmhammer = {
           else if op0.v == 'include' then
             local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
             local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
-            [s2, $.include(templates)([name, newDot])]
+            [s2, $.include({ '$': templates, args: [name, newDot], vs: {} }).v]
           else if op0.v == 'tpl' then
             local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
             local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
-            [s2, $.tpl(templates)([name, newDot])]
+            [s2, $.tpl({ '$': templates, args: [name, newDot], vs: {} }).v]
           else
             error ('evalCommand: unknown id: %s' % [op0.v])
         else
@@ -660,10 +660,11 @@ local helmhammer = {
       eval: eval,
     },
 
-  tpl(templates):
-    function(args)
-      local tpl_ = self.tpl_(templates), src = args[0], dot = args[1];
-      tpl_.eval(
+  tpl(args0):
+    local templates = args0['$'], args = args0.args, vs = args0.vs;
+    local tpl_ = self.tpl_(templates), src = args[0], dot = args[1];
+    {
+      v: tpl_.eval(
         tpl_.parse(
           tpl_.lex(src, 0, []),
           0,
@@ -674,6 +675,8 @@ local helmhammer = {
           vars: { ''/* $ */: dot },
         },
       ).out,
+      vs: vs,
+    },
 
   chartMain(
     chartName,
@@ -819,7 +822,8 @@ assert tpl_.parse(tpl_.lex('a{{.}}b', 0, []), 0) == { t: 'list', v: [
   { t: 'text', v: 'b' },
 ] };
 
-local tpl = helmhammer.tpl({ tpl0(dot): dot.valueTpl0 });
+local tpl(args) =
+  helmhammer.tpl({ '$': { tpl0(dot): dot.valueTpl0 }, args: args, vs: {} }).v;
 assert tpl(['', {}]) == '';
 assert tpl(['a', {}]) == 'a';
 assert tpl(['{', {}]) == '{';

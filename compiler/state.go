@@ -25,6 +25,10 @@ func newState(v *jsonnet.Expr, vs *jsonnet.Expr) *state {
 	}
 }
 
+func newStateSameVS(env *envT, v *jsonnet.Expr) *state {
+	return newState(v, jsonnet.Index(env.preStateName, stateVS))
+}
+
 func (s *state) toLocal(stateName stateName, localBody *jsonnet.Expr) *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind: jsonnet.ELocal,
@@ -51,7 +55,8 @@ var (
 type stateName = string
 
 func generateStateName() stateName {
-	return fmt.Sprintf("s%d", genid())
+	id := genid()
+	return fmt.Sprintf("s%d", id)
 }
 
 var nextGenID = 0
