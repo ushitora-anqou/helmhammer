@@ -34,7 +34,7 @@ local helmhammer = {
       local aux(heap, queue0, out) =
         local
           first = queue0[0],
-          queue = queue0[1:],
+          queue = queue0[1],
           src = first[0],
           k = first[1];
         if std.length(queue0) == 0 then [heap, out]
@@ -48,43 +48,53 @@ local helmhammer = {
         else if std.isArray(src) then
           local res = allocate(heap, src), heap1 = res[0], aryp = res[1];
           local res = k(heap1, aryp, out), heap2 = res[0], out1 = res[1];
-          local queue1 = queue + std.mapWithIndex(
-            function(index, item)
-              [
-                item,
-                function(heap, itemv, out)
+          local queue1 =
+            std.foldl(
+              function(queue, x) [x, queue],
+              std.mapWithIndex(
+                function(index, item)
                   [
-                    assign(
-                      heap,
-                      aryp,
-                      arrayReplace(deref(heap, aryp), index, itemv),
-                    ),
-                    out,
+                    item,
+                    function(heap, itemv, out)
+                      [
+                        assign(
+                          heap,
+                          aryp,
+                          arrayReplace(deref(heap, aryp), index, itemv),
+                        ),
+                        out,
+                      ],
                   ],
-              ],
-            src,
-          );
+                src,
+              ),
+              queue,
+            );
           aux(heap2, queue1, out1) tailstrict
         else if std.isObject(src) then
           local res = allocate(heap, src), heap1 = res[0], objp = res[1];
           local res = k(heap1, objp, out), heap2 = res[0], out1 = res[1];
-          local queue1 = queue + std.map(
-            function(key)
-              [
-                src[key],
-                function(heap, value, out)
-                  if src[key] == value then [heap, out]
-                  else [
-                    assign(
-                      heap,
-                      objp,
-                      deref(heap, objp) + { [key]: value },
-                    ),
-                    out,
+          local queue1 =
+            std.foldl(
+              function(queue, x) [x, queue],
+              std.map(
+                function(key)
+                  [
+                    src[key],
+                    function(heap, value, out)
+                      if src[key] == value then [heap, out]
+                      else [
+                        assign(
+                          heap,
+                          objp,
+                          deref(heap, objp) + { [key]: value },
+                        ),
+                        out,
+                      ],
                   ],
-              ],
-            std.objectFields(src),
-          );
+                std.objectFields(src),
+              ),
+              queue,
+            );
           aux(heap2, queue1, out1) tailstrict
         else
           error 'helmhammer.value.fromConst: unknown type';
@@ -98,6 +108,7 @@ local helmhammer = {
               itemv,  // set out
             ],
           ],
+          [],
         ],
         null,
       ) tailstrict,
@@ -513,7 +524,11 @@ local helmhammer = {
     else
       error ('regexReplaceAll: not implemented: %s' % [args]),
 
-  ternary(args): error 'ternary: not implemented',
+  ternary(args):
+    assert std.length(args) == 3;
+    assert std.isBoolean(args[2]);
+    if args[2] then args[0] else args[1],
+
   typeIs(args): error 'typeIs: not implemented',
   toRawJson(args): error 'toRawJson: not implemented',
   dateInZone(args): error 'dateInZone: not implemented',
