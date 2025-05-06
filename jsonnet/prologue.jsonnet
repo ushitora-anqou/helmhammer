@@ -156,7 +156,7 @@ local helmhammer = {
       '',
       std.map(
         function(x)
-          if x == null then error 'join: not expected null'
+          if x == null then 'null'
           else if std.isString(x) then x
           else if std.isNumber(x) || std.isBoolean(x) then std.toString(x)
           //else if std.isArray(x) || std.isObject(x) then error 'join: stringifing arrays or objects is not implemented yet'
@@ -484,7 +484,7 @@ local helmhammer = {
     else if std.isBoolean(v) then if v then 1 else 0
     else error 'int64: invalid type',
 
-  deepCopy(args): // FIXME
+  deepCopy(args):  // FIXME
     assert std.length(args) == 1;
     args[0],
 
@@ -519,12 +519,16 @@ local helmhammer = {
   dateInZone(args): error 'dateInZone: not implemented',
   now(args): error 'now: not implemented',
 
-  set(args): error 'set: not implemented',
-  //set(vs, dname, key, value):
-  //  assert std.isObject(vs[dname]);
-  //  assert std.isString(key);
-  //  local vs1 = vs { [dname]: vs[dname] { [key]: value } };
-  //  [vs1, vs1[dname]],
+  set(args0):
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local objp = args[0], key = args[1], newValue = args[2];
+    assert std.isString(key);
+    assert $.value.isAddr(objp);
+    local objv = $.value.deref(heap, objp);
+    assert std.isObject(objv);
+    local newobjv = objv { [key]: newValue };
+    local newheap = $.value.assign(heap, objp, newobjv);
+    { v: objp, vs: vs, h: newheap },
 
   callBuiltin(state, ident, args):
     local

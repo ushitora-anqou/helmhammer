@@ -1,0 +1,9 @@
+test1:
+- {{ .Values.test1.v }}
+{{ $v1 := set .Values.test1 "v" 1 }}
+- {{ .Values.test1.v }}
+- {{ $v1.v }}
+- {{ .Values.test1.w }}
+{{ $v2 := set .Values.test1 "w" 1 }}
+- {{ .Values.test1.w }}
+- {{ $v2.w }}

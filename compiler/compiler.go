@@ -808,7 +808,6 @@ func compileBuiltinFunctions(
 	}
 
 	switch ident {
-	// FIXME: implement `set`
 	case "include", "tpl", "set":
 	default:
 		return nil
