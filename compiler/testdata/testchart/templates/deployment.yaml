@@ -1,9 +1,25 @@
-test1:
-- {{ .Values.test1.v }}
-{{ $v1 := set .Values.test1 "v" 1 }}
-- {{ .Values.test1.v }}
+testSet:
+- {{ .Values.testSet.v }}
+{{ $v1 := set .Values.testSet "v" 1 }}
+- {{ .Values.testSet.v }}
 - {{ $v1.v }}
-- {{ .Values.test1.w }}
-{{ $v2 := set .Values.test1 "w" 1 }}
-- {{ .Values.test1.w }}
+- {{ .Values.testSet.w }}
+{{ $v2 := set .Values.testSet "w" 1 }}
+- {{ .Values.testSet.w }}
 - {{ $v2.w }}
+
+testMergeOverwrite:
+{{ with .Values.testMergeOverwrite }}
+{{ $r1 := mergeOverwrite .v1 .v2 }}
+- {{ .v1.k }}
+- {{ $r1.k }}
+{{ $r2 := mergeOverwrite .v3 .v4 }}
+- {{ .v3.name }}
+- {{ .v3.keyvalue.key1 }}
+- {{ .v3.keyvalue.key2 }}
+- {{ .v3.keyvalue.key3 }}
+- {{ $r2.name }}
+- {{ $r2.keyvalue.key1 }}
+- {{ $r2.keyvalue.key2 }}
+- {{ $r2.keyvalue.key3 }}
+{{ end }}

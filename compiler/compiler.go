@@ -808,7 +808,7 @@ func compileBuiltinFunctions(
 	}
 
 	switch ident {
-	case "include", "tpl", "set":
+	case "include", "tpl", "set", "mergeOverwrite":
 	default:
 		return nil
 	}

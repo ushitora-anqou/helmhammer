@@ -13,7 +13,7 @@ local helmhammer = {
       [heap1, { p: pointer }],
 
     local isAddr(v) =
-      std.isObject(v) && std.objectHas(v, 'p'),
+      std.isObject(v) && std.length(v) == 1 && std.objectHas(v, 'p'),
 
     local deref(heap, addr) =
       if isAddr(addr) then heap[addr.p] else error 'deref: not addr',
@@ -134,6 +134,10 @@ local helmhammer = {
       then $.value.deref(heap, receiver0)
       else receiver0;
     assert !$.value.isAddr(receiver);
+    //assert (
+    //  if $.value.isAddr(receiver)
+    //  then std.trace("field: %s %s" % [receiver0, trimFunctions(heap)], false)
+    //  else true);
     if std.isObject(receiver) && std.objectHas(receiver, fieldName) then
       if $.value.isAddr(receiver[fieldName]) &&
          std.isFunction($.value.deref(heap, receiver[fieldName]))
@@ -509,15 +513,27 @@ local helmhammer = {
     else
       error ('regexReplaceAll: not implemented: %s' % [args]),
 
-  mergeOverwrite(args):
-    if std.length(args) == 2 && args[0] == {} && args[1] == {} then {}
-    else error ('mergeOverwrite: not implemented: %s' % [args]),
-
   ternary(args): error 'ternary: not implemented',
   typeIs(args): error 'typeIs: not implemented',
   toRawJson(args): error 'toRawJson: not implemented',
   dateInZone(args): error 'dateInZone: not implemented',
   now(args): error 'now: not implemented',
+
+  mergeOverwrite(args0):
+    // FIXME: implement mergo
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    assert std.length(args) >= 1;
+    assert std.all(
+      std.map(
+        function(arg) $.value.isAddr(arg) && std.isObject($.value.deref(heap, arg)),
+        args,
+      ),
+    );
+    local constArgs = std.map(function(arg) $.value.toConst(heap, arg), args);
+    local merged = std.foldl(std.mergePatch, constArgs[1:], constArgs[0]);
+    local res = $.value.fromConst(heap, merged), heap1 = res[0], p = res[1];
+    local newheap = $.value.assign(heap1, args[0], $.value.deref(heap1, p));
+    { v: p, vs: vs, h: newheap },
 
   set(args0):
     local args = args0.args, vs = args0.vs, heap = args0.heap;

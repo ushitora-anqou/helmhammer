@@ -587,7 +587,6 @@ func PredefinedFunctions() map[string]*Expr {
 		"int64",
 		"list",
 		"lower",
-		"mergeOverwrite",
 		"min",
 		"ne",
 		"nindent",

@@ -1,2 +1,18 @@
-test1:
+testSet:
   v: 0
+
+testMergeOverwrite:
+  v1: {}
+  v2:
+    k: v
+  v3:
+    name: A
+    keyvalue:
+      key1: not value 1
+      key2: value2
+  v4:
+    name: B
+    keyvalue:
+      key1: value1
+      key2: value2
+      key3: value3

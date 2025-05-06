@@ -3,7 +3,6 @@ package compiler_test
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -187,7 +186,7 @@ func testCompile(t *testing.T, tmpl0 *template.Template, tests []compileTest) {
 				LocalBody: jsonnet.Index("output", "v"),
 			}
 
-			log.Printf("%s", jsonnetExpr.String())
+			//log.Printf("%s", jsonnetExpr.String())
 
 			sb := strings.Builder{}
 			tmpl.Option("missingkey=zero")
