@@ -464,6 +464,42 @@ func TestCompileChartValid(t *testing.T) {
 			valuesYaml:     "cert-manager-v1.17.2-1.values.yaml",
 			expectedOutput: "cert-manager-v1.17.2-1.expected",
 		},
+
+		{
+			name:           "argo-cd 0: empty",
+			chartDir:       "thirdparty/argo-cd-7.9.0",
+			expectedOutput: "argo-cd-7.9.0-0.expected",
+			patch: []byte(
+				`[
+					{"op": "remove", "path": "/3/spec/template/metadata/annotations/checksum~1cmd-params"},
+					{"op": "remove", "path": "/4/spec/template/metadata/annotations/checksum~1cmd-params"},
+					{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cmd-params"},
+					{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cmd-params"},
+					{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cmd-params"},
+					{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cm"},
+					{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cm"},
+					{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cm"}
+				]`),
+		},
+
+		{
+			name:           "argo-cd 1: some values",
+			chartDir:       "thirdparty/argo-cd-7.9.0",
+			namespace:      "argocd",
+			valuesYaml:     "argo-cd-7.9.0-1.values.yaml",
+			expectedOutput: "argo-cd-7.9.0-1.expected",
+			patch: []byte(
+				`[
+					{"op": "remove", "path": "/3/spec/template/metadata/annotations/checksum~1cmd-params"},
+					{"op": "remove", "path": "/4/spec/template/metadata/annotations/checksum~1cmd-params"},
+					{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cmd-params"},
+					{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cmd-params"},
+					{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cmd-params"},
+					{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cm"},
+					{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cm"},
+					{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cm"}
+				]`),
+		},
 	}
 
 	for _, tt := range tests {
@@ -525,6 +561,7 @@ func TestCompileChartValid(t *testing.T) {
 				jsonnetExpr.CallNamedArgs["values"] = jsonnet.ConvertIntoJsonnet(values)
 			}
 			vm := gojsonnet.MakeVM()
+			vm.MaxStack = 1000
 			gotString, err := vm.EvaluateAnonymousSnippet(
 				"file.jsonnet",
 				jsonnetExpr.StringWithPrologue(),

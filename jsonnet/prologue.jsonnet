@@ -404,17 +404,6 @@ local helmhammer = {
     assert std.isString(args[0]);
     std.base64(args[0]),
 
-  dict(args):
-    local loop(i, out) =
-      if i >= std.length(args) then out
-      else
-        local key = std.toString(args[i]);
-        if i + 1 >= std.length(args) then
-          loop(i + 2, out { [key]: '' })
-        else
-          loop(i + 2, out { [key]: args[i + 1] });
-    loop(0, {}),
-
   gt(args):
     assert std.length(args) == 2;
     args[0] > args[1],
@@ -473,8 +462,8 @@ local helmhammer = {
           if i < 0 || !std.member(cutset, s[i]) then i
           else loop(i - 1);
         s[0:loop(std.length(s) - 1) + 1],
-      s = args[0],
-      cutset = args[1],
+      cutset = args[0],
+      s = args[1],
       s1 = trimLeft(s, cutset),
       s2 = trimRight(s1, cutset);
     s2,
@@ -498,10 +487,6 @@ local helmhammer = {
     else if std.isString(v) then std.parseInt(v)
     else if std.isBoolean(v) then if v then 1 else 0
     else error 'int64: invalid type',
-
-  deepCopy(args):  // FIXME
-    assert std.length(args) == 1;
-    args[0],
 
   trim(args):
     assert std.length(args) == 1;
@@ -533,6 +518,30 @@ local helmhammer = {
   toRawJson(args): error 'toRawJson: not implemented',
   dateInZone(args): error 'dateInZone: not implemented',
   now(args): error 'now: not implemented',
+
+  deepCopy(args0):
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    assert std.length(args) == 1;
+    local
+      res = $.value.fromConst(heap, $.value.toConst(heap, args[0])),
+      newheap = res[0],
+      v = res[1];
+    { v: v, vs: vs, h: newheap },
+
+  dict(args0):
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local loop(i, out) =
+      if i >= std.length(args) then out
+      else
+        assert !$.value.isAddr(args[i]);
+        local key = std.toString(args[i]);
+        if i + 1 >= std.length(args) then
+          loop(i + 2, out { [key]: '' })
+        else
+          loop(i + 2, out { [key]: args[i + 1] });
+    local m = loop(0, {});
+    local res = $.value.allocate(heap, m), heap1 = res[0], v = res[1];
+    { v: v, vs: vs, h: heap1 },
 
   mergeOverwrite(args0):
     // FIXME: implement mergo
@@ -999,7 +1008,7 @@ assert helmhammer.index([
   3,
 ]) == 1;
 
-assert helmhammer.trimAll(['aabbcc', 'ac']) == 'bb';
+assert helmhammer.trimAll(['ac', 'aabbcc']) == 'bb';
 
 local tpl_ = helmhammer.tpl_({});
 assert tpl_.strIndex('', '', 0) == -1;

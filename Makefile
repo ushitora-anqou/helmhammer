@@ -36,6 +36,7 @@ $(eval $(call download-chart,reloader-2.1.3,https://stakater.github.io/stakater-
 $(eval $(call download-chart,cloudflare-tunnel-ingress-controller-0.0.18,https://helm.strrl.dev/cloudflare-tunnel-ingress-controller-0.0.18.tgz,cloudflare-tunnel-ingress-controller))
 $(eval $(call download-chart,sidekiq-prometheus-exporter-0.2.1,https://github.com/Strech/sidekiq-prometheus-exporter/releases/download/v0.2.0-4/sidekiq-prometheus-exporter-0.2.1.tgz,sidekiq-prometheus-exporter))
 $(eval $(call download-chart,cert-manager-v1.17.2,https://charts.jetstack.io/charts/cert-manager-v1.17.2.tgz,cert-manager))
+$(eval $(call download-chart,argo-cd-7.9.0,https://github.com/argoproj/argo-helm/releases/download/argo-cd-7.9.0/argo-cd-7.9.0.tgz,argo-cd))
 
 .PHONY: download-all-charts
 download-all-charts: \
@@ -43,7 +44,8 @@ download-all-charts: \
 	$(TESTDATA_THIRDPARTY)/reloader-2.1.3 \
 	$(TESTDATA_THIRDPARTY)/cloudflare-tunnel-ingress-controller-0.0.18 \
 	$(TESTDATA_THIRDPARTY)/sidekiq-prometheus-exporter-0.2.1 \
-	$(TESTDATA_THIRDPARTY)/cert-manager-v1.17.2
+	$(TESTDATA_THIRDPARTY)/cert-manager-v1.17.2 \
+	$(TESTDATA_THIRDPARTY)/argo-cd-7.9.0
 
 define generate-expected-file
 $$(TESTDATA)/$(1):
@@ -90,6 +92,14 @@ $(eval $(call generate-expected-file,cert-manager-v1.17.2-1.expected, \
 		--include-crds --namespace cert-manager \
 		--values cert-manager-v1.17.2-1.values.yaml \
 ))
+$(eval $(call generate-expected-file,argo-cd-7.9.0-0.expected, \
+	helm template argo-cd thirdparty/argo-cd-7.9.0 \
+))
+$(eval $(call generate-expected-file,argo-cd-7.9.0-1.expected, \
+	helm template argo-cd thirdparty/argo-cd-7.9.0 \
+		--include-crds --namespace argocd \
+		--values argo-cd-7.9.0-1.values.yaml \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -104,4 +114,6 @@ generate-all-expected-files: \
 	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-0.expected \
 	$(TESTDATA)/sidekiq-prometheus-exporter-0.2.1-1.expected \
 	$(TESTDATA)/cert-manager-v1.17.2-0.expected \
-	$(TESTDATA)/cert-manager-v1.17.2-1.expected
+	$(TESTDATA)/cert-manager-v1.17.2-1.expected \
+	$(TESTDATA)/argo-cd-7.9.0-0.expected \
+	$(TESTDATA)/argo-cd-7.9.0-1.expected

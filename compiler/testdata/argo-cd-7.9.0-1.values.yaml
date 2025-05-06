@@ -1,0 +1,13 @@
+configs:
+  params:
+    server.insecure: true,
+  repositories:
+    ket-apps-private-repo:
+      name: ket-apps-private-repo
+      type: git
+      url: https://github.com/ushitora-anqou/helmhammer
+      password: XXX
+  secret:
+    createSecret: false
+  cm:
+    timeout.reconciliation: 24h
