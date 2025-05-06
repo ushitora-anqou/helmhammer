@@ -377,7 +377,7 @@ func TestCompileChartValid(t *testing.T) {
 		name, chartDir, namespace, valuesYaml, expectedOutput string
 		patch                                                 []byte
 	}{
-		{name: "hello", chartDir: "hello", expectedOutput: "hello.expected"},
+		{name: "skeleton", chartDir: "skeleton", expectedOutput: "skeleton.expected"},
 
 		{
 			name:           "topolvm 0: empty values",

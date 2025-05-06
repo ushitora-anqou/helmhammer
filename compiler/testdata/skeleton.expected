@@ -3,11 +3,11 @@
     "apiVersion": "apps/v1",
     "kind": "Deployment",
     "metadata": {
-      "name": "hello",
+      "name": "skeleton",
       "labels": {
-        "helm.sh/chart": "hello-0.1.0",
-        "app.kubernetes.io/name": "hello",
-        "app.kubernetes.io/instance": "hello",
+        "helm.sh/chart": "skeleton-0.1.0",
+        "app.kubernetes.io/name": "skeleton",
+        "app.kubernetes.io/instance": "skeleton",
         "app.kubernetes.io/version": "1.16.0",
         "app.kubernetes.io/managed-by": "Helm"
       }
@@ -16,25 +16,25 @@
       "replicas": 1,
       "selector": {
         "matchLabels": {
-          "app.kubernetes.io/name": "hello",
-          "app.kubernetes.io/instance": "hello"
+          "app.kubernetes.io/name": "skeleton",
+          "app.kubernetes.io/instance": "skeleton"
         }
       },
       "template": {
         "metadata": {
           "labels": {
-            "helm.sh/chart": "hello-0.1.0",
-            "app.kubernetes.io/name": "hello",
-            "app.kubernetes.io/instance": "hello",
+            "helm.sh/chart": "skeleton-0.1.0",
+            "app.kubernetes.io/name": "skeleton",
+            "app.kubernetes.io/instance": "skeleton",
             "app.kubernetes.io/version": "1.16.0",
             "app.kubernetes.io/managed-by": "Helm"
           }
         },
         "spec": {
-          "serviceAccountName": "hello",
+          "serviceAccountName": "skeleton",
           "containers": [
             {
-              "name": "hello",
+              "name": "skeleton",
               "image": "nginx:1.16.0",
               "imagePullPolicy": "IfNotPresent",
               "ports": [
@@ -66,11 +66,11 @@
     "apiVersion": "v1",
     "kind": "Pod",
     "metadata": {
-      "name": "hello-test-connection",
+      "name": "skeleton-test-connection",
       "labels": {
-        "helm.sh/chart": "hello-0.1.0",
-        "app.kubernetes.io/name": "hello",
-        "app.kubernetes.io/instance": "hello",
+        "helm.sh/chart": "skeleton-0.1.0",
+        "app.kubernetes.io/name": "skeleton",
+        "app.kubernetes.io/instance": "skeleton",
         "app.kubernetes.io/version": "1.16.0",
         "app.kubernetes.io/managed-by": "Helm"
       },
@@ -87,7 +87,7 @@
             "wget"
           ],
           "args": [
-            "hello:80"
+            "skeleton:80"
           ]
         }
       ],
@@ -98,11 +98,11 @@
     "apiVersion": "v1",
     "kind": "Service",
     "metadata": {
-      "name": "hello",
+      "name": "skeleton",
       "labels": {
-        "helm.sh/chart": "hello-0.1.0",
-        "app.kubernetes.io/name": "hello",
-        "app.kubernetes.io/instance": "hello",
+        "helm.sh/chart": "skeleton-0.1.0",
+        "app.kubernetes.io/name": "skeleton",
+        "app.kubernetes.io/instance": "skeleton",
         "app.kubernetes.io/version": "1.16.0",
         "app.kubernetes.io/managed-by": "Helm"
       }
@@ -118,8 +118,8 @@
         }
       ],
       "selector": {
-        "app.kubernetes.io/name": "hello",
-        "app.kubernetes.io/instance": "hello"
+        "app.kubernetes.io/name": "skeleton",
+        "app.kubernetes.io/instance": "skeleton"
       }
     }
   },
@@ -127,11 +127,11 @@
     "apiVersion": "v1",
     "kind": "ServiceAccount",
     "metadata": {
-      "name": "hello",
+      "name": "skeleton",
       "labels": {
-        "helm.sh/chart": "hello-0.1.0",
-        "app.kubernetes.io/name": "hello",
-        "app.kubernetes.io/instance": "hello",
+        "helm.sh/chart": "skeleton-0.1.0",
+        "app.kubernetes.io/name": "skeleton",
+        "app.kubernetes.io/instance": "skeleton",
         "app.kubernetes.io/version": "1.16.0",
         "app.kubernetes.io/managed-by": "Helm"
       }

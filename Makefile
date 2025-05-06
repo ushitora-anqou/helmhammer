@@ -50,8 +50,8 @@ $$(TESTDATA)/$(1):
 	cd $$(TESTDATA); $(2) | yq ea -o=json '[.]' | jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | .[] | select(. != null)' | jq -s > $(1)
 endef
 
-$(eval $(call generate-expected-file,hello.expected, \
-	helm template hello hello \
+$(eval $(call generate-expected-file,skeleton.expected, \
+	helm template skeleton skeleton \
 ))
 $(eval $(call generate-expected-file,topolvm-15.5.4-0.expected, \
 	helm template topolvm thirdparty/topolvm-15.5.4 \
@@ -90,7 +90,7 @@ $(eval $(call generate-expected-file,cert-manager-v1.17.2-1.expected, \
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
-	$(TESTDATA)/hello.expected \
+	$(TESTDATA)/skeleton.expected \
 	$(TESTDATA)/topolvm-15.5.4-0.expected \
 	$(TESTDATA)/topolvm-15.5.4-1.expected \
 	$(TESTDATA)/reloader-2.1.3-0.expected \
