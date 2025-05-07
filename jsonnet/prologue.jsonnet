@@ -255,11 +255,6 @@ local helmhammer = {
   contains(args):
     std.findSubstr(args[0], args[1]) != [],
 
-  default(args):
-    assert std.length(args) >= 1;
-    if std.length(args) == 1 || $.empty([args[1]]) then args[0]
-    else args[1],
-
   trimSuffix(args):
     if std.endsWith(args[1], args[0]) then
       std.substr(args[1], 0, std.length(args[1]) - std.length(args[0]))
@@ -377,14 +372,6 @@ local helmhammer = {
     assert std.length(args) >= 1;
     std.minArray(std.map($.toInt, args)),
 
-  empty(args):
-    assert std.length(args) == 1;
-    local v = args[0];
-    v == null ||
-    ((std.isArray(v) || std.isObject(v) || std.isString(v)) && std.length(v) == 0) ||
-    (std.isBoolean(v) && !v) ||
-    (std.isNumber(v) && v == 0),
-
   hasKey(args):
     assert std.length(args) == 2;
     assert std.isObject(args[0]);
@@ -490,6 +477,33 @@ local helmhammer = {
   toRawJson(args): error 'toRawJson: not implemented',
   dateInZone(args): error 'dateInZone: not implemented',
   now(args): error 'now: not implemented',
+
+  _empty(heap, v):
+    if v == null then
+      true
+    else if $.value.isAddr(v) then
+      local w = $.value.deref(heap, v);
+      assert std.isArray(w) || std.isObject(w);
+      std.length(w) == 0
+    else if std.isString(v) then
+      std.length(v) == 0
+    else if std.isBoolean(v) then
+      !v
+    else if std.isNumber(v) then
+      v == 0,
+
+  empty(args0):
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    assert std.length(args) == 1;
+    { v: $._empty(heap, args[0]), vs: vs, h: heap },
+
+  default(args0):
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    assert std.length(args) >= 1;
+    if std.length(args) == 1 || $._empty(heap, args[1]) then
+      { v: args[0], vs: vs, h: heap }
+    else
+      { v: args[1], vs: vs, h: heap },
 
   list(args0):
     local args = args0.args, vs = args0.vs, heap = args0.heap;
