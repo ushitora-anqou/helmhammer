@@ -252,11 +252,6 @@ local helmhammer = {
   printf(args):
     std.format(args[0], args[1:]),
 
-  include(args0):
-    local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.heap;
-    local resultState = templates[args[0]](heap, args[1]);
-    resultState { vs: vs },
-
   contains(args):
     std.findSubstr(args[0], args[1]) != [],
 
@@ -518,6 +513,11 @@ local helmhammer = {
   toRawJson(args): error 'toRawJson: not implemented',
   dateInZone(args): error 'dateInZone: not implemented',
   now(args): error 'now: not implemented',
+
+  include(args0):
+    local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.heap;
+    local resultState = templates[args[0]](heap, args[1]);
+    resultState { vs: vs },
 
   deepCopy(args0):
     local args = args0.args, vs = args0.vs, heap = args0.heap;
