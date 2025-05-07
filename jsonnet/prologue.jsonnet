@@ -300,23 +300,6 @@ local helmhammer = {
       ),
     ),
 
-  not(args):
-    !$.isTrue(args[0]),
-
-  or(args):
-    assert std.length(args) >= 1;
-    local loop(i) =
-      if i == std.length(args) - 1 || $.isTrue(args[i]) then args[i]
-      else loop(i + 1);
-    loop(0),
-
-  and(args):
-    assert std.length(args) >= 1;
-    local loop(i) =
-      if i == std.length(args) - 1 || !$.isTrue(args[i]) then args[i]
-      else loop(i + 1);
-    loop(0),
-
   eq(args):
     assert std.length(args) == 2;
     args[0] == args[1],
@@ -477,6 +460,26 @@ local helmhammer = {
   toRawJson(args): error 'toRawJson: not implemented',
   dateInZone(args): error 'dateInZone: not implemented',
   now(args): error 'now: not implemented',
+
+  not(args0):
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    { v: !$.isTrueOnHeap(heap, args[0]), vs: vs, h: heap },
+
+  or(args0):
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    assert std.length(args) >= 1;
+    local loop(i) =
+      if i == std.length(args) - 1 || $.isTrueOnHeap(heap, args[i]) then args[i]
+      else loop(i + 1);
+    { v: loop(0), vs: vs, h: heap },
+
+  and(args0):
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    assert std.length(args) >= 1;
+    local loop(i) =
+      if i == std.length(args) - 1 || !$.isTrueOnHeap(heap, args[i]) then args[i]
+      else loop(i + 1);
+    { v: loop(0), vs: vs, h: heap },
 
   _empty(heap, v):
     if v == null then
@@ -1008,15 +1011,15 @@ local helmhammer = {
 };
 // DON'T USE BELOW
 
-assert helmhammer.or([0, 0]) == 0;
-assert helmhammer.or([1, 0]) == 1;
-assert helmhammer.or([0, true]) == true;
-assert helmhammer.or([1, 1]) == 1;
+assert helmhammer.or({ args: [0, 0], vs: {}, heap: {} }).v == 0;
+assert helmhammer.or({ args: [1, 0], vs: {}, heap: {} }).v == 1;
+assert helmhammer.or({ args: [0, true], vs: {}, heap: {} }).v == true;
+assert helmhammer.or({ args: [1, 1], vs: {}, heap: {} }).v == 1;
 
-assert helmhammer.and([false, 0]) == false;
-assert helmhammer.and([1, 0]) == 0;
-assert helmhammer.and([0, true]) == 0;
-assert helmhammer.and([1, 1]) == 1;
+assert helmhammer.and({ args: [false, 0], vs: {}, heap: {} }).v == false;
+assert helmhammer.and({ args: [1, 0], vs: {}, heap: {} }).v == 0;
+assert helmhammer.and({ args: [0, true], vs: {}, heap: {} }).v == 0;
+assert helmhammer.and({ args: [1, 1], vs: {}, heap: {} }).v == 1;
 
 assert helmhammer.dir(['/run/topolvm/lvmd.sock']) == '/run/topolvm';
 
