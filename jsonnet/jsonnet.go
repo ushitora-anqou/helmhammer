@@ -582,7 +582,6 @@ func PredefinedFunctions() map[string]*Expr {
 		"indent",
 		"int",
 		"int64",
-		"list",
 		"lower",
 		"min",
 		"ne",
@@ -607,7 +606,6 @@ func PredefinedFunctions() map[string]*Expr {
 		"trimAll",
 		"trimSuffix",
 		"trunc",
-		"tuple",
 		"typeIs",
 	} {
 		m[name] = Index("helmhammer", name)

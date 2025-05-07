@@ -348,9 +348,6 @@ local helmhammer = {
   concat(args):
     std.join([], args),
 
-  list(args):
-    args,
-
   lower(args):
     assert std.length(args) == 1;
     std.asciiLower(args[0]),
@@ -416,9 +413,6 @@ local helmhammer = {
     local needle = args[0], haystack = args[1];
     assert std.isArray(haystack);
     std.member(haystack, needle),
-
-  tuple(args):
-    $.list(args),
 
   fail(args):
     assert std.length(args) == 1;
@@ -496,6 +490,14 @@ local helmhammer = {
   toRawJson(args): error 'toRawJson: not implemented',
   dateInZone(args): error 'dateInZone: not implemented',
   now(args): error 'now: not implemented',
+
+  list(args0):
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local res = $.value.allocate(heap, args);
+    { v: res[1], vs: vs, h: res[0] },
+
+  tuple(args0):
+    $.list(args0),
 
   index(args0):
     local args = args0.args, vs = args0.vs, heap = args0.heap;
