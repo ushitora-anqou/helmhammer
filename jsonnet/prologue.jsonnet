@@ -425,23 +425,6 @@ local helmhammer = {
     assert std.isString(args[0]);
     error ('fail: %s' % [args[0]]),
 
-  index(args):
-    assert std.length(args) >= 2;
-    std.foldl(
-      function(v, arg)
-        if std.isObject(v) then
-          if !std.isString(arg) then error 'index: key is not a string'
-          else if std.objectHas(v, arg) then v[arg]
-          else null
-        else if std.isArray(v) then
-          if !std.isNumber(arg) then error 'index: key is not an integer'
-          else if arg < std.length(v) then v[arg]
-          else null
-        else null,
-      args[1:],
-      args[0],
-    ),
-
   trimAll(args):
     assert std.length(args) == 2;
     assert std.isString(args[0]);
@@ -513,6 +496,26 @@ local helmhammer = {
   toRawJson(args): error 'toRawJson: not implemented',
   dateInZone(args): error 'dateInZone: not implemented',
   now(args): error 'now: not implemented',
+
+  index(args0):
+    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    assert std.length(args) >= 2;
+    local v = std.foldl(
+      function(addr, arg)
+        local v = $.value.deref(heap, addr);
+        if std.isObject(v) then
+          if !std.isString(arg) then error 'index: key is not a string'
+          else if std.objectHas(v, arg) then v[arg]
+          else null
+        else if std.isArray(v) then
+          if !std.isNumber(arg) then error 'index: key is not an integer'
+          else if arg < std.length(v) then v[arg]
+          else null
+        else null,
+      args[1:],
+      args[0],
+    );
+    { v: v, vs: vs, h: heap },
 
   include(args0):
     local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.heap;
@@ -1001,12 +1004,12 @@ assert helmhammer.and([1, 1]) == 1;
 
 assert helmhammer.dir(['/run/topolvm/lvmd.sock']) == '/run/topolvm';
 
-assert helmhammer.index([
-  [0, [0, 0, [0, 0, 0, 1]]],
-  1,
-  2,
-  3,
-]) == 1;
+assert helmhammer.index({
+  local input = helmhammer.value.fromConst({}, [0, [0, 0, [0, 0, 0, 1]]]),
+  args: [input[1], 1, 2, 3],
+  vs: {},
+  heap: input[0],
+}).v == 1;
 
 assert helmhammer.trimAll(['ac', 'aabbcc']) == 'bb';
 

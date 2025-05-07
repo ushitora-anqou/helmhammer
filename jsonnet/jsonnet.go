@@ -580,7 +580,6 @@ func PredefinedFunctions() map[string]*Expr {
 		"has",
 		"hasKey",
 		"indent",
-		"index",
 		"int",
 		"int64",
 		"list",
