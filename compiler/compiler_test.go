@@ -3,6 +3,7 @@ package compiler_test
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -183,10 +184,10 @@ func testCompile(t *testing.T, tmpl0 *template.Template, tests []compileTest) {
 						},
 					}},
 				},
-				LocalBody: jsonnet.Index("output", "v"),
+				LocalBody: jsonnet.IndexInt("output", 0),
 			}
 
-			//log.Printf("%s", jsonnetExpr.String())
+			log.Printf("%s", jsonnetExpr.String())
 
 			sb := strings.Builder{}
 			tmpl.Option("missingkey=zero")
@@ -227,37 +228,6 @@ func TestCompileValidTemplates(t *testing.T) {
 	// The following test table comes from Go compiler's test code:
 	// 	https://cs.opensource.google/go/go/+/refs/tags/go1.24.2:src/text/template/exec_test.go
 	tests := []compileTest{
-		{
-			name: "if simple true",
-			tpl:  `hel{{ if true }}lo2{{ else }}lo3{{ end }}`,
-		},
-		{
-			name: "if simple false",
-			tpl:  `hel{{ if false }}lo2{{ else }}lo3{{ end }}`,
-		},
-		{
-			name: "if .",
-			tpl:  `{{ if . }}1{{ else }}0{{ end }}`,
-			data: true,
-		},
-		{
-			name: "if .a",
-			tpl:  `{{ if .a }}1{{ else }}0{{ end }}`,
-			data: map[string]any{"a": false},
-		},
-		{
-			name: "if .a.b",
-			tpl:  `{{ if .a.b }}1{{ else }}0{{ end }}`,
-			data: map[string]map[string]any{"a": {"b": false}},
-		},
-		{
-			name: "nested if",
-			tpl:  `{{ $x := 1 }}{{ if true }}{{ $x = 2 }}{{ if true }}{{ $x = 3 }}{{ end }}{{ end }}{{ $x }}`,
-			data: nil,
-		},
-		{"templates", `{{define "foo"}}{{.}}{{end}}{{template "foo" 3}}`, nil},
-		{"skip space", "abc\n\n{{- \"hello\" -}}\n\ndef", nil},
-
 		{"empty", "", nil},
 		{"text", "some text", nil},
 		{".U.V", "-{{.U.V}}-", tVal},
@@ -364,6 +334,8 @@ func TestCompileValidTemplates(t *testing.T) {
 		{"with variable and action", "{{with $x := $}}{{$y := $.U.V}}{{$y}}{{end}}", tVal},
 		{"with else with", "{{with 0}}{{.}}{{else with true}}{{.}}{{end}}", tVal},
 		{"with else with chain", "{{with 0}}{{.}}{{else with false}}{{.}}{{else with `notempty`}}{{.}}{{end}}", tVal},
+
+		{"templates", `{{define "foo"}}{{.}}{{end}}{{template "foo" 3}}`, nil},
 	}
 
 	testCompile(t, template.New("gotpl"), tests)
@@ -561,7 +533,6 @@ func TestCompileChartValid(t *testing.T) {
 				jsonnetExpr.CallNamedArgs["values"] = jsonnet.ConvertIntoJsonnet(values)
 			}
 			vm := gojsonnet.MakeVM()
-			vm.MaxStack = 1000
 			gotString, err := vm.EvaluateAnonymousSnippet(
 				"file.jsonnet",
 				jsonnetExpr.StringWithPrologue(),

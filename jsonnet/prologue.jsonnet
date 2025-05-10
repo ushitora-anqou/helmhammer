@@ -200,52 +200,58 @@ local helmhammer = {
     else if std.isNumber(v) then v != 0
     else true,
 
-  range(state, values0, fthen, felse):
-    if values0 == null then felse(state { v: '' })
+  range(vs0, heap0, values0, fthen, felse):
+    if values0 == null then felse()
     else if std.isNumber(values0) then
       local
-        res = $.value.allocate(state.h, std.makeArray(values0, function(x) x)),
+        res = $.value.allocate(heap0, std.makeArray(values0, function(x) x)),
         heap = res[0],
         aryp = res[1];
-      self.range(state { h: heap }, aryp, fthen, felse)
+      self.range(vs0, heap, aryp, fthen, felse)
     else if $.value.isAddr(values0) then
-      local values = $.value.deref(state.h, values0);
+      local values = $.value.deref(heap0, values0);
       if std.isArray(values) then
-        if std.length(values) == 0 then felse(state { v: '' })
+        if std.length(values) == 0 then felse()
         else
-          std.foldl(
+          local res = std.foldl(
             function(acc, value)
-              local postState = fthen(acc.state, acc.i, value);
+              local res = fthen(acc.vs, acc.h, acc.i, value);
               {
                 i: acc.i + 1,
-                state: postState {
-                  v: acc.state.v + postState.v,
-                },
+                v: acc.v + res[0],
+                vs: res[1],
+                h: res[2],
               },
             values,
             {
               i: 0,
-              state: state { v: '' },
+              v: '',
+              vs: vs0,
+              h: heap0,
             },
-          ).state
+          );
+          [res.v, res.vs, res.h]
       else if std.isObject(values) then
-        if std.length(values) == 0 then felse(state { v: '' })
+        if std.length(values) == 0 then felse()
         else
-          std.foldl(
+          local res = std.foldl(
             function(acc, kv)
-              local postState = fthen(acc.state, kv.key, kv.value);
+              local res = fthen(acc.vs, acc.h, kv.key, kv.value);
               {
                 i: acc.i + 1,
-                state: postState {
-                  v: acc.state.v + postState.v,
-                },
+                v: acc.v + res[0],
+                vs: res[1],
+                h: res[2],
               },
             std.objectKeysValues(values),
             {
               i: 0,
-              state: state { v: '' },
+              v: '',
+              vs: vs0,
+              h: heap0,
             },
-          ).state
+          );
+          [res.v, res.vs, res.h]
       else error ('range: not implemented: %s' % [values0])
     else error ('range: not implemented: %s' % [values0]),
 
@@ -462,24 +468,24 @@ local helmhammer = {
   now(args): error 'now: not implemented',
 
   not(args0):
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
-    { v: !$.isTrueOnHeap(heap, args[0]), vs: vs, h: heap },
+    local args = args0.args, vs = args0.vs, heap = args0.h;
+    [ !$.isTrueOnHeap(heap, args[0]), vs, heap ],
 
   or(args0):
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local args = args0.args, vs = args0.vs, heap = args0.h;
     assert std.length(args) >= 1;
     local loop(i) =
       if i == std.length(args) - 1 || $.isTrueOnHeap(heap, args[i]) then args[i]
       else loop(i + 1);
-    { v: loop(0), vs: vs, h: heap },
+    [ loop(0), vs, heap ],
 
   and(args0):
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local args = args0.args, vs = args0.vs, heap = args0.h;
     assert std.length(args) >= 1;
     local loop(i) =
       if i == std.length(args) - 1 || !$.isTrueOnHeap(heap, args[i]) then args[i]
       else loop(i + 1);
-    { v: loop(0), vs: vs, h: heap },
+    [ loop(0), vs, heap ],
 
   _empty(heap, v):
     if v == null then
@@ -496,28 +502,28 @@ local helmhammer = {
       v == 0,
 
   empty(args0):
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local args = args0.args, vs = args0.vs, heap = args0.h;
     assert std.length(args) == 1;
-    { v: $._empty(heap, args[0]), vs: vs, h: heap },
+    [ $._empty(heap, args[0]), vs, heap ],
 
   default(args0):
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local args = args0.args, vs = args0.vs, heap = args0.h;
     assert std.length(args) >= 1;
     if std.length(args) == 1 || $._empty(heap, args[1]) then
-      { v: args[0], vs: vs, h: heap }
+      [ args[0], vs, heap ]
     else
-      { v: args[1], vs: vs, h: heap },
+      [ args[1], vs, heap ],
 
   list(args0):
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local args = args0.args, vs = args0.vs, heap = args0.h;
     local res = $.value.allocate(heap, args);
-    { v: res[1], vs: vs, h: res[0] },
+    [ res[1], vs, res[0] ],
 
   tuple(args0):
     $.list(args0),
 
   index(args0):
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local args = args0.args, vs = args0.vs, heap = args0.h;
     assert std.length(args) >= 2;
     local v = std.foldl(
       function(addr, arg)
@@ -534,24 +540,25 @@ local helmhammer = {
       args[1:],
       args[0],
     );
-    { v: v, vs: vs, h: heap },
+    [ v, vs, heap ],
 
   include(args0):
-    local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.heap;
-    local resultState = templates[args[0]](heap, args[1]);
-    resultState { vs: vs },
+    local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.h;
+    local res = templates[args[0]](heap, args[1]);
+    assert std.isString(res[0]); // collapse thunks to avoid 'max stack frames exceeded' error
+    [res[0], vs, res[2]],
 
   deepCopy(args0):
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local args = args0.args, vs = args0.vs, heap = args0.h;
     assert std.length(args) == 1;
     local
       res = $.value.fromConst(heap, $.value.toConst(heap, args[0])),
       newheap = res[0],
       v = res[1];
-    { v: v, vs: vs, h: newheap },
+    [ v, vs, newheap ],
 
   dict(args0):
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local args = args0.args, vs = args0.vs, heap = args0.h;
     local loop(i, out) =
       if i >= std.length(args) then out
       else
@@ -563,11 +570,11 @@ local helmhammer = {
           loop(i + 2, out { [key]: args[i + 1] });
     local m = loop(0, {});
     local res = $.value.allocate(heap, m), heap1 = res[0], v = res[1];
-    { v: v, vs: vs, h: heap1 },
+    [ v, vs, heap1 ],
 
   mergeOverwrite(args0):
     // FIXME: implement mergo
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local args = args0.args, vs = args0.vs, heap = args0.h;
     assert std.length(args) >= 1;
     assert std.all(
       std.map(
@@ -579,10 +586,10 @@ local helmhammer = {
     local merged = std.foldl(std.mergePatch, constArgs[1:], constArgs[0]);
     local res = $.value.fromConst(heap, merged), heap1 = res[0], p = res[1];
     local newheap = $.value.assign(heap1, args[0], $.value.deref(heap1, p));
-    { v: p, vs: vs, h: newheap },
+    [ p, vs, newheap ],
 
   set(args0):
-    local args = args0.args, vs = args0.vs, heap = args0.heap;
+    local args = args0.args, vs = args0.vs, heap = args0.h;
     local objp = args[0], key = args[1], newValue = args[2];
     assert std.isString(key);
     assert $.value.isAddr(objp);
@@ -590,17 +597,13 @@ local helmhammer = {
     assert std.isObject(objv);
     local newobjv = objv { [key]: newValue };
     local newheap = $.value.assign(heap, objp, newobjv);
-    { v: objp, vs: vs, h: newheap },
+    [ objp, vs, newheap ],
 
-  callBuiltin(state, ident, args):
-    local
-      res = $.value.fromConst(
-        state.h,
-        $[ident](std.map(function(arg) $.value.toConst(state.h, arg), args)),
-      ),
-      heap = res[0],
-      addr = res[1];
-    state { v: addr, h: heap },
+  callBuiltin(h, ident, args):
+    $.value.fromConst(
+      h,
+      $[ident](std.map(function(arg) $.value.toConst(h, arg), args)),
+    ),
 
   tpl_(templates):
     {
@@ -862,12 +865,12 @@ local helmhammer = {
             local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
             local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
             local res = $.value.fromConst({}, newDot), heap = res[0], newDotOnHeap = res[1];
-            [s2, $.include({ '$': templates, args: [name, newDotOnHeap], vs: {}, heap: heap }).v]
+            [s2, $.include({ '$': templates, args: [name, newDotOnHeap], vs: {}, h: heap })[0]]
           else if op0.v == 'tpl' then
             local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
             local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
             local res = $.value.fromConst({}, newDot), heap = res[0], newDotOnHeap = res[1];
-            [s2, $.tpl({ '$': templates, args: [name, newDotOnHeap], vs: {}, heap: heap }).v]
+            [s2, $.tpl({ '$': templates, args: [name, newDotOnHeap], vs: {}, h: heap })[0]]
           else
             error ('evalCommand: unknown id: %s' % [op0.v])
         else
@@ -912,7 +915,7 @@ local helmhammer = {
     },
 
   tpl(args0):
-    local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.heap;
+    local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.h;
     local tpl_ = self.tpl_(templates), src = args[0], dot = $.value.toConst(heap, args[1]);
     local evalResult =
       tpl_.eval(
@@ -927,11 +930,7 @@ local helmhammer = {
         },
       ).out;
     assert std.isString(evalResult);
-    {
-      v: evalResult,
-      vs: vs,
-      h: heap,
-    },
+    [evalResult, vs, heap],
 
   chartMain(
     chartName,
@@ -980,7 +979,7 @@ local helmhammer = {
               $.value.deref(heap0, vals[1]).Template,
               { Name: key, BasePath: templateBasePath },
             );
-          files[key](heap1, vals[1]).v,
+          files[key](heap1, vals[1])[0],
         flatten(ary) =
           local loop(i, out) =
             if i >= std.length(ary) then out
@@ -1011,15 +1010,15 @@ local helmhammer = {
 };
 // DON'T USE BELOW
 
-assert helmhammer.or({ args: [0, 0], vs: {}, heap: {} }).v == 0;
-assert helmhammer.or({ args: [1, 0], vs: {}, heap: {} }).v == 1;
-assert helmhammer.or({ args: [0, true], vs: {}, heap: {} }).v == true;
-assert helmhammer.or({ args: [1, 1], vs: {}, heap: {} }).v == 1;
+assert helmhammer.or({ args: [0, 0], vs: {}, heap: {} })[0] == 0;
+assert helmhammer.or({ args: [1, 0], vs: {}, heap: {} })[0] == 1;
+assert helmhammer.or({ args: [0, true], vs: {}, heap: {} })[0] == true;
+assert helmhammer.or({ args: [1, 1], vs: {}, heap: {} })[0] == 1;
 
-assert helmhammer.and({ args: [false, 0], vs: {}, heap: {} }).v == false;
-assert helmhammer.and({ args: [1, 0], vs: {}, heap: {} }).v == 0;
-assert helmhammer.and({ args: [0, true], vs: {}, heap: {} }).v == 0;
-assert helmhammer.and({ args: [1, 1], vs: {}, heap: {} }).v == 1;
+assert helmhammer.and({ args: [false, 0], vs: {}, heap: {} })[0] == false;
+assert helmhammer.and({ args: [1, 0], vs: {}, heap: {} })[0] == 0;
+assert helmhammer.and({ args: [0, true], vs: {}, heap: {} })[0] == 0;
+assert helmhammer.and({ args: [1, 1], vs: {}, heap: {} })[0] == 1;
 
 assert helmhammer.dir(['/run/topolvm/lvmd.sock']) == '/run/topolvm';
 
@@ -1027,8 +1026,8 @@ assert helmhammer.index({
   local input = helmhammer.value.fromConst({}, [0, [0, 0, [0, 0, 0, 1]]]),
   args: [input[1], 1, 2, 3],
   vs: {},
-  heap: input[0],
-}).v == 1;
+  h: input[0],
+})[0] == 1;
 
 assert helmhammer.trimAll(['ac', 'aabbcc']) == 'bb';
 
@@ -1086,11 +1085,11 @@ assert tpl_.parse(tpl_.lex('a{{.}}b', 0, []), 0) == { t: 'list', v: [
 local tpl(args) =
   local res = helmhammer.value.fromConst({}, args[1]), heap = res[0], dot = res[1];
   helmhammer.tpl({
-    '$': { tpl0(heap, dot): { v: helmhammer.value.deref(heap, dot).valueTpl0 } },
+    '$': { tpl0(heap, dot): [helmhammer.value.deref(heap, dot).valueTpl0] },
     args: [args[0], dot],
     vs: {},
-    heap: heap,
-  }).v;
+    h: heap,
+  })[0];
 assert tpl(['', {}]) == '';
 assert tpl(['a', {}]) == 'a';
 assert tpl(['{', {}]) == '{';
