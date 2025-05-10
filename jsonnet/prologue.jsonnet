@@ -171,7 +171,7 @@ local join(heap, ary) =
         else if std.isString(x) then x
         else if std.isNumber(x) || std.isBoolean(x) then std.toString(x)
         //else if std.isArray(x) || std.isObject(x) then error 'join: stringifing arrays or objects is not implemented yet'
-        else error 'join: unexpected type of value',
+        else error ('join: unexpected type of value: %s' % [x]),
       ary,
     ),
   );
@@ -935,6 +935,34 @@ local tpl_(templates) =
   assert std.isString(evalResult);
   [evalResult, vs, heap];
 
+local mergeTwoValues(heap, dstp, srcp) =
+  if !isAddr(dstp) || !isAddr(srcp) ||
+     !std.isObject(deref(heap, dstp)) || !std.isObject(deref(heap, srcp))
+  then
+    error 'mergeTwoValues: not object'
+  else
+    local src = deref(heap, srcp);
+    local newheap = std.foldl(
+      function(heap, key)
+        local dst = deref(heap, dstp);
+        if std.objectHas(dst, key) then
+          if dst[key] == null then
+            assign(heap, dstp, std.objectRemoveKey(dst, key))
+          else if
+            isAddr(dst[key]) && std.isObject(deref(heap, dst[key])) &&
+            isAddr(src[key]) && std.isObject(deref(heap, src[key]))
+          then
+            local newheap = mergeTwoValues(heap, dst[key], src[key]);
+            assign(newheap, dstp, dst)
+          else
+            heap
+        else
+          assign(heap, dstp, dst { [key]: src[key] }),
+      std.objectFields(deref(heap, srcp)),
+      heap,
+    );
+    newheap;
+
 local chartMain(
   chartName,
   chartVersion,
@@ -945,44 +973,46 @@ local chartMain(
   capabilities,
   keys,
   defaultValues,
+  initialHeap,
   crds,
   files,
       ) =
   function(values={}, namespace='default', includeCrds=false)
     local
-      vals =
-        fromConst({}, {
-          Values: std.mergePatch(defaultValues, values),
-          Chart: {
-            Name: chartName,
-            Version: chartVersion,
-            AppVersion: chartAppVersion,
+      dotRes = fromConst(initialHeap, {
+        Values: values,
+        Chart: {
+          Name: chartName,
+          Version: chartVersion,
+          AppVersion: chartAppVersion,
+        },
+        Release: {
+          Name: releaseName,
+          Namespace: namespace,
+          Service: releaseService,
+        },
+        Capabilities: capabilities {
+          APIVersions: {  // FIXME: APIVersions should behave as an array, too.
+            Has(heap, args):
+              assert std.length(args) == 1;
+              assert std.isString(args[0]);
+              // FIXME: support resource name like "apps/v1/Deployment"
+              std.member(capabilities.APIVersions, args[0]),
           },
-          Release: {
-            Name: releaseName,
-            Namespace: namespace,
-            Service: releaseService,
-          },
-          Capabilities: capabilities {
-            APIVersions: {  // FIXME: APIVersions should behave as an array, too.
-              Has(heap, args):
-                assert std.length(args) == 1;
-                assert std.isString(args[0]);
-                // FIXME: support resource name like "apps/v1/Deployment"
-                std.member(capabilities.APIVersions, args[0]),
-            },
-          },
-          Template: {},  // filled in runFile
-        }),
+        },
+        Template: {},  // filled in runFile
+      }),
+      heap1 = dotRes[0],
+      dot = dotRes[1],
+      heap2 = mergeTwoValues(heap1, deref(heap1, dot).Values, defaultValues),
       runFile(key) =
         local
-          heap0 = vals[0],
-          heap1 = assign(
-            heap0,
-            deref(heap0, vals[1]).Template,
+          heap3 = assign(
+            heap2,
+            deref(heap2, dot).Template,
             { Name: key, BasePath: templateBasePath },
           );
-        files[key](heap1, vals[1])[0],
+        files[key](heap3, dot)[0],
       flatten(ary) =
         local loop(i, out) =
           if i >= std.length(ary) then out
@@ -1146,5 +1176,24 @@ assert local res = fromConst({}, 1); toConst(res[0], res[1]) == 1;
 assert local res = fromConst({}, function() 42); toConst(res[0], res[1])() == 42;
 assert local res = fromConst({}, [1, [2]]); toConst(res[0], res[1]) == [1, [2]];
 assert local res = fromConst({}, { a: 0, b: [1] }); toConst(res[0], res[1]) == { a: 0, b: [1] };
+
+local runMergeTwoValues(dst, src) =
+  local heap0 = {};
+  local res = fromConst(heap0, dst), heap1 = res[0], dstp = res[1];
+  local res = fromConst(heap1, src), heap2 = res[0], srcp = res[1];
+  local heap3 = mergeTwoValues(heap2, dstp, srcp);
+  //  std.trace('%s %s %s\n%s' % [heap2, dst, src, mergeTwoValues(heap2, dst, src)], false);
+  toConst(heap3, dstp);
+
+assert runMergeTwoValues({}, {}) == {};
+assert runMergeTwoValues({ a: 1 }, {}) == { a: 1 };
+assert runMergeTwoValues({}, { a: 1 }) == { a: 1 };
+assert runMergeTwoValues({ a: 1 }, { a: 1 }) == { a: 1 };
+assert runMergeTwoValues({ a: 1 }, { a: 2 }) == { a: 1 };
+assert runMergeTwoValues({ a: null }, { a: 2 }) == {};
+assert runMergeTwoValues({ a: 1, b: 2 }, { a: 2 }) == { a: 1, b: 2 };
+assert runMergeTwoValues({ a: 1, b: 2 }, { a: 2, c: 3 }) == { a: 1, b: 2, c: 3 };
+assert runMergeTwoValues({ a: { b: 1 } }, { a: { b: 2 }, c: 3 }) == { a: { b: 1 }, c: 3 };
+assert runMergeTwoValues({ a: [1] }, { a: [2] }) == { a: [1] };
 
 'ok'

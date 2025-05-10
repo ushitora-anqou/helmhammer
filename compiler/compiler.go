@@ -31,19 +31,15 @@ func sequential[Item any](
 	fIter func(*env.T, int, Item, *jsonnet.Expr) (*jsonnet.Expr, *state.T, error),
 	init *jsonnet.Expr,
 ) (*jsonnet.Expr, *state.T, error) {
-	var curState *state.T
+	curState := env.State()
 	acc := init
 	for i, item := range items {
 		var err error
-		if curState == nil {
-			acc, curState, err = fIter(env, i, item, acc)
-		} else {
-			acc, curState, err = curState.Use(
-				func(vs *jsonnet.Expr, h *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
-					return fIter(env.WithVSAndH(vs, h), i, item, acc)
-				},
-			)
-		}
+		acc, curState, err = curState.Use(
+			func(vs *jsonnet.Expr, h *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
+				return fIter(env.WithVSAndH(vs, h), i, item, acc)
+			},
+		)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -63,12 +59,17 @@ func CompileChart(chart *helm.Chart) (*jsonnet.Expr, error) {
 		crds = append(crds, crd.File.Data)
 	}
 
+	defaultValues, initialHeap, err := jsonnet.DeepAllocate(chart.Values)
+	if err != nil {
+		return nil, err
+	}
+
 	expr = jsonnet.CallChartMain(
 		chart.Name, chart.Version, chart.AppVersion,
 		chart.Name, "Helm",
 		chart.TemplateBasePath,
 		jsonnet.ConvertIntoJsonnet(chart.Capabilities),
-		chart.RenderedKeys, jsonnet.ConvertIntoJsonnet(chart.Values),
+		chart.RenderedKeys, defaultValues, initialHeap,
 		crds, expr,
 	)
 

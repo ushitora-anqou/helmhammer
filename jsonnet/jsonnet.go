@@ -2,6 +2,7 @@ package jsonnet
 
 import (
 	_ "embed"
+	"errors"
 
 	"fmt"
 	"reflect"
@@ -355,11 +356,16 @@ func CallField(args ...*Expr) *Expr {
 
 func CallFromConst(heap *Expr, v *Expr) *Expr {
 	return &Expr{
-		Kind: ECall,
-		CallFunc: &Expr{
-			Kind: ERaw,
-			Raw:  `fromConst`,
-		},
+		Kind:     ECall,
+		CallFunc: Index("fromConst"),
+		CallArgs: []*Expr{heap, v},
+	}
+}
+
+func CallAllocate(heap *Expr, v *Expr) *Expr {
+	return &Expr{
+		Kind:     ECall,
+		CallFunc: Index("allocate"),
 		CallArgs: []*Expr{heap, v},
 	}
 }
@@ -505,7 +511,7 @@ func CallChartMain(
 	releaseName, releaseService string,
 	templateBasePath string,
 	capabilities *Expr,
-	keys []string, defaultValues *Expr,
+	keys []string, defaultValues *Expr, initialHeap *Expr,
 	crds [][]byte, body *Expr) *Expr {
 	exprKeys := []*Expr{}
 	for _, key := range keys {
@@ -536,6 +542,7 @@ func CallChartMain(
 			capabilities,
 			{Kind: EList, List: exprKeys},
 			defaultValues,
+			initialHeap,
 			{Kind: EList, List: crdsList},
 			body,
 		},
@@ -588,4 +595,106 @@ func CallToConst(heap *Expr, v *Expr) *Expr {
 		},
 		CallArgs: []*Expr{heap, v},
 	}
+}
+
+func deepAllocate(heap map[int]*Expr, src any) (*Expr, error) {
+	v := reflect.ValueOf(src)
+
+	if !v.IsValid() {
+		return &Expr{Kind: ENull}, nil
+	}
+
+	switch v.Kind() {
+	case reflect.Bool:
+		fallthrough
+	case reflect.Int:
+		fallthrough
+	case reflect.Uint16:
+		fallthrough
+	case reflect.Float64:
+		fallthrough
+	case reflect.String:
+		return ConvertIntoJsonnet(src), nil
+
+	case reflect.Pointer:
+		if v.IsNil() {
+			return &Expr{Kind: ENull}, nil
+		}
+		return deepAllocate(heap, reflect.Indirect(v).Interface())
+
+	case reflect.Slice:
+		exprs := []*Expr{}
+		for i := range v.Len() {
+			var expr *Expr
+			var err error
+			expr, err = deepAllocate(heap, v.Index(i).Interface())
+			if err != nil {
+				return nil, err
+			}
+			exprs = append(exprs, expr)
+		}
+		return deepAllocateCollection(heap, &Expr{Kind: EList, List: exprs})
+
+	case reflect.Map:
+		if v.IsNil() {
+			return &Expr{Kind: ENull}, nil
+		}
+		exprs := map[string]*Expr{}
+		for iter := v.MapRange(); iter.Next(); {
+			var expr *Expr
+			var err error
+			expr, err = deepAllocate(heap, iter.Value().Interface())
+			if err != nil {
+				return nil, err
+			}
+			exprs[iter.Key().Interface().(string)] = expr
+		}
+		return deepAllocateCollection(heap, Map(exprs))
+
+	case reflect.Struct:
+		exprs := map[string]*Expr{}
+		ty := v.Type()
+		for i := range ty.NumField() {
+			field := ty.Field(i)
+			if !field.IsExported() {
+				continue
+			}
+			var expr *Expr
+			var err error
+			expr, err = deepAllocate(heap, v.FieldByIndex(field.Index).Interface())
+			if err != nil {
+				return nil, err
+			}
+			exprs[field.Name] = expr
+		}
+		return deepAllocateCollection(heap, Map(exprs))
+	}
+
+	return nil, errors.New("deepAllocate: unknown type")
+}
+
+func deepAllocateCollection(heap map[int]*Expr, collection *Expr) (*Expr, error) {
+	pointer := len(heap)
+	heap[pointer] = collection
+	return Map(
+		map[string]*Expr{
+			"p": {Kind: EStringLiteral, StringLiteral: strconv.Itoa(pointer)},
+		},
+	), nil
+}
+
+func DeepAllocate(src any) (*Expr, *Expr, error) {
+	heap := map[int]*Expr{}
+	vExpr, err := deepAllocate(heap, src)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	realHeap := map[string]*Expr{}
+	for i, v := range heap {
+		realHeap[strconv.Itoa(i)] = v
+	}
+	hExpr := Map(realHeap)
+
+	return vExpr, hExpr, nil
 }
