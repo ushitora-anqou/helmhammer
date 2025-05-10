@@ -29,105 +29,111 @@ local arrayReplace(ary, index, newItem) =
   );
 
 local fromConst(heap, src) =
-  local aux(heap, queue0, out) =
-    local
-      first = queue0[0],
-      queue = queue0[1],
-      src = first[0],
-      k = first[1];
-    if std.length(queue0) == 0 then [heap, out]
-    else if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
-      local res = k(heap, src, out), heap1 = res[0], out1 = res[1];
-      aux(heap1, queue, out1) tailstrict
-    else if std.isFunction(src) then
-      local res = allocate(heap, src), heap1 = res[0], v = res[1];
-      local res = k(heap1, v, out), heap2 = res[0], out1 = res[1];
-      aux(heap2, queue, out1) tailstrict
-    else if std.isArray(src) then
-      local res = allocate(heap, src), heap1 = res[0], aryp = res[1];
-      local res = k(heap1, aryp, out), heap2 = res[0], out1 = res[1];
-      local queue1 =
-        std.foldl(
-          function(queue, x) [x, queue],
-          std.mapWithIndex(
-            function(index, item)
-              [
-                item,
-                function(heap, itemv, out)
-                  [
-                    assign(
-                      heap,
-                      aryp,
-                      arrayReplace(deref(heap, aryp), index, itemv),
-                    ),
-                    out,
-                  ],
-              ],
-            src,
-          ),
-          queue,
-        );
-      aux(heap2, queue1, out1) tailstrict
-    else if std.isObject(src) then
-      local res = allocate(heap, src), heap1 = res[0], objp = res[1];
-      local res = k(heap1, objp, out), heap2 = res[0], out1 = res[1];
-      local queue1 =
-        std.foldl(
-          function(queue, x) [x, queue],
-          std.map(
-            function(key)
-              [
-                src[key],
-                function(heap, value, out)
-                  if src[key] == value then [heap, out]
-                  else [
-                    assign(
-                      heap,
-                      objp,
-                      deref(heap, objp) + { [key]: value },
-                    ),
-                    out,
-                  ],
-              ],
-            std.objectFields(src),
-          ),
-          queue,
-        );
-      aux(heap2, queue1, out1) tailstrict
-    else
-      error 'helmhammer.fromConst: unknown type';
-  aux(
-    heap,
-    [
+  if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
+    [heap, src]
+  else
+    local aux(heap, queue0, out) =
+      local
+        first = queue0[0],
+        queue = queue0[1],
+        src = first[0],
+        k = first[1];
+      if std.length(queue0) == 0 then [heap, out]
+      else if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
+        local res = k(heap, src, out), heap1 = res[0], out1 = res[1];
+        aux(heap1, queue, out1) tailstrict
+      else if std.isFunction(src) then
+        local res = allocate(heap, src), heap1 = res[0], v = res[1];
+        local res = k(heap1, v, out), heap2 = res[0], out1 = res[1];
+        aux(heap2, queue, out1) tailstrict
+      else if std.isArray(src) then
+        local res = allocate(heap, src), heap1 = res[0], aryp = res[1];
+        local res = k(heap1, aryp, out), heap2 = res[0], out1 = res[1];
+        local queue1 =
+          std.foldl(
+            function(queue, x) [x, queue],
+            std.mapWithIndex(
+              function(index, item)
+                [
+                  item,
+                  function(heap, itemv, out)
+                    [
+                      assign(
+                        heap,
+                        aryp,
+                        arrayReplace(deref(heap, aryp), index, itemv),
+                      ),
+                      out,
+                    ],
+                ],
+              src,
+            ),
+            queue,
+          );
+        aux(heap2, queue1, out1) tailstrict
+      else if std.isObject(src) then
+        local res = allocate(heap, src), heap1 = res[0], objp = res[1];
+        local res = k(heap1, objp, out), heap2 = res[0], out1 = res[1];
+        local queue1 =
+          std.foldl(
+            function(queue, x) [x, queue],
+            std.map(
+              function(key)
+                [
+                  src[key],
+                  function(heap, value, out)
+                    if src[key] == value then [heap, out]
+                    else [
+                      assign(
+                        heap,
+                        objp,
+                        deref(heap, objp) + { [key]: value },
+                      ),
+                      out,
+                    ],
+                ],
+              std.objectFields(src),
+            ),
+            queue,
+          );
+        aux(heap2, queue1, out1) tailstrict
+      else
+        error 'helmhammer.fromConst: unknown type';
+    aux(
+      heap,
       [
-        src,
-        function(heap, itemv, _out) [
-          heap,
-          itemv,  // set out
+        [
+          src,
+          function(heap, itemv, _out) [
+            heap,
+            itemv,  // set out
+          ],
         ],
+        [],
       ],
-      [],
-    ],
-    null,
-  ) tailstrict;
+      null,
+    ) tailstrict;
 
 local toConst(heap, src) =
-  local aux(heap, src) =
-    if isAddr(src) then
-      local v = deref(heap, src);
-      if std.isFunction(v) then
-        v
-      else if std.isArray(v) then
-        std.map(function(item) aux(heap, item), v)
-      else if std.isObject(v) then
-        std.mapWithKey(function(_, src) aux(heap, src), v)
+  if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
+    src
+  else
+    local aux(heap, src) =
+      if isAddr(src) then
+        local v = deref(heap, src);
+        if std.isFunction(v) then
+          v
+        else if std.isArray(v) then
+          std.map(function(item) aux(heap, item), v)
+        else if std.isObject(v) then
+          std.mapWithKey(function(_, src) aux(heap, src), v)
+        else
+          error 'helmhammer.toConst: invalid addr'
+      else if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
+        src
       else
-        error 'helmhammer.toConst: invalid addr'
-    else if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
-      src
-    else
-      error 'helmhammer.toConst: invalid value. maybe already const?';
-  aux(heap, src) tailstrict;
+        error 'helmhammer.toConst: invalid value. maybe already const?';
+    aux(heap, src) tailstrict;
 
 local field(heap, receiver0, fieldName, args) =
   local receiver =
@@ -465,7 +471,6 @@ local dateInZone(args) =
 local now(args) =
   error 'now: not implemented';
 
-
 local not(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
   [!isTrueOnHeap(heap, args[0]), vs, heap];
@@ -544,7 +549,6 @@ local index(args0) =
 local include(args0) =
   local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.h;
   local res = templates[args[0]](heap, args[1]);
-  //assert std.isString(res[0]);  // collapse thunks to avoid 'max stack frames exceeded' error
   [res[0], vs, res[2]];
 
 local deepCopy(args0) =
