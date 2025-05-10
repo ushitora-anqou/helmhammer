@@ -318,30 +318,18 @@ func AddMap(lhs *Expr, rhs map[*Expr]*Expr) *Expr {
 	}
 }
 
-func CallIsTrue(v *Expr) *Expr {
-	return &Expr{
-		Kind:     ECall,
-		CallFunc: Index("helmhammer", "isTrue"),
-		CallArgs: []*Expr{v},
-	}
-}
-
 func CallIsTrueOnHeap(heap *Expr, v *Expr) *Expr {
 	return &Expr{
 		Kind:     ECall,
-		CallFunc: Index("helmhammer", "isTrueOnHeap"),
+		CallFunc: Index("isTrueOnHeap"),
 		CallArgs: []*Expr{heap, v},
 	}
 }
 
 func CallJoin(heap *Expr, list []*Expr) *Expr {
 	return &Expr{
-		Kind: ECall,
-		CallFunc: &Expr{
-			Kind:          EIndexList,
-			IndexListHead: &Expr{Kind: EID, IDName: "helmhammer"},
-			IndexListTail: []string{"join"},
-		},
+		Kind:     ECall,
+		CallFunc: Index("join"),
 		CallArgs: []*Expr{
 			heap,
 			{Kind: EList, List: list},
@@ -351,24 +339,16 @@ func CallJoin(heap *Expr, list []*Expr) *Expr {
 
 func CallRange(args ...*Expr) *Expr {
 	return &Expr{
-		Kind: ECall,
-		CallFunc: &Expr{
-			Kind:          EIndexList,
-			IndexListHead: &Expr{Kind: EID, IDName: "helmhammer"},
-			IndexListTail: []string{"range"},
-		},
+		Kind:     ECall,
+		CallFunc: Index("range"),
 		CallArgs: args,
 	}
 }
 
 func CallField(args ...*Expr) *Expr {
 	return &Expr{
-		Kind: ECall,
-		CallFunc: &Expr{
-			Kind:          EIndexList,
-			IndexListHead: &Expr{Kind: EID, IDName: "helmhammer"},
-			IndexListTail: []string{"field"},
-		},
+		Kind:     ECall,
+		CallFunc: Index("field"),
 		CallArgs: args,
 	}
 }
@@ -378,7 +358,7 @@ func CallFromConst(heap *Expr, v *Expr) *Expr {
 		Kind: ECall,
 		CallFunc: &Expr{
 			Kind: ERaw,
-			Raw:  `helmhammer.value.fromConst`,
+			Raw:  `fromConst`,
 		},
 		CallArgs: []*Expr{heap, v},
 	}
@@ -545,7 +525,7 @@ func CallChartMain(
 
 	return &Expr{
 		Kind:     ECall,
-		CallFunc: Index("helmhammer", "chartMain"),
+		CallFunc: Index("chartMain"),
 		CallArgs: []*Expr{
 			{Kind: EStringLiteral, StringLiteral: chartName},
 			{Kind: EStringLiteral, StringLiteral: chartVersion},
@@ -603,7 +583,7 @@ func PredefinedFunctions() map[string]*Expr {
 		"trunc",
 		"typeIs",
 	} {
-		m[name] = Index("helmhammer", name)
+		m[name] = Index(name)
 	}
 	return m
 }
@@ -639,7 +619,7 @@ func CallDeref(heap *Expr, v *Expr) *Expr {
 		Kind: ECall,
 		CallFunc: &Expr{
 			Kind: ERaw,
-			Raw:  "helmhammer.value.deref",
+			Raw:  "deref",
 		},
 		CallArgs: []*Expr{heap, v},
 	}
@@ -650,7 +630,7 @@ func CallToConst(heap *Expr, v *Expr) *Expr {
 		Kind: ECall,
 		CallFunc: &Expr{
 			Kind: ERaw,
-			Raw:  "helmhammer.value.toConst",
+			Raw:  "toConst",
 		},
 		CallArgs: []*Expr{heap, v},
 	}

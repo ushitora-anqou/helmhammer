@@ -792,11 +792,11 @@ func compilePredefinedFunctions(
 					Kind: jsonnet.ECall,
 					CallFunc: &jsonnet.Expr{
 						Kind: jsonnet.ERaw,
-						Raw:  `helmhammer.callBuiltin`,
+						Raw:  `callBuiltin`,
 					},
 					CallArgs: []*jsonnet.Expr{
 						e.H(),
-						{Kind: jsonnet.EStringLiteral, StringLiteral: ident},
+						jsonnet.Index(ident),
 						compiledArgs,
 					},
 				},
@@ -832,11 +832,8 @@ func compilePredefinedFunctions(
 		[]*jsonnet.LocalBind{{
 			Name: resultName,
 			Body: &jsonnet.Expr{
-				Kind: jsonnet.ECall,
-				CallFunc: &jsonnet.Expr{
-					Kind: jsonnet.ERaw,
-					Raw:  fmt.Sprintf(`helmhammer.%s`, ident),
-				},
+				Kind:     jsonnet.ECall,
+				CallFunc: jsonnet.Index(ident),
 				CallArgs: []*jsonnet.Expr{
 					jsonnet.Map(map[string]*jsonnet.Expr{
 						"$": {
