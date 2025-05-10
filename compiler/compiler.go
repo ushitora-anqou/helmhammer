@@ -783,7 +783,55 @@ func compilePredefinedFunctions(
 	ident string,
 	compiledArgs *jsonnet.Expr,
 ) (*jsonnet.Expr, *state.T, bool) {
-	if _, ok := jsonnet.PredefinedFunctions()[ident]; ok {
+	switch ident {
+	case
+		"b64enc",
+		"contains",
+		"dir",
+		"eq",
+		"fail",
+		"gt",
+		"indent",
+		"int",
+		"int64",
+		"lower",
+		"min",
+		"ne",
+		"nindent",
+		"print",
+		"printf",
+		"quote",
+		"regexReplaceAll",
+		"replace",
+		"required",
+		"sha256sum",
+		"squote",
+		"ternary",
+		"toString",
+		"trim",
+		"trimAll",
+		"trimSuffix",
+		"trunc":
+		vExpr := &jsonnet.Expr{
+			Kind:     jsonnet.ECall,
+			CallFunc: jsonnet.Index(ident),
+			CallArgs: []*jsonnet.Expr{
+				compiledArgs,
+			},
+		}
+		return vExpr, e.State(), true
+
+	case
+		"concat",
+		"dateInZone",
+		"fromYaml",
+		"has",
+		"hasKey",
+		"now",
+		"omit",
+		"toRawJson",
+		"toYaml",
+		"typeIs":
 		resultName := generateBindName()
 		newState := state.New(
 			[]*jsonnet.LocalBind{{
@@ -805,9 +853,7 @@ func compilePredefinedFunctions(
 			jsonnet.IndexInt(resultName, 0),
 		)
 		return jsonnet.IndexInt(resultName, 1), newState, true
-	}
 
-	switch ident {
 	case
 		"and",
 		"deepCopy",
@@ -823,32 +869,31 @@ func compilePredefinedFunctions(
 		"set",
 		"tpl",
 		"tuple":
-	default:
-		return nil, nil, false
+		resultName := generateBindName()
+		newState := state.New(
+			[]*jsonnet.LocalBind{{
+				Name: resultName,
+				Body: &jsonnet.Expr{
+					Kind:     jsonnet.ECall,
+					CallFunc: jsonnet.Index(ident),
+					CallArgs: []*jsonnet.Expr{
+						jsonnet.Map(map[string]*jsonnet.Expr{
+							"$": {
+								Kind:   jsonnet.EID,
+								IDName: "$",
+							},
+							"args": compiledArgs,
+							"vs":   e.VS(),
+							"h":    e.H(),
+						}),
+					},
+				},
+			}},
+			jsonnet.IndexInt(resultName, 1),
+			jsonnet.IndexInt(resultName, 2),
+		)
+		return jsonnet.IndexInt(resultName, 0), newState, true
 	}
 
-	resultName := generateBindName()
-	newState := state.New(
-		[]*jsonnet.LocalBind{{
-			Name: resultName,
-			Body: &jsonnet.Expr{
-				Kind:     jsonnet.ECall,
-				CallFunc: jsonnet.Index(ident),
-				CallArgs: []*jsonnet.Expr{
-					jsonnet.Map(map[string]*jsonnet.Expr{
-						"$": {
-							Kind:   jsonnet.EID,
-							IDName: "$",
-						},
-						"args": compiledArgs,
-						"vs":   e.VS(),
-						"h":    e.H(),
-					}),
-				},
-			},
-		}},
-		jsonnet.IndexInt(resultName, 1),
-		jsonnet.IndexInt(resultName, 2),
-	)
-	return jsonnet.IndexInt(resultName, 0), newState, true
+	return nil, nil, false
 }

@@ -533,7 +533,6 @@ func TestCompileChartValid(t *testing.T) {
 				jsonnetExpr.CallNamedArgs["values"] = jsonnet.ConvertIntoJsonnet(values)
 			}
 			vm := gojsonnet.MakeVM()
-			vm.MaxStack = 1000
 			gotString, err := vm.EvaluateAnonymousSnippet(
 				"file.jsonnet",
 				jsonnetExpr.StringWithPrologue(),

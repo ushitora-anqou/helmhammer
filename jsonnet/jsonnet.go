@@ -542,52 +542,6 @@ func CallChartMain(
 	}
 }
 
-func PredefinedFunctions() map[string]*Expr {
-	m := map[string]*Expr{}
-	for _, name := range []string{
-		"b64enc",
-		"concat",
-		"contains",
-		"dateInZone",
-		"dir",
-		"eq",
-		"fail",
-		"fromYaml",
-		"gt",
-		"has",
-		"hasKey",
-		"indent",
-		"int",
-		"int64",
-		"lower",
-		"min",
-		"ne",
-		"nindent",
-		"now",
-		"omit",
-		"print",
-		"printf",
-		"quote",
-		"regexReplaceAll",
-		"replace",
-		"required",
-		"sha256sum",
-		"squote",
-		"ternary",
-		"toRawJson",
-		"toString",
-		"toYaml",
-		"trim",
-		"trimAll",
-		"trimSuffix",
-		"trunc",
-		"typeIs",
-	} {
-		m[name] = Index(name)
-	}
-	return m
-}
-
 func Map(src map[string]*Expr) *Expr {
 	m := map[*Expr]*Expr{}
 	for k, v := range src {
