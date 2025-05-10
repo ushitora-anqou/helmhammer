@@ -98,7 +98,7 @@ local fromConst(heap, src) =
           );
         aux(heap2, queue1, out1) tailstrict
       else
-        error 'helmhammer.fromConst: unknown type';
+        error 'fromConst: unknown type';
     aux(
       heap,
       [
@@ -128,11 +128,11 @@ local toConst(heap, src) =
         else if std.isObject(v) then
           std.mapWithKey(function(_, src) aux(heap, src), v)
         else
-          error 'helmhammer.toConst: invalid addr'
+          error 'toConst: invalid addr'
       else if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
         src
       else
-        error 'helmhammer.toConst: invalid value. maybe already const?';
+        error 'toConst: invalid value. maybe already const?';
     aux(heap, src) tailstrict;
 
 local field(heap, receiver0, fieldName, args) =

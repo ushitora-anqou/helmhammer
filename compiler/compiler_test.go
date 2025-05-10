@@ -133,10 +133,10 @@ func (t T) MAddJsonnet() *jsonnet.Expr {
 		Raw: strings.TrimSpace(`
 function(heap, args)
 	assert std.isNumber(args[0]);
-	assert helmhammer.value.isAddr(args[1]);
+	assert isAddr(args[1]);
 	std.map(
 		function(x) x + args[0],
-		helmhammer.value.deref(heap, args[1]),
+		deref(heap, args[1]),
 	)`,
 		),
 	}
@@ -533,6 +533,7 @@ func TestCompileChartValid(t *testing.T) {
 				jsonnetExpr.CallNamedArgs["values"] = jsonnet.ConvertIntoJsonnet(values)
 			}
 			vm := gojsonnet.MakeVM()
+			vm.MaxStack = 1000
 			gotString, err := vm.EvaluateAnonymousSnippet(
 				"file.jsonnet",
 				jsonnetExpr.StringWithPrologue(),
