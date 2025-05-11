@@ -14,17 +14,6 @@ import (
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
 )
 
-var nextGenID = 0
-
-func genid() int {
-	nextGenID++
-	return nextGenID
-}
-
-func generateBindName() string {
-	return fmt.Sprintf("t%d", genid())
-}
-
 func sequential[Item any](
 	env *env.T,
 	items []Item,
@@ -97,8 +86,8 @@ func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
 }
 
 func compile(e *env.T, node parse.Node) (*jsonnet.Expr, error) {
-	enhancedVSName := generateBindName() // vs + {"$": dot}
-	dotName := generateBindName()
+	enhancedVSName := state.GenerateBindName() // vs + {"$": dot}
+	dotName := state.GenerateBindName()
 	enhancedE := e.WithVSAndH(
 		jsonnet.Index(enhancedVSName),
 		jsonnet.Index("h"),
@@ -205,7 +194,7 @@ func compileNode(e *env.T, node parse.Node) (*jsonnet.Expr, *state.T, error) {
 		}
 		return pipeState.Use(
 			func(vs, h *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
-				tmplResultName := generateBindName()
+				tmplResultName := state.GenerateBindName()
 				newState := state.New(
 					[]*jsonnet.LocalBind{
 						{Name: tmplResultName, Body: &jsonnet.Expr{
@@ -265,7 +254,7 @@ func compilePipeline(e *env.T, pipe *parse.PipeNode) (*jsonnet.Expr, *state.T, e
 
 	return pipeState.Use(
 		func(vs, h *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
-			pipeExprName := generateBindName()
+			pipeExprName := state.GenerateBindName()
 
 			assignments := map[*jsonnet.Expr]*jsonnet.Expr{}
 			for _, variable := range pipe.Decl {
@@ -284,9 +273,13 @@ func compilePipeline(e *env.T, pipe *parse.PipeNode) (*jsonnet.Expr, *state.T, e
 				return pipeExpr, state.New(nil, vs, h), nil
 			}
 
+			newVSName := state.GenerateBindName()
 			return jsonnet.Index(pipeExprName), state.New(
-				[]*jsonnet.LocalBind{{Name: pipeExprName, Body: pipeExpr}},
-				jsonnet.AddMap(vs, assignments),
+				[]*jsonnet.LocalBind{
+					{Name: pipeExprName, Body: pipeExpr},
+					{Name: newVSName, Body: jsonnet.AddMap(vs, assignments)},
+				},
+				jsonnet.Index(newVSName),
 				h,
 			), nil
 		},
@@ -611,9 +604,9 @@ func compileRange(e *env.T, node *parse.RangeNode) (*jsonnet.Expr, *state.T, err
 		return nil, nil, fmt.Errorf("compileRange: %w", err)
 	}
 
-	nestedVSName := generateBindName()
-	nestedHName := generateBindName()
-	dotName := generateBindName()
+	nestedVSName := state.GenerateBindName()
+	nestedHName := state.GenerateBindName()
+	dotName := state.GenerateBindName()
 
 	thenExpr, thenState, err := e.WithVSAndH(
 		jsonnet.Index(nestedVSName),
@@ -673,7 +666,7 @@ func compileRange(e *env.T, node *parse.RangeNode) (*jsonnet.Expr, *state.T, err
 				nestedVSValue = jsonnet.AddMap(nestedVSValue, assignments)
 			}
 
-			resultName := generateBindName()
+			resultName := state.GenerateBindName()
 			newState := state.New(
 				[]*jsonnet.LocalBind{
 					{Name: resultName, Body: jsonnet.CallRange(
@@ -723,7 +716,7 @@ func compileIfOrWith(
 
 			return pipeState.Use(
 				func(vs, h *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
-					dotName := generateBindName()
+					dotName := state.GenerateBindName()
 					enhancedE := e.WithVSAndH(vs, h)
 					if typ == parse.NodeWith {
 						enhancedE = enhancedE.WithDot(jsonnet.Index(dotName))
@@ -766,7 +759,7 @@ func compileIfOrWith(
 						IfThen: thenState.Finalize(thenExpr),
 						IfElse: elseState.Finalize(elseExpr),
 					}
-					resultName := generateBindName()
+					resultName := state.GenerateBindName()
 					newState := state.New(
 						[]*jsonnet.LocalBind{{Name: resultName, Body: result}},
 						jsonnet.IndexInt(resultName, 1),
@@ -786,17 +779,24 @@ func compilePredefinedFunctions(
 ) (*jsonnet.Expr, *state.T, bool) {
 	switch ident {
 	case
+		"add",
 		"b64enc",
+		"ceil",
 		"contains",
 		"dir",
+		"div",
+		"divf",
 		"eq",
 		"fail",
 		"gt",
 		"indent",
 		"int",
 		"int64",
+		"kindIs",
 		"lower",
 		"min",
+		"mul",
+		"mulf",
 		"mustRegexReplaceAllLiteral",
 		"ne",
 		"nindent",
@@ -804,6 +804,7 @@ func compilePredefinedFunctions(
 		"printf",
 		"quote",
 		"regexReplaceAll",
+		"regexReplaceAllLiteral",
 		"replace",
 		"required",
 		"semverCompare",
@@ -827,15 +828,17 @@ func compilePredefinedFunctions(
 	case
 		"concat",
 		"dateInZone",
+		"fromJson",
 		"fromYaml",
 		"has",
 		"hasKey",
 		"now",
 		"omit",
+		"toJson",
 		"toRawJson",
 		"toYaml",
 		"typeIs":
-		resultName := generateBindName()
+		resultName := state.GenerateBindName()
 		newState := state.New(
 			[]*jsonnet.LocalBind{{
 				Name: resultName,
@@ -859,21 +862,27 @@ func compilePredefinedFunctions(
 
 	case
 		"and",
+		"append",
+		"coalesce",
 		"deepCopy",
 		"default",
 		"dict",
 		"empty",
+		"get",
 		"include",
 		"index",
+		"join",
 		"len",
 		"list",
+		"merge",
 		"mergeOverwrite",
 		"not",
 		"or",
 		"set",
 		"tpl",
-		"tuple":
-		resultName := generateBindName()
+		"tuple",
+		"uniq":
+		resultName := state.GenerateBindName()
 		newState := state.New(
 			[]*jsonnet.LocalBind{{
 				Name: resultName,

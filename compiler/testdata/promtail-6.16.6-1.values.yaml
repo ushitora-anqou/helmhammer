@@ -42,6 +42,6 @@ initContainer:
     command:
       - "sh"
       - "-c"
-      - 'sysctl -w fs.inotify.max_user_instances=512\nsysctl -w fs.inotify.max_user_watches=100000\n'
+      - "sysctl -w fs.inotify.max_user_instances=512\nsysctl -w fs.inotify.max_user_watches=100000\n"
     securityContext:
       privileged: true

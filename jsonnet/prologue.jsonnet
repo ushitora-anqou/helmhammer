@@ -162,7 +162,7 @@ local field(heap, receiver0, fieldName, args) =
       null;
 //std.trace('%s %s' % [trimFunctions(receiver), fieldName], null),
 
-local join(heap, ary) =
+local _join(heap, ary) =
   std.join(
     '',
     std.map(
@@ -171,7 +171,7 @@ local join(heap, ary) =
         else if std.isString(x) then x
         else if std.isNumber(x) || std.isBoolean(x) then std.toString(x)
         //else if std.isArray(x) || std.isObject(x) then error 'join: stringifing arrays or objects is not implemented yet'
-        else error ('join: unexpected type of value: %s' % [x]),
+        else error ('_join: unexpected type of value: %s' % [x]),
       ary,
     ),
   );
@@ -242,14 +242,6 @@ local range(vs0, heap0, values0, fthen, felse) =
         [res.v, res.vs, res.h]
     else error ('range: not implemented: %s' % [values0])
   else error ('range: not implemented: %s' % [values0]);
-
-local isTrue(v/* should be const */) =
-  if v == null then false
-  else if std.isArray(v) || std.isObject(v) || std.isString(v) then std.length(v) > 0
-  else if std.isBoolean(v) then v
-  else if std.isFunction(v) then v != null
-  else if std.isNumber(v) then v != 0
-  else true;
 
 local printf(args) =
   std.format(args[0], args[1:]);
@@ -341,8 +333,246 @@ local sha256sum(args) =
   assert std.length(args) == 1;
   std.sha256(args[0]);
 
+// cf. https://github.com/google/jsonnet/blob/42153e4c993c2b8196f98c5ab6f1150f398e3d0d/stdlib/std.jsonnet#L1000
+local escapeStringJsonSQuote(str_) =
+  local str = std.toString(str_);
+  local trans(ch) =
+    if ch == "'" then
+      "\\'"
+    else if ch == '\\' then
+      '\\\\'
+    else if ch == '\b' then
+      '\\b'
+    else if ch == '\f' then
+      '\\f'
+    else if ch == '\n' then
+      '\\n'
+    else if ch == '\r' then
+      '\\r'
+    else if ch == '\t' then
+      '\\t'
+    else
+      local cp = std.codepoint(ch);
+      if cp < 32 || (cp >= 127 && cp <= 159) then
+        '\\u%04x' % [cp]
+      else
+        ch;
+  "'%s'" % std.join('', [trans(ch) for ch in std.stringChars(str)]);
+
+// cf. https://github.com/google/jsonnet/blob/42153e4c993c2b8196f98c5ab6f1150f398e3d0d/stdlib/std.jsonnet#L1089
+local letters = std.set(std.stringChars('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_-/'));
+local digits = std.set(std.stringChars('0123456789'));
+local intChars = std.set(digits + std.stringChars('_-'));
+local binChars = std.set(intChars + std.stringChars('b'));
+local hexChars = std.set(digits + std.stringChars('abcdefx_-'));
+local floatChars = std.set(digits + std.stringChars('e._-'));
+local dateChars = std.set(digits + std.stringChars('-'));
+local safeChars = std.set(letters + floatChars);
+local manifestYamlDoc(value, indent_array_in_object=false, quote_keys=true) =
+  local onlyChars(charSet, strSet) =
+    if std.length(std.setInter(charSet, strSet)) == std.length(strSet) then
+      true
+    else false;
+  local isReserved(key) =
+    // NOTE: These values are checked for case insensitively.
+    // While this approach results in some false positives, it eliminates
+    // the risk of missing a permutation.
+    local reserved = [
+      // Boolean types taken from https://yaml.org/type/bool.html
+      'true',
+      'false',
+      'yes',
+      'no',
+      'on',
+      'off',
+      'y',
+      'n',
+      // Numerical words taken from https://yaml.org/type/float.html
+      '.nan',
+      '-.inf',
+      '+.inf',
+      '.inf',
+      'null',
+      // Invalid keys that contain no invalid characters
+      '-',
+      '---',
+      '',
+    ];
+    local bad = [word for word in reserved if word == std.asciiLower(key)];
+    if std.length(bad) > 0 then
+      true
+    else false;
+  local typeMatch(m_key, type) =
+    // Look for positive or negative numerical types (ex: 0x)
+    if std.substr(m_key, 0, 2) == type || std.substr(m_key, 0, 3) == '-' + type then
+      true
+    else false;
+  local bareSafe(key) =
+    /*
+    For a key to be considered safe to emit without quotes, the following must be true
+      - All characters must match [a-zA-Z0-9_/\-]
+      - Not match the integer format defined in https://yaml.org/type/int.html
+      - Not match the float format defined in https://yaml.org/type/float.html
+      - Not match the timestamp format defined in https://yaml.org/type/timestamp.html
+      - Not match the boolean format defined in https://yaml.org/type/bool.html
+      - Not match the null format defined in https://yaml.org/type/null.html
+      - Not match (ignoring case) any reserved words which pass the above tests.
+        Reserved words are defined in isReserved() above.
+
+    Since the remaining YAML types require characters outside the set chosen as valid
+    for the elimination of quotes from the YAML output, the remaining types listed at
+    https://yaml.org/type/ are by default always quoted.
+    */
+    local keyLc = std.asciiLower(key);
+    local keyChars = std.stringChars(key);
+    local keySet = std.set(keyChars);
+    local keySetLc = std.set(std.stringChars(keyLc));
+    // Check for unsafe characters
+    if !onlyChars(safeChars, keySet) then
+      false
+    // Check for reserved words
+    else if isReserved(key) then
+      false
+    /* Check for timestamp values.  Since spaces and colons are already forbidden,
+       all that could potentially pass is the standard date format (ex MM-DD-YYYY, YYYY-DD-MM, etc).
+       This check is even more conservative: Keys that meet all of the following:
+         - all characters match [0-9\-]
+         - has exactly 2 dashes
+       are considered dates.
+    */
+    else if onlyChars(dateChars, keySet)
+            && std.length(std.findSubstr('-', key)) == 2 then
+      false
+    /* Check for integers.  Keys that meet all of the following:
+         - all characters match [0-9_\-]
+         - has at most 1 dash
+       are considered integers.
+    */
+    else if onlyChars(intChars, keySetLc)
+            && std.length(std.findSubstr('-', key)) < 2 then
+      false
+    /* Check for binary integers.  Keys that meet all of the following:
+         - all characters match [0-9b_\-]
+         - has at least 3 characters
+         - starts with (-)0b
+       are considered binary integers.
+    */
+    else if onlyChars(binChars, keySetLc)
+            && std.length(key) > 2
+            && typeMatch(key, '0b') then
+      false
+    /* Check for floats. Keys that meet all of the following:
+         - all characters match [0-9e._\-]
+         - has at most a single period
+         - has at most two dashes
+         - has at most 1 'e'
+       are considered floats.
+    */
+    else if onlyChars(floatChars, keySetLc)
+            && std.length(std.findSubstr('.', key)) == 1
+            && std.length(std.findSubstr('-', key)) < 3
+            && std.length(std.findSubstr('e', keyLc)) < 2 then
+      false
+    /* Check for hexadecimals.  Keys that meet all of the following:
+         - all characters match [0-9a-fx_\-]
+         - has at most 1 dash
+         - has at least 3 characters
+         - starts with (-)0x
+       are considered hexadecimals.
+    */
+    else if onlyChars(hexChars, keySetLc)
+            && std.length(std.findSubstr('-', key)) < 2
+            && std.length(keyChars) > 2
+            && typeMatch(key, '0x') then
+      false
+    // All checks pass. Key is safe for emission without quotes.
+    else true;
+  local escapeKeyYaml(key) =
+    if bareSafe(key) then key else escapeStringJsonSQuote(key);
+  local aux(v, path, cindent) =
+    if v == true then
+      'true'
+    else if v == false then
+      'false'
+    else if v == null then
+      'null'
+    else if std.isNumber(v) then
+      '' + v
+    else if std.isString(v) then
+      local len = std.length(v);
+      if len == 0 then
+        "''"
+      else if v[len - 1] == '\n' then
+        local split = std.split(v, '\n');
+        std.join('\n' + cindent + '  ', ['|'] + split[0:std.length(split) - 1])
+      else
+        escapeStringJsonSQuote(v)
+    else if std.isFunction(v) then
+      error 'Tried to manifest function at ' + path
+    else if std.isArray(v) then
+      if std.length(v) == 0 then
+        '[]'
+      else
+        local params(value) =
+          if std.isArray(value) && std.length(value) > 0 then {
+            // While we could avoid the new line, it yields YAML that is
+            // hard to read, e.g.:
+            // - - - 1
+            //     - 2
+            //   - - 3
+            //     - 4
+            new_indent: cindent + '  ',
+            space: '\n' + self.new_indent,
+          } else if std.isObject(value) && std.length(value) > 0 then {
+            new_indent: cindent + '  ',
+            // In this case we can start on the same line as the - because the indentation
+            // matches up then.  The converse is not true, because fields are not always
+            // 1 character long.
+            space: ' ',
+          } else {
+            // In this case, new_indent is only used in the case of multi-line strings.
+            new_indent: cindent,
+            space: ' ',
+          };
+        local range = std.range(0, std.length(v) - 1);
+        local parts = [
+          '-' + param.space + aux(v[i], path + [i], param.new_indent)
+          for i in range
+          for param in [params(v[i])]
+        ];
+        std.join('\n' + cindent, parts)
+    else if std.isObject(v) then
+      if std.length(v) == 0 then
+        '{}'
+      else
+        local params(value) =
+          if std.isArray(value) && std.length(value) > 0 then {
+            // Not indenting allows e.g.
+            // ports:
+            // - 80
+            // instead of
+            // ports:
+            //   - 80
+            new_indent: if indent_array_in_object then cindent + '  ' else cindent,
+            space: '\n' + self.new_indent,
+          } else if std.isObject(value) && std.length(value) > 0 then {
+            new_indent: cindent + '  ',
+            space: '\n' + self.new_indent,
+          } else {
+            // In this case, new_indent is only used in the case of multi-line strings.
+            new_indent: cindent,
+            space: ' ',
+          };
+        local lines = [
+          (if quote_keys then escapeStringJsonSQuote(k) else escapeKeyYaml(k)) + ':' + param.space + aux(v[k], path + [k], param.new_indent)
+          for k in std.objectFields(v)
+          for param in [params(v[k])]
+        ];
+        std.join('\n' + cindent, lines);
+  aux(value, [], '');
+
 local toYaml(args) =
-  std.manifestYamlDoc(args[0], quote_keys=false);
+  manifestYamlDoc(args[0], quote_keys=false);
 
 local dir(args) =
   assert std.length(args) == 1;
@@ -461,34 +691,102 @@ local mustRegexReplaceAllLiteral(args) =
   if args[1] == '' then ''
   else error ('mustRegexReplaceAllLiteral: not implemented: %s' % [args]);
 
+local regexReplaceAllLiteral(args) =
+  assert std.length(args) == 3;
+  assert std.isString(args[0]);
+  assert std.isString(args[1]);
+  assert std.isString(args[2]);
+  if args[0] == '[^a-zA-Z0-9._-]' && args[1] == '3.4.2' then
+    '3.4.2'
+  else error ('regexReplaceAllLiteral: not implemented: %s' % [trimFunctions(args)]);
+
+
 local ternary(args) =
   assert std.length(args) == 3;
   assert std.isBoolean(args[2]);
   if args[2] then args[0] else args[1];
 
-local typeIs(args) =
-  error 'typeIs: not implemented';
-
-local toRawJson(args) =
-  error 'toRawJson: not implemented';
-
-local dateInZone(args) =
-  error 'dateInZone: not implemented';
-
-local now(args) =
-  error 'now: not implemented';
-
 local semverCompare(args) =
   // FIXME
-  if args[0] == '>=1.13-0' && args[1] == 'v1.32.0' then
+  if (args[0] == '>=1.13-0' || args[0] == '>= 1.23-0' || args[0] == '>=1.21-0') && args[1] == 'v1.32.0' then
     true
   else
     error ('semverCompare: not implemented: %s' % [args]);
 
+local add(args) =
+  assert std.length(args) >= 2;
+  std.foldl(function(acc, arg) acc + toInt(arg), args, 0);
+
+local mul(args) =
+  assert std.length(args) >= 2;
+  std.foldl(function(acc, arg) acc * toInt(arg), args, 1);
+
+local div(args) =
+  assert std.length(args) == 2;
+  toInt(args[0]) / toInt(args[1]);
+
+local divf(args) = error ('divf: not implemented: %s' % [trimFunctions(args)]);
+local mulf(args) = error ('mulf: not implemented: %s' % [trimFunctions(args)]);
+
+local append(args) = error ('append: not implemented: %s' % [trimFunctions(args)]);
+local ceil(args) = error ('ceil: not implemented: %s' % [trimFunctions(args)]);
+local dateInZone(args) = error 'dateInZone: not implemented';
+local fromJson(args) = error ('fromJson: not implemented: %s' % [trimFunctions(args)]);
+local join(args) = error ('join: not implemented: %s' % [trimFunctions(args)]);
+local kindIs(args) = error ('kindIs: not implemented: %s' % [trimFunctions(args)]);
+local now(args) = error 'now: not implemented';
+local toJson(args) = error ('toJson: not implemented: %s' % [trimFunctions(args)]);
+local toRawJson(args) = error 'toRawJson: not implemented';
+local typeIs(args) = error 'typeIs: not implemented';
+
+local _empty(heap, v) =
+  if v == null then
+    true
+  else if isAddr(v) then
+    local w = deref(heap, v);
+    assert std.isArray(w) || std.isObject(w);
+    std.length(w) == 0
+  else if std.isString(v) then
+    std.length(v) == 0
+  else if std.isBoolean(v) then
+    !v
+  else if std.isNumber(v) then
+    v == 0;
+
+local uniq(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  local listp = args[0];
+  assert isAddr(listp);
+  local list = deref(heap, listp);
+  assert std.isArray(list);
+  local newlist = std.uniq(list);
+  local newheap = assign(heap, listp, newlist);
+  [listp, vs, newheap];
+
+local get(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 2;
+  assert isAddr(args[0]);
+  local d = deref(heap, args[0]);
+  assert std.isObject(d);
+  assert std.isString(args[1]);
+  local key = args[1];
+  local retv = if std.objectHas(d, key) then d[key] else '';
+  [retv, vs, heap];
+
+local coalesce(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  local aux(i) =
+    if i >= std.length(args) then null
+    else if _empty(heap, args[i]) then aux(i + 1)
+    else args[i];
+  [aux(0), vs, heap];
+
 local len(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
   assert std.length(args) == 1;
-  if isAddr(heap, args[0]) then
+  if isAddr(args[0]) then
     [std.length(deref(heap, args[0])), vs, heap]
   else if std.isString(args[0]) then
     [std.length(args[0]), vs, heap]
@@ -514,20 +812,6 @@ local and(args0) =
     if i == std.length(args) - 1 || !isTrueOnHeap(heap, args[i]) then args[i]
     else loop(i + 1);
   [loop(0), vs, heap];
-
-local _empty(heap, v) =
-  if v == null then
-    true
-  else if isAddr(v) then
-    local w = deref(heap, v);
-    assert std.isArray(w) || std.isObject(w);
-    std.length(w) == 0
-  else if std.isString(v) then
-    std.length(v) == 0
-  else if std.isBoolean(v) then
-    !v
-  else if std.isNumber(v) then
-    v == 0;
 
 local empty(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
@@ -615,6 +899,10 @@ local mergeOverwrite(args0) =
   local newheap = assign(heap1, args[0], deref(heap1, p));
   [p, vs, newheap];
 
+local merge(args0) =
+  // FIXME: implement mergo
+  mergeOverwrite(args0);
+
 local set(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
   local objp = args[0], key = args[1], newValue = args[2];
@@ -632,13 +920,20 @@ local callBuiltin(h, f, args) =
     f(std.map(function(arg) toConst(h, arg), args)),
   );
 
+local strIndex(pat, str, start) =
+  // FIXME: slow
+  local parts = std.split(str, pat);
+  local loop(i, pos) =
+    if i >= std.length(parts) then -1
+    else if i == 0 then
+      loop(i + 1, pos + std.length(parts[i])) tailstrict
+    else if pos < start then
+      loop(i + 1, pos + std.length(pat) + std.length(parts[i])) tailstrict
+    else pos;
+  loop(0, 0) tailstrict;
+
 local tpl_(templates) =
   {
-    local strIndex(pat, str, start) =
-      // FIXME: slow
-      local occurrences = std.findSubstr(pat, str[start:std.length(str)]);
-      if occurrences == [] then -1 else start + occurrences[0],
-
     local isSpace(c) =
       c == ' ' || c == '\n' || c == '\r' || c == '\t',
 
@@ -656,35 +951,36 @@ local tpl_(templates) =
       local i =
         if skipLeadingSpaces then findNonSpace(str, i0, 1)
         else i0;
-      assert i < std.length(str) : 'lexText: unexpected eof';
-      /*
-                0 1 2 3 4 5
-                a   { { - a
-        i     = 0
-        j     =     2
-        j - 1 =   1
-        j + 2 =         4
-        j + 3 =           5
-        k     = 0
-        k + 1 =   1
-      */
-      local j = strIndex('{{', str, i);
-      if j == -1 then out + [{ t: 'text', v: str[i:] }]
+      if i >= std.length(str) then out
       else
-        assert j + 2 < std.length(str) : 'lexText: unexpected {{';
-        if str[j + 2] == '-' then
-          local k = findNonSpace(str, j - 1, -1);
-          lexInsideAction(
-            str,
-            j + 3,
-            (if i >= k + 1 then out else out + [{ t: 'text', v: str[i:k + 1] }]) + [{ t: '{{' }]
-          ) tailstrict
+        /*
+                  0 1 2 3 4 5
+                  a   { { - a
+          i     = 0
+          j     =     2
+          j - 1 =   1
+          j + 2 =         4
+          j + 3 =           5
+          k     = 0
+          k + 1 =   1
+        */
+        local j = strIndex('{{', str, i);
+        if j == -1 then out + [{ t: 'text', v: str[i:] }]
         else
-          lexInsideAction(
-            str,
-            j + 2,
-            (if i >= j then out else out + [{ t: 'text', v: str[i:j] }]) + [{ t: '{{' }]
-          ) tailstrict,
+          assert j + 2 < std.length(str) : 'lexText: unexpected {{';
+          if str[j + 2] == '-' then
+            local k = findNonSpace(str, j - 1, -1);
+            lexInsideAction(
+              str,
+              j + 3,
+              (if i >= k + 1 then out else out + [{ t: 'text', v: str[i:k + 1] }]) + [{ t: '{{' }]
+            ) tailstrict
+          else
+            lexInsideAction(
+              str,
+              j + 2,
+              (if i >= j then out else out + [{ t: 'text', v: str[i:j] }]) + [{ t: '{{' }]
+            ) tailstrict,
 
     local isAlphanumeric(ch) =
       local c = std.codepoint(ch);
@@ -882,9 +1178,9 @@ local tpl_(templates) =
     local evalOperand(op, s0) =
       if op.t == 'chain' then
         local res = evalOperand(op.v[0], s0), s = res[0], val = res[1];
-        [s, std.foldl(function(acc, field) acc[field], op.v[1], val)]
+        [s, std.foldl(function(acc, field) deref(s0.h, acc)[field], op.v[1], val)]
       else if op.t == 'field' then
-        [s0, if op.v == '' then s0.dot else s0.dot[op.v]]
+        [s0, if op.v == '' then s0.dot else deref(s0.h, s0.dot)[op.v]]
       else if op.t == 'var' then
         [s0, s0.vars[op.v]]
       else if op.t == 'number' || op.t == 'string' then
@@ -895,9 +1191,12 @@ local tpl_(templates) =
         error ('evalOperand: unknown operand: %s' % [op]),
 
     local predefinedFuncs = {
-      nindent: nindent,
-      toYaml: toYaml,
-      printf: printf,
+      indent(args): indent(args.args),
+      nindent(args): nindent(args.args),
+      toYaml(args): toYaml([toConst(args.heap, args.args[0])]),
+      printf(args): printf(args.args),
+      and(args): std.foldl(function(acc, x) acc && isTrueOnHeap(args.heap, x), args.args, true),
+      or(args): std.foldl(function(acc, x) acc || isTrueOnHeap(args.heap, x), args.args, false),
     },
 
     local evalCommand(command, final, s0) =
@@ -916,17 +1215,17 @@ local tpl_(templates) =
             s = res[0],
             args = res[1];
           local args1 = if final == null then args else args + [final];
-          [s, predefinedFuncs[op0.v](args1)]
-        else if op0.v == 'include' then
+          [s, predefinedFuncs[op0.v]({ heap: s0.h, args: args1 })]
+        else if op0.v == 'template' || op0.v == 'include' then
           local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
           local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
-          local res = fromConst({}, newDot), heap = res[0], newDotOnHeap = res[1];
-          [s2, include({ '$': templates, args: [name, newDotOnHeap], vs: {}, h: heap })[0]]
+          local res = include({ '$': templates, args: [name, newDot], vs: {}, h: s2.h });
+          [s2 { h: res[2] }, res[0]]
         else if op0.v == 'tpl' then
           local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
           local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
-          local res = fromConst({}, newDot), heap = res[0], newDotOnHeap = res[1];
-          [s2, tpl({ '$': templates, args: [name, newDotOnHeap], vs: {}, h: heap })[0]]
+          local res = tpl({ '$': templates, args: [name, newDot], vs: {}, h: s2.h });
+          [s2 { h: res[2] }, res[0]]
         else
           error ('evalCommand: unknown id: %s' % [op0.v])
       else
@@ -955,10 +1254,11 @@ local tpl_(templates) =
         s { out+: std.toString(val) }
       else if node.t == 'with' || node.t == 'if' then
         local res = evalPipeline(node.v.pipe, s0), s = res[0], pipeVal = res[1];
-        if isTrue(pipeVal) then
-          eval(node.v.list, if node.t == 'if' then s else s { dot: pipeVal })
+        if isTrueOnHeap(s0.h, pipeVal) then
+          local s1 = eval(node.v.list, if node.t == 'if' then s else s { dot: pipeVal });
+          s1 { dot: s.dot }
         else if node.v.elseList != null then
-          eval(node.v.elseList, s)
+          eval(node.v.elseList, s) tailstrict
         else
           s0
       else error 'eval: unexpected node',
@@ -972,7 +1272,7 @@ local tpl_(templates) =
 
       tpl(args0) =
   local templates = args0['$'], args = args0.args, vs = args0.vs, heap = args0.h;
-  local tpl__ = tpl_(templates), src = args[0], dot = toConst(heap, args[1]);
+  local tpl__ = tpl_(templates), src = args[0], dot = args[1];
   local evalResult =
     tpl__.eval(
       tpl__.parse(
@@ -983,6 +1283,7 @@ local tpl_(templates) =
         dot: dot,
         out: '',
         vars: { ''/* $ */: dot },
+        h: heap,
       },
     ).out;
   assert std.isString(evalResult);
@@ -1095,18 +1396,30 @@ local chartMain(
             ),
           ),
         );
-        parseYaml(manifests);
+        local parsed = parseYaml(manifests);
+        if parsed == null || std.isArray(parsed) then parsed
+        else [parsed];
     std.filter(
       function(x) x != null,
-      flatten(
-        std.map(
-          parseManifests,
-          (if includeCrds then crds else []) + std.map(runFile, keys),
+      std.flattenArrays(
+        std.filter(
+          function(x) x != null,
+          std.map(
+            parseManifests,
+            std.map(runFile, keys),
+          ),
         ),
       ),
     );
 
 // DON'T USE BELOW
+
+assert std.assertEqual(strIndex('{{', 'abc', 0), -1);
+assert std.assertEqual(strIndex('{{', '{{c', 0), 0);
+assert std.assertEqual(strIndex('{{', 'a{{', 0), 1);
+assert std.assertEqual(strIndex('{{', 'a{{b{{', 3), 4);
+assert std.assertEqual(strIndex('{{', 'a{{b{{', 5), -1);
+assert std.assertEqual(strIndex('{{', '{{ with .A }}{{.B}}{{ end }}', 13), 13);
 
 assert or({ args: [0, 0], vs: {}, heap: {} })[0] == 0;
 assert or({ args: [1, 0], vs: {}, heap: {} })[0] == 1;
@@ -1130,14 +1443,6 @@ assert index({
 assert trimAll(['ac', 'aabbcc']) == 'bb';
 
 local tpl__ = tpl_({});
-assert tpl__.strIndex('', '', 0) == -1;
-assert tpl__.strIndex('a', '', 0) == -1;
-assert tpl__.strIndex('', 'a', 0) == -1;
-assert tpl__.strIndex('a', 'a', 0) == 0;
-assert tpl__.strIndex('b', 'a', 0) == -1;
-assert tpl__.strIndex('a', 'a', 1) == -1;
-assert tpl__.strIndex('a', 'aa', 1) == 1;
-assert tpl__.strIndex('aa', 'baa', 1) == 1;
 assert tpl__.findNonSpace(' a', 0, 1) == 1;
 assert tpl__.findNonSpace('a ', 1, -1) == 0;
 assert tpl__.findNonSpace(' ', 0, -1) == -1;
@@ -1215,7 +1520,9 @@ assert tpl___(['{{ if .A }}{{.B}}{{ end }}', { A: { B: 1 }, B: 0 }]) == '0';
 assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
 assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
 assert tpl___(['{{ tpl "{{.A}}" $ }}', { A: 10 }]) == '10';
-assert tpl___(['{{ tpl (toYaml .A) . }}', { A: { B: '{{.B}}' }, B: 'hello' }]) == 'B: "hello"';
+assert tpl___(['{{ tpl (toYaml .A) . }}', { A: { B: '{{.B}}' }, B: 'hello' }]) == "B: 'hello'";
+assert tpl___(['{{ with .A }}{{ end }}{{ .C }}', { A: { B: 1 }, C: 2 }]) == '2';
+
 
 assert fromConst({}, 10) == [{}, 10];
 assert fromConst({}, true) == [{}, true];

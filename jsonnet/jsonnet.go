@@ -330,7 +330,7 @@ func CallIsTrueOnHeap(heap *Expr, v *Expr) *Expr {
 func CallJoin(heap *Expr, list []*Expr) *Expr {
 	return &Expr{
 		Kind:     ECall,
-		CallFunc: Index("join"),
+		CallFunc: Index("_join"),
 		CallArgs: []*Expr{
 			heap,
 			{Kind: EList, List: list},

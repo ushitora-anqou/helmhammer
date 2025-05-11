@@ -2,6 +2,7 @@ package state
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
@@ -59,4 +60,15 @@ func (t *T) Finalize(v *jsonnet.Expr) *jsonnet.Expr {
 
 func (t *T) PrependLocalBind(b *jsonnet.LocalBind) {
 	t.localBinds = slices.Concat([]*jsonnet.LocalBind{b}, t.localBinds)
+}
+
+var nextGenID = 0
+
+func genid() int {
+	nextGenID++
+	return nextGenID
+}
+
+func GenerateBindName() string {
+	return fmt.Sprintf("t%d", genid())
 }

@@ -164,18 +164,14 @@ func (e *T) WithScope(
 				}
 			}
 
-			newVS := outerVS
-			if len(assignedVars) != 0 {
-				newVS = jsonnet.AddMap(outerVS, assignedVars)
+			if len(assignedVars) == 0 {
+				return vExpr, state.New(nil, outerVS, h), nil
 			}
 
-			// local [nestedPostState.name] = [nestedPostState.body];
-			// {
-			//   v: [nestedPostState.v],
-			//   vs: [preStateName].vs + [assignedVars],
-			//   h: [nestedPostState.h],
-			// }
-			return vExpr, state.New([]*jsonnet.LocalBind{}, newVS, h), nil
+			newVSName := state.GenerateBindName()
+			return vExpr, state.New([]*jsonnet.LocalBind{
+				{Name: newVSName, Body: jsonnet.AddMap(outerVS, assignedVars)},
+			}, jsonnet.Index(newVSName), h), nil
 		},
 	)
 }
