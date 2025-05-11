@@ -176,7 +176,6 @@ local join(heap, ary) =
     ),
   );
 
-
 local isTrueOnHeap(heap, v) =
   if isAddr(v) then
     local w = deref(heap, v);
