@@ -722,11 +722,11 @@ local tpl_(templates) =
         j = loop(i);
       [j, std.parseInt(str[i:j])],
 
-    local lexString(str, i) =  // FIXME: escape
+    local lexString(str, i, quote) =  // FIXME: escape
       local
         loop(i) =
           if i >= std.length(str) then error 'lexString: unexpected eof'
-          else if str[i] == '"' then i + 1
+          else if str[i] == quote then i + 1
           else loop(i + 1) tailstrict,
         j = loop(i + 1);
       [j, str[i + 1:j - 1]],
@@ -748,8 +748,8 @@ local tpl_(templates) =
           lexInsideAction(str, i + 1, out + [{ t: c }]) tailstrict
         else if isSpace(c) then
           lexInsideAction(str, findNonSpace(str, i + 1, 1), out + [{ t: ' ' }]) tailstrict
-        else if c == '"' then
-          local res = lexString(str, i), j = res[0], v = res[1];
+        else if c == '"' || c == '`' then
+          local res = lexString(str, i, c), j = res[0], v = res[1];
           lexInsideAction(str, j, out + [{ t: 'string', v: v }]) tailstrict
         else if isNumeric(c) then
           local res = lexNumber(str, i), j = res[0], v = res[1];
