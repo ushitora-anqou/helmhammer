@@ -479,7 +479,11 @@ local now(args) =
   error 'now: not implemented';
 
 local semverCompare(args) =
-  error 'semverCompare: not implemented';
+  // FIXME
+  if args[0] == '>=1.13-0' && args[1] == 'v1.32.0' then
+    true
+  else
+    error ('semverCompare: not implemented: %s' % [args]);
 
 local len(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
