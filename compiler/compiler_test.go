@@ -12,6 +12,7 @@ import (
 	"text/template"
 
 	jsonpatch "github.com/evanphx/json-patch"
+	"github.com/go-openapi/jsonpointer"
 	gojsonnet "github.com/google/go-jsonnet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -346,7 +347,8 @@ func TestCompileChartValid(t *testing.T) {
 
 	tests := []struct {
 		name, chartDir, namespace, valuesYaml, expectedOutput string
-		patch                                                 []byte
+		patches                                               []string
+		yamlPaths                                             []string
 	}{
 		{name: "skeleton", chartDir: "skeleton", expectedOutput: "skeleton.expected"},
 		{name: "testchart", chartDir: "testchart", expectedOutput: "testchart.expected"},
@@ -355,12 +357,11 @@ func TestCompileChartValid(t *testing.T) {
 			name:           "topolvm 0: empty values",
 			chartDir:       "thirdparty/topolvm-15.5.4",
 			expectedOutput: "topolvm-15.5.4-0.expected",
-			patch: []byte(
-				// Some fields won't be equal due to toYaml's different behaviour.
-				`[
-					{"op": "remove", "path": "/2/spec/template/metadata/annotations/checksum~1config"},
-					{"op": "remove", "path": "/31/data/lvmd.yaml"}
-				]`),
+			// Some fields won't be equal due to toYaml's different behaviour.
+			patches: []string{
+				`{"op": "remove", "path": "/2/spec/template/metadata/annotations/checksum~1config"}`,
+			},
+			yamlPaths: []string{`/31/data/lvmd.yaml`},
 		},
 
 		{
@@ -369,16 +370,16 @@ func TestCompileChartValid(t *testing.T) {
 			namespace:      "topolvm-system",
 			valuesYaml:     "topolvm-15.5.4-1.values.yaml",
 			expectedOutput: "topolvm-15.5.4-1.expected",
-			patch: []byte(
-				// ❯ cat topolvm-15.5.4-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-lvmd-0" and .kind == "DaemonSet") | index(true)'
-				// 2
-				//
-				// ❯ cat topolvm-15.5.4-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-lvmd-0" and .kind == "ConfigMap") | index(true)'
-				// 32
-				`[
-					{"op": "remove", "path": "/2/spec/template/metadata/annotations/checksum~1config"},
-					{"op": "remove", "path": "/32/data/lvmd.yaml"}
-				]`),
+
+			// ❯ cat topolvm-15.5.4-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-lvmd-0" and .kind == "DaemonSet") | index(true)'
+			// 2
+			patches: []string{
+				`{"op": "remove", "path": "/2/spec/template/metadata/annotations/checksum~1config"}`,
+			},
+
+			// ❯ cat topolvm-15.5.4-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "topolvm-lvmd-0" and .kind == "ConfigMap") | index(true)'
+			// 32
+			yamlPaths: []string{`/32/data/lvmd.yaml`},
 		},
 
 		{
@@ -441,17 +442,16 @@ func TestCompileChartValid(t *testing.T) {
 			name:           "argo-cd 0: empty",
 			chartDir:       "thirdparty/argo-cd-7.9.0",
 			expectedOutput: "argo-cd-7.9.0-0.expected",
-			patch: []byte(
-				`[
-					{"op": "remove", "path": "/3/spec/template/metadata/annotations/checksum~1cmd-params"},
-					{"op": "remove", "path": "/4/spec/template/metadata/annotations/checksum~1cmd-params"},
-					{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cmd-params"},
-					{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cmd-params"},
-					{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cmd-params"},
-					{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cm"},
-					{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cm"},
-					{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cm"}
-				]`),
+			patches: []string{
+				`{"op": "remove", "path": "/3/spec/template/metadata/annotations/checksum~1cmd-params"}`,
+				`{"op": "remove", "path": "/4/spec/template/metadata/annotations/checksum~1cmd-params"}`,
+				`{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cmd-params"}`,
+				`{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cmd-params"}`,
+				`{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cmd-params"}`,
+				`{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cm"}`,
+				`{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cm"}`,
+				`{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cm"}`,
+			},
 		},
 
 		{
@@ -460,23 +460,22 @@ func TestCompileChartValid(t *testing.T) {
 			namespace:      "argocd",
 			valuesYaml:     "argo-cd-7.9.0-1.values.yaml",
 			expectedOutput: "argo-cd-7.9.0-1.expected",
-			patch: []byte(
-				`[
-					{"op": "remove", "path": "/3/spec/template/metadata/annotations/checksum~1cmd-params"},
-					{"op": "remove", "path": "/4/spec/template/metadata/annotations/checksum~1cmd-params"},
-					{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cmd-params"},
-					{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cmd-params"},
-					{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cmd-params"},
-					{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cm"},
-					{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cm"},
-					{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cm"}
-				]`),
+			patches: []string{
+				`{"op": "remove", "path": "/3/spec/template/metadata/annotations/checksum~1cmd-params"}`,
+				`{"op": "remove", "path": "/4/spec/template/metadata/annotations/checksum~1cmd-params"}`,
+				`{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cmd-params"}`,
+				`{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cmd-params"}`,
+				`{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cmd-params"}`,
+				`{"op": "remove", "path": "/7/spec/template/metadata/annotations/checksum~1cm"}`,
+				`{"op": "remove", "path": "/8/spec/template/metadata/annotations/checksum~1cm"}`,
+				`{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cm"}`,
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			finalizeManifests := func(src []byte, patch jsonpatch.Patch) []map[string]any {
+			finalizeManifests := func(src []byte, patch jsonpatch.Patch) ([]map[string]any, []map[string]any) {
 				var parsed []map[string]any
 				err := json.Unmarshal(src, &parsed)
 				require.NoError(t, err)
@@ -499,13 +498,22 @@ func TestCompileChartValid(t *testing.T) {
 				err = json.Unmarshal(patched, &parsed)
 				require.NoError(t, err)
 
-				return parsed
+				var unpatchedParsed []map[string]any
+				err = json.Unmarshal(sorted, &unpatchedParsed)
+				require.NoError(t, err)
+
+				return parsed, unpatchedParsed
 			}
 
 			var patch jsonpatch.Patch
-			if tt.patch != nil {
+			if tt.patches != nil || tt.yamlPaths != nil {
+				yamlPatches := convertPathsToRemovalPatches(tt.yamlPaths)
+				src := fmt.Sprintf(
+					"[%s]",
+					strings.Join(slices.Concat(tt.patches, yamlPatches), ","),
+				)
 				var err error
-				patch, err = jsonpatch.DecodePatch(tt.patch)
+				patch, err = jsonpatch.DecodePatch([]byte(src))
 				require.NoError(t, err)
 			}
 
@@ -538,13 +546,44 @@ func TestCompileChartValid(t *testing.T) {
 				jsonnetExpr.StringWithPrologue(),
 			)
 			require.NoError(t, err)
-			got := finalizeManifests([]byte(strings.Trim(gotString, "\n")), patch)
+			got, unpatchedGot := finalizeManifests([]byte(strings.Trim(gotString, "\n")), patch)
 
 			expectedSrc, err := os.ReadFile(filepath.Join(testdataDir, tt.expectedOutput))
 			require.NoError(t, err)
-			expected := finalizeManifests(expectedSrc, patch)
+			expected, unpatchedExpected := finalizeManifests(expectedSrc, patch)
 
 			assert.Equal(t, expected, got)
+
+			for _, yamlPath := range tt.yamlPaths {
+				p, err := jsonpointer.New(yamlPath)
+				require.NoError(t, err)
+
+				expectedRaw, _, err := p.Get(unpatchedExpected)
+				require.NoError(t, err)
+				expected, ok := expectedRaw.(string)
+				require.True(t, ok)
+				var expectedParsed any
+				err = yaml.Unmarshal([]byte(expected), &expectedParsed)
+				require.NoError(t, err)
+
+				gotRaw, _, err := p.Get(unpatchedGot)
+				assert.NoError(t, err)
+				got, ok := gotRaw.(string)
+				assert.True(t, ok)
+				var gotParsed any
+				err = yaml.Unmarshal([]byte(got), &gotParsed)
+				assert.NoError(t, err)
+
+				assert.Equal(t, expectedParsed, gotParsed)
+			}
 		})
 	}
+}
+
+func convertPathsToRemovalPatches(paths []string) []string {
+	patches := make([]string, 0, len(paths))
+	for _, path := range paths {
+		patches = append(patches, fmt.Sprintf(`{"op":"remove","path":"%s"}`, path))
+	}
+	return patches
 }

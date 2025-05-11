@@ -5,6 +5,7 @@ go 1.24.1
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/evanphx/json-patch v5.9.11+incompatible
+	github.com/go-openapi/jsonpointer v0.21.0
 	github.com/google/go-jsonnet v0.21.0-rc2
 	github.com/stretchr/testify v1.10.0
 	helm.sh/helm/v3 v3.17.3
@@ -19,10 +20,13 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
+	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
+	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
