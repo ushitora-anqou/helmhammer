@@ -890,15 +890,29 @@ local tpl_(templates) =
       else
         error ('evalOperand: unknown operand: %s' % [op]),
 
+    local predefinedFuncs = {
+      nindent: nindent,
+      toYaml: toYaml,
+      printf: printf,
+    },
+
     local evalCommand(command, final, s0) =
       local op0 = command.v[0];  // FIXME
       if op0.t == 'id' then
-        if op0.v == 'nindent' then
-          local res = evalOperand(command.v[1], s0), s = res[0], val = res[1];
-          [s, nindent([val, final])]
-        else if op0.v == 'toYaml' then
-          local res = evalOperand(command.v[1], s0), s = res[0], val = res[1];
-          [s, toYaml([val])]
+        if std.objectHas(predefinedFuncs, op0.v) then
+          local
+            res =
+              std.foldl(
+                function(acc, c)
+                  local res = evalOperand(c, acc[0]), s = res[0], val = res[1];
+                  [s, acc[1] + [val]],
+                command.v[1:],
+                [s0, []],
+              ),
+            s = res[0],
+            args = res[1];
+          local args1 = if final == null then args else args + [final];
+          [s, predefinedFuncs[op0.v](args1)]
         else if op0.v == 'include' then
           local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
           local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
