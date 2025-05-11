@@ -23,3 +23,9 @@ testMergeOverwrite:
 - {{ $r2.keyvalue.key2 }}
 - {{ $r2.keyvalue.key3 }}
 {{ end }}
+
+testKubeVersion:
+  major: {{ .Capabilities.KubeVersion.Major }}
+  minor: {{ .Capabilities.KubeVersion.Minor }}
+  version: {{ .Capabilities.KubeVersion.Version }}
+  t2: {{ .Capabilities.KubeVersion.GitVersion }}

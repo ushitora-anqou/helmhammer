@@ -998,6 +998,17 @@ local mergeTwoValues(heap, dstp, srcp) =
     );
     newheap;
 
+local parseKubeVersion(src) =
+  local i0 = if src[0] == 'v' then 1 else 0;
+  local res = std.split(src[i0:], '.');
+  assert std.length(res) == 3;
+  {
+    Major: res[0],
+    Minor: res[1],
+    Version: 'v%s.%s.%s' % res,
+    GitVersion: self.Version,
+  };
+
 local chartMain(
   chartName,
   chartVersion,
@@ -1012,7 +1023,7 @@ local chartMain(
   crds,
   files,
       ) =
-  function(values={}, namespace='default', includeCrds=false)
+  function(values={}, namespace='default', includeCrds=false, kubeVersion='1.32.0')
     local
       dotRes = fromConst(initialHeap, {
         Values: values,
@@ -1027,6 +1038,7 @@ local chartMain(
           Service: releaseService,
         },
         Capabilities: capabilities {
+          KubeVersion: parseKubeVersion(kubeVersion),
           APIVersions: {  // FIXME: APIVersions should behave as an array, too.
             Has(heap, args):
               assert std.length(args) == 1;

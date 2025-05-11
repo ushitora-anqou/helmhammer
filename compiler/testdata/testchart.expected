@@ -19,6 +19,12 @@
       "value1",
       "value2",
       "value3"
-    ]
+    ],
+    "testKubeVersion": {
+      "major": 1,
+      "minor": 32,
+      "version": "v1.32.0",
+      "t2": "v1.32.0"
+    }
   }
 ]

@@ -56,7 +56,7 @@ $(eval $(call generate-expected-file,skeleton.expected, \
 	helm template skeleton skeleton \
 ))
 $(eval $(call generate-expected-file,testchart.expected, \
-	helm template testchart testchart \
+	helm template --kube-version="v1.32.0" testchart testchart \
 ))
 $(eval $(call generate-expected-file,topolvm-15.5.4-0.expected, \
 	helm template topolvm thirdparty/topolvm-15.5.4 \
