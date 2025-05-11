@@ -744,8 +744,8 @@ local tpl_(templates) =
         else if c == '$' then
           local res = lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
           lexInsideAction(str, j, out + [{ t: 'var', v: v }]) tailstrict
-        else if c == '|' then
-          lexInsideAction(str, i + 1, out + [{ t: '|' }]) tailstrict
+        else if c == '|' || c == '(' || c == ')' then
+          lexInsideAction(str, i + 1, out + [{ t: c }]) tailstrict
         else if isSpace(c) then
           lexInsideAction(str, findNonSpace(str, i + 1, 1), out + [{ t: ' ' }]) tailstrict
         else if c == '"' then
@@ -763,7 +763,7 @@ local tpl_(templates) =
             else if v == 'end' then { t: 'end' }
             else { t: 'id', v: v };
           lexInsideAction(str, j, out + [token]) tailstrict
-        else error 'lexInsideAction: unexpected char',
+        else error ('lexInsideAction: unexpected char: %s' % [c]),
 
     local lex(str, i, out, skipLeadingSpaces=false) =
       if i >= std.length(str) then
@@ -788,6 +788,11 @@ local tpl_(templates) =
         [i + 1, { t: 'number', v: tok.v }]
       else if tok.t == 'string' then
         [i + 1, { t: 'string', v: tok.v }]
+      else if tok.t == '(' then
+        local res = parseAction(toks, i + 1), j = res[0], node = res[1];
+        assert node.t == 'action';
+        assert node.v.t == 'pipeline';
+        [j, node.v]
       else error ('parseTerm: unexpected token: %s' % [tok.t]),
 
     local parseOperand(toks, i) =
@@ -804,7 +809,7 @@ local tpl_(templates) =
     local parseCommand(toks, i) =
       local loop(i0, operands) =
         local i = findNonSpaceToken(toks, i0);
-        if toks[i].t == '}}' then
+        if toks[i].t == '}}' || toks[i].t == ')' then
           [i, { t: 'command', v: operands }]
         else if toks[i].t == '|' then
           [i + 1, { t: 'command', v: operands }]
@@ -816,7 +821,8 @@ local tpl_(templates) =
     local parsePipeline(toks, i) =
       local loop(i0, commands) =
         local i = findNonSpaceToken(toks, i0);
-        if toks[i].t == '}}' then [i + 1, { t: 'pipeline', v: commands }]
+        if toks[i].t == '}}' || toks[i].t == ')' then
+          [i + 1, { t: 'pipeline', v: commands }]
         else
           local res = parseCommand(toks, i), j = res[0], node = res[1];
           loop(j, commands + [node]);
@@ -838,6 +844,18 @@ local tpl_(templates) =
       else
         [l2 + 1, { pipe: pipe.v, list: list, elseList: elseList }],
 
+    local parseAction(toks, i0) =
+      local i = findNonSpaceToken(toks, i0);
+      local tok = toks[i];
+      if tok.t == 'with' || tok.t == 'if' then
+        local res = parseControl(toks, i + 1), j = res[0], node = res[1];
+        [j, { t: tok.t, v: node }]
+      else if tok.t == 'else' || tok.t == 'end' then
+        [i, null]
+      else
+        local res = parsePipeline(toks, i), j = res[0], node = res[1];
+        [j, { t: 'action', v: node }],
+
     local parseList(toks, i) =
       local loop(i, root) =
         if i >= std.length(toks) then
@@ -847,17 +865,9 @@ local tpl_(templates) =
           if tok.t == 'text' then
             loop(i + 1, root { v+: [{ t: 'text', v: tok.v }] }) tailstrict
           else if tok.t == '{{' then
-            local i0 = i;
-            local i = findNonSpaceToken(toks, i0 + 1);
-            local tok = toks[i];
-            if tok.t == 'with' || tok.t == 'if' then
-              local res = parseControl(toks, i + 1), j = res[0], node = res[1];
-              loop(j, root { v+: [{ t: tok.t, v: node }] }) tailstrict
-            else if tok.t == 'else' || tok.t == 'end' then
-              [i, root]
-            else
-              local res = parsePipeline(toks, i), j = res[0], node = res[1];
-              loop(j, root { v+: [{ t: 'action', v: node }] }) tailstrict;
+            local res = parseAction(toks, i + 1), j = res[0], node = res[1];
+            if node == null then [j, root]
+            else loop(j, root { v+: [node] }) tailstrict;
       loop(i, { t: 'list', v: [] }),
 
     local parse(toks/* tokens */, i) =
@@ -875,8 +885,10 @@ local tpl_(templates) =
         [s0, s0.vars[op.v]]
       else if op.t == 'number' || op.t == 'string' then
         [s0, op.v]
+      else if op.t == 'pipeline' then
+        evalPipeline(op.v, s0)
       else
-        error 'evalOperand: unknown operand',
+        error ('evalOperand: unknown operand: %s' % [op]),
 
     local evalCommand(command, final, s0) =
       local op0 = command.v[0];  // FIXME
@@ -884,6 +896,9 @@ local tpl_(templates) =
         if op0.v == 'nindent' then
           local res = evalOperand(command.v[1], s0), s = res[0], val = res[1];
           [s, nindent([val, final])]
+        else if op0.v == 'toYaml' then
+          local res = evalOperand(command.v[1], s0), s = res[0], val = res[1];
+          [s, toYaml([val])]
         else if op0.v == 'include' then
           local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
           local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
@@ -1170,6 +1185,7 @@ assert tpl___(['{{ if .A }}{{.B}}{{ end }}', { A: { B: 1 }, B: 0 }]) == '0';
 assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
 assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
 assert tpl___(['{{ tpl "{{.A}}" $ }}', { A: 10 }]) == '10';
+assert tpl___(['{{ tpl (toYaml .A) . }}', { A: { B: '{{.B}}' }, B: 'hello' }]) == 'B: "hello"';
 
 assert fromConst({}, 10) == [{}, 10];
 assert fromConst({}, true) == [{}, true];
