@@ -453,6 +453,14 @@ local regexReplaceAll(args) =
   else
     error ('regexReplaceAll: not implemented: %s' % [args]);
 
+local mustRegexReplaceAllLiteral(args) =
+  assert std.length(args) == 3;
+  assert std.isString(args[0]);
+  assert std.isString(args[1]);
+  assert std.isString(args[2]);
+  if args[1] == '' then ''
+  else error ('mustRegexReplaceAllLiteral: not implemented: %s' % [args]);
+
 local ternary(args) =
   assert std.length(args) == 3;
   assert std.isBoolean(args[2]);
@@ -469,6 +477,19 @@ local dateInZone(args) =
 
 local now(args) =
   error 'now: not implemented';
+
+local semverCompare(args) =
+  error 'semverCompare: not implemented';
+
+local len(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  if isAddr(heap, args[0]) then
+    [std.length(deref(heap, args[0])), vs, heap]
+  else if std.isString(args[0]) then
+    [std.length(args[0]), vs, heap]
+  else
+    error 'len: invalid type';
 
 local not(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
