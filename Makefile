@@ -37,6 +37,7 @@ $(eval $(call download-chart,cloudflare-tunnel-ingress-controller-0.0.18,https:/
 $(eval $(call download-chart,sidekiq-prometheus-exporter-0.2.1,https://github.com/Strech/sidekiq-prometheus-exporter/releases/download/v0.2.0-4/sidekiq-prometheus-exporter-0.2.1.tgz,sidekiq-prometheus-exporter))
 $(eval $(call download-chart,cert-manager-v1.17.2,https://charts.jetstack.io/charts/cert-manager-v1.17.2.tgz,cert-manager))
 $(eval $(call download-chart,argo-cd-7.9.0,https://github.com/argoproj/argo-helm/releases/download/argo-cd-7.9.0/argo-cd-7.9.0.tgz,argo-cd))
+$(eval $(call download-chart,promtail-6.16.6,https://github.com/grafana/helm-charts/releases/download/promtail-6.16.6/promtail-6.16.6.tgz,promtail))
 
 .PHONY: download-all-charts
 download-all-charts: \
@@ -45,7 +46,8 @@ download-all-charts: \
 	$(TESTDATA_THIRDPARTY)/cloudflare-tunnel-ingress-controller-0.0.18 \
 	$(TESTDATA_THIRDPARTY)/sidekiq-prometheus-exporter-0.2.1 \
 	$(TESTDATA_THIRDPARTY)/cert-manager-v1.17.2 \
-	$(TESTDATA_THIRDPARTY)/argo-cd-7.9.0
+	$(TESTDATA_THIRDPARTY)/argo-cd-7.9.0 \
+	$(TESTDATA_THIRDPARTY)/promtail-6.16.6
 
 define generate-expected-file
 $$(TESTDATA)/$(1):
@@ -100,6 +102,14 @@ $(eval $(call generate-expected-file,argo-cd-7.9.0-1.expected, \
 		--include-crds --namespace argocd \
 		--values argo-cd-7.9.0-1.values.yaml \
 ))
+$(eval $(call generate-expected-file,promtail-6.16.6-0.expected, \
+	helm template promtail thirdparty/promtail-6.16.6 \
+))
+$(eval $(call generate-expected-file,promtail-6.16.6-1.expected, \
+	helm template promtail thirdparty/promtail-6.16.6 \
+		--include-crds --namespace promtail \
+		--values promtail-6.16.6-1.values.yaml \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -116,4 +126,6 @@ generate-all-expected-files: \
 	$(TESTDATA)/cert-manager-v1.17.2-0.expected \
 	$(TESTDATA)/cert-manager-v1.17.2-1.expected \
 	$(TESTDATA)/argo-cd-7.9.0-0.expected \
-	$(TESTDATA)/argo-cd-7.9.0-1.expected
+	$(TESTDATA)/argo-cd-7.9.0-1.expected \
+	$(TESTDATA)/promtail-6.16.6-0.expected \
+	$(TESTDATA)/promtail-6.16.6-1.expected

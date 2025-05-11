@@ -471,6 +471,44 @@ func TestCompileChartValid(t *testing.T) {
 				`{"op": "remove", "path": "/9/spec/template/metadata/annotations/checksum~1cm"}`,
 			},
 		},
+
+		{
+			name:           "promtail 0: empty",
+			chartDir:       "thirdparty/promtail-6.16.6",
+			expectedOutput: "promtail-6.16.6-0.expected",
+
+			// ❯ cat compiler/testdata/promtail-6.16.6-0.expected | jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.spec.template.metadata.annotations | has("checksum/config")) | index(true)'
+			// 0
+			patches: []string{
+				`{"op": "remove", "path": "/0/spec/template/metadata/annotations/checksum~1config"}`,
+			},
+
+			// ❯ cat compiler/testdata/promtail-6.16.6-0.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "promtail" and .kind == "Secret") | index(true)'
+			// 3
+			yamlPaths: []string{
+				`/3/stringData/promtail.yaml`,
+			},
+		},
+
+		{
+			name:           "promtail 1: some values",
+			chartDir:       "thirdparty/promtail-6.16.6",
+			namespace:      "promtail",
+			valuesYaml:     "promtail-6.16.6-1.values.yaml",
+			expectedOutput: "promtail-6.16.6-1.expected",
+
+			// ❯ cat compiler/testdata/promtail-6.16.6-0.expected | jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.spec.template.metadata.annotations | has("checksum/config")) | index(true)'
+			// 0
+			patches: []string{
+				`{"op": "remove", "path": "/0/spec/template/metadata/annotations/checksum~1config"}`,
+			},
+
+			// ❯ cat compiler/testdata/promtail-6.16.6-0.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "promtail" and .kind == "Secret") | index(true)'
+			// 3
+			yamlPaths: []string{
+				`/3/stringData/promtail.yaml`,
+			},
+		},
 	}
 
 	for _, tt := range tests {
