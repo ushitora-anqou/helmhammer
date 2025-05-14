@@ -359,220 +359,8 @@ local escapeStringJsonSQuote(str_) =
         ch;
   "'%s'" % std.join('', [trans(ch) for ch in std.stringChars(str)]);
 
-// cf. https://github.com/google/jsonnet/blob/42153e4c993c2b8196f98c5ab6f1150f398e3d0d/stdlib/std.jsonnet#L1089
-local letters = std.set(std.stringChars('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_-/'));
-local digits = std.set(std.stringChars('0123456789'));
-local intChars = std.set(digits + std.stringChars('_-'));
-local binChars = std.set(intChars + std.stringChars('b'));
-local hexChars = std.set(digits + std.stringChars('abcdefx_-'));
-local floatChars = std.set(digits + std.stringChars('e._-'));
-local dateChars = std.set(digits + std.stringChars('-'));
-local safeChars = std.set(letters + floatChars);
-local manifestYamlDoc(value, indent_array_in_object=false, quote_keys=true) =
-  local onlyChars(charSet, strSet) =
-    if std.length(std.setInter(charSet, strSet)) == std.length(strSet) then
-      true
-    else false;
-  local isReserved(key) =
-    // NOTE: These values are checked for case insensitively.
-    // While this approach results in some false positives, it eliminates
-    // the risk of missing a permutation.
-    local reserved = [
-      // Boolean types taken from https://yaml.org/type/bool.html
-      'true',
-      'false',
-      'yes',
-      'no',
-      'on',
-      'off',
-      'y',
-      'n',
-      // Numerical words taken from https://yaml.org/type/float.html
-      '.nan',
-      '-.inf',
-      '+.inf',
-      '.inf',
-      'null',
-      // Invalid keys that contain no invalid characters
-      '-',
-      '---',
-      '',
-    ];
-    local bad = [word for word in reserved if word == std.asciiLower(key)];
-    if std.length(bad) > 0 then
-      true
-    else false;
-  local typeMatch(m_key, type) =
-    // Look for positive or negative numerical types (ex: 0x)
-    if std.substr(m_key, 0, 2) == type || std.substr(m_key, 0, 3) == '-' + type then
-      true
-    else false;
-  local bareSafe(key) =
-    /*
-    For a key to be considered safe to emit without quotes, the following must be true
-      - All characters must match [a-zA-Z0-9_/\-]
-      - Not match the integer format defined in https://yaml.org/type/int.html
-      - Not match the float format defined in https://yaml.org/type/float.html
-      - Not match the timestamp format defined in https://yaml.org/type/timestamp.html
-      - Not match the boolean format defined in https://yaml.org/type/bool.html
-      - Not match the null format defined in https://yaml.org/type/null.html
-      - Not match (ignoring case) any reserved words which pass the above tests.
-        Reserved words are defined in isReserved() above.
-
-    Since the remaining YAML types require characters outside the set chosen as valid
-    for the elimination of quotes from the YAML output, the remaining types listed at
-    https://yaml.org/type/ are by default always quoted.
-    */
-    local keyLc = std.asciiLower(key);
-    local keyChars = std.stringChars(key);
-    local keySet = std.set(keyChars);
-    local keySetLc = std.set(std.stringChars(keyLc));
-    // Check for unsafe characters
-    if !onlyChars(safeChars, keySet) then
-      false
-    // Check for reserved words
-    else if isReserved(key) then
-      false
-    /* Check for timestamp values.  Since spaces and colons are already forbidden,
-       all that could potentially pass is the standard date format (ex MM-DD-YYYY, YYYY-DD-MM, etc).
-       This check is even more conservative: Keys that meet all of the following:
-         - all characters match [0-9\-]
-         - has exactly 2 dashes
-       are considered dates.
-    */
-    else if onlyChars(dateChars, keySet)
-            && std.length(std.findSubstr('-', key)) == 2 then
-      false
-    /* Check for integers.  Keys that meet all of the following:
-         - all characters match [0-9_\-]
-         - has at most 1 dash
-       are considered integers.
-    */
-    else if onlyChars(intChars, keySetLc)
-            && std.length(std.findSubstr('-', key)) < 2 then
-      false
-    /* Check for binary integers.  Keys that meet all of the following:
-         - all characters match [0-9b_\-]
-         - has at least 3 characters
-         - starts with (-)0b
-       are considered binary integers.
-    */
-    else if onlyChars(binChars, keySetLc)
-            && std.length(key) > 2
-            && typeMatch(key, '0b') then
-      false
-    /* Check for floats. Keys that meet all of the following:
-         - all characters match [0-9e._\-]
-         - has at most a single period
-         - has at most two dashes
-         - has at most 1 'e'
-       are considered floats.
-    */
-    else if onlyChars(floatChars, keySetLc)
-            && std.length(std.findSubstr('.', key)) == 1
-            && std.length(std.findSubstr('-', key)) < 3
-            && std.length(std.findSubstr('e', keyLc)) < 2 then
-      false
-    /* Check for hexadecimals.  Keys that meet all of the following:
-         - all characters match [0-9a-fx_\-]
-         - has at most 1 dash
-         - has at least 3 characters
-         - starts with (-)0x
-       are considered hexadecimals.
-    */
-    else if onlyChars(hexChars, keySetLc)
-            && std.length(std.findSubstr('-', key)) < 2
-            && std.length(keyChars) > 2
-            && typeMatch(key, '0x') then
-      false
-    // All checks pass. Key is safe for emission without quotes.
-    else true;
-  local escapeKeyYaml(key) =
-    if bareSafe(key) then key else escapeStringJsonSQuote(key);
-  local aux(v, path, cindent) =
-    if v == true then
-      'true'
-    else if v == false then
-      'false'
-    else if v == null then
-      'null'
-    else if std.isNumber(v) then
-      '' + v
-    else if std.isString(v) then
-      local len = std.length(v);
-      if len == 0 then
-        "''"
-      else if v[len - 1] == '\n' then
-        local split = std.split(v, '\n');
-        std.join('\n' + cindent + '  ', ['|'] + split[0:std.length(split) - 1])
-      else
-        escapeStringJsonSQuote(v)
-    else if std.isFunction(v) then
-      error 'Tried to manifest function at ' + path
-    else if std.isArray(v) then
-      if std.length(v) == 0 then
-        '[]'
-      else
-        local params(value) =
-          if std.isArray(value) && std.length(value) > 0 then {
-            // While we could avoid the new line, it yields YAML that is
-            // hard to read, e.g.:
-            // - - - 1
-            //     - 2
-            //   - - 3
-            //     - 4
-            new_indent: cindent + '  ',
-            space: '\n' + self.new_indent,
-          } else if std.isObject(value) && std.length(value) > 0 then {
-            new_indent: cindent + '  ',
-            // In this case we can start on the same line as the - because the indentation
-            // matches up then.  The converse is not true, because fields are not always
-            // 1 character long.
-            space: ' ',
-          } else {
-            // In this case, new_indent is only used in the case of multi-line strings.
-            new_indent: cindent,
-            space: ' ',
-          };
-        local range = std.range(0, std.length(v) - 1);
-        local parts = [
-          '-' + param.space + aux(v[i], path + [i], param.new_indent)
-          for i in range
-          for param in [params(v[i])]
-        ];
-        std.join('\n' + cindent, parts)
-    else if std.isObject(v) then
-      if std.length(v) == 0 then
-        '{}'
-      else
-        local params(value) =
-          if std.isArray(value) && std.length(value) > 0 then {
-            // Not indenting allows e.g.
-            // ports:
-            // - 80
-            // instead of
-            // ports:
-            //   - 80
-            new_indent: if indent_array_in_object then cindent + '  ' else cindent,
-            space: '\n' + self.new_indent,
-          } else if std.isObject(value) && std.length(value) > 0 then {
-            new_indent: cindent + '  ',
-            space: '\n' + self.new_indent,
-          } else {
-            // In this case, new_indent is only used in the case of multi-line strings.
-            new_indent: cindent,
-            space: ' ',
-          };
-        local lines = [
-          (if quote_keys then escapeStringJsonSQuote(k) else escapeKeyYaml(k)) + ':' + param.space + aux(v[k], path + [k], param.new_indent)
-          for k in std.objectFields(v)
-          for param in [params(v[k])]
-        ];
-        std.join('\n' + cindent, lines);
-  aux(value, [], '');
-
 local toYaml(args) =
-  manifestYamlDoc(args[0], quote_keys=false);
+  std.manifestYamlDoc(args[0], quote_keys=false);
 
 local dir(args) =
   assert std.length(args) == 1;
@@ -1024,12 +812,15 @@ local tpl_(templates) =
 
     local lexString(str, i, quote) =  // FIXME: escape
       local
-        loop(i) =
-          if i >= std.length(str) then error 'lexString: unexpected eof'
-          else if str[i] == quote then i + 1
-          else loop(i + 1) tailstrict,
-        j = loop(i + 1);
-      [j, str[i + 1:j - 1]],
+        loop(j) =
+          if j >= std.length(str) then error 'lexString: unexpected eof'
+          else if str[j] == '\\' && str[j + 1] == quote then [j + 2, j]
+          else if str[j] == quote then [j + 1, j]
+          else loop(j + 1) tailstrict,
+        res = loop(i + 1),
+        j1 = res[0],
+        j2 = res[1];
+      [j1, str[i + 1:j2]],
 
     local lexInsideAction(str, i, out) =
       if i + 2 < std.length(str) && str[i] == '-' && str[i + 1] == '}' && str[i + 2] == '}' then
@@ -1048,6 +839,9 @@ local tpl_(templates) =
           lexInsideAction(str, i + 1, out + [{ t: c }]) tailstrict
         else if isSpace(c) then
           lexInsideAction(str, findNonSpace(str, i + 1, 1), out + [{ t: ' ' }]) tailstrict
+        else if c == '\\' && (str[i + 1] == '"' || str[i + 1] == '`') then
+          local res = lexString(str, i + 1, str[i + 1]), j = res[0], v = res[1];
+          lexInsideAction(str, j, out + [{ t: 'string', v: v }]) tailstrict
         else if c == '"' || c == '`' then
           local res = lexString(str, i, c), j = res[0], v = res[1];
           lexInsideAction(str, j, out + [{ t: 'string', v: v }]) tailstrict
@@ -1520,7 +1314,7 @@ assert tpl___(['{{ if .A }}{{.B}}{{ end }}', { A: { B: 1 }, B: 0 }]) == '0';
 assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
 assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
 assert tpl___(['{{ tpl "{{.A}}" $ }}', { A: 10 }]) == '10';
-assert tpl___(['{{ tpl (toYaml .A) . }}', { A: { B: '{{.B}}' }, B: 'hello' }]) == "B: 'hello'";
+assert tpl___(['{{ tpl (toYaml .A) . }}', { A: { B: '{{.B}}' }, B: 'hello' }]) == 'B: "hello"';
 assert tpl___(['{{ with .A }}{{ end }}{{ .C }}', { A: { B: 1 }, C: 2 }]) == '2';
 
 
