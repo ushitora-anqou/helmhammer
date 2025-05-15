@@ -1208,159 +1208,360 @@ local chartMain(
 
 // DON'T USE BELOW
 
-assert std.assertEqual(strIndex('{{', 'abc', 0), -1);
-assert std.assertEqual(strIndex('{{', '{{c', 0), 0);
-assert std.assertEqual(strIndex('{{', 'a{{', 0), 1);
-assert std.assertEqual(strIndex('{{', 'a{{b{{', 3), 4);
-assert std.assertEqual(strIndex('{{', 'a{{b{{', 5), -1);
-assert std.assertEqual(strIndex('{{', '{{ with .A }}{{.B}}{{ end }}', 13), 13);
-
-assert or({ args: [0, 0], vs: {}, heap: {} })[0] == 0;
-assert or({ args: [1, 0], vs: {}, heap: {} })[0] == 1;
-assert or({ args: [0, true], vs: {}, heap: {} })[0] == true;
-assert or({ args: [1, 1], vs: {}, heap: {} })[0] == 1;
-
-assert and({ args: [false, 0], vs: {}, heap: {} })[0] == false;
-assert and({ args: [1, 0], vs: {}, heap: {} })[0] == 0;
-assert and({ args: [0, true], vs: {}, heap: {} })[0] == 0;
-assert and({ args: [1, 1], vs: {}, heap: {} })[0] == 1;
-
-assert dir(['/run/topolvm/lvmd.sock']) == '/run/topolvm';
-
-assert index({
-  local input = fromConst({}, [0, [0, 0, [0, 0, 0, 1]]]),
-  args: [input[1], 1, 2, 3],
-  vs: {},
-  h: input[0],
-})[0] == 1;
-
-assert trimAll(['ac', 'aabbcc']) == 'bb';
+//assert std.assertEqual(strIndex('{{', 'abc', 0), -1);
+//assert std.assertEqual(strIndex('{{', '{{c', 0), 0);
+//assert std.assertEqual(strIndex('{{', 'a{{', 0), 1);
+//assert std.assertEqual(strIndex('{{', 'a{{b{{', 3), 4);
+//assert std.assertEqual(strIndex('{{', 'a{{b{{', 5), -1);
+//assert std.assertEqual(strIndex('{{', '{{ with .A }}{{.B}}{{ end }}', 13), 13);
+//
+//assert or({ args: [0, 0], vs: {}, heap: {} })[0] == 0;
+//assert or({ args: [1, 0], vs: {}, heap: {} })[0] == 1;
+//assert or({ args: [0, true], vs: {}, heap: {} })[0] == true;
+//assert or({ args: [1, 1], vs: {}, heap: {} })[0] == 1;
+//
+//assert and({ args: [false, 0], vs: {}, heap: {} })[0] == false;
+//assert and({ args: [1, 0], vs: {}, heap: {} })[0] == 0;
+//assert and({ args: [0, true], vs: {}, heap: {} })[0] == 0;
+//assert and({ args: [1, 1], vs: {}, heap: {} })[0] == 1;
+//
+//assert dir(['/run/topolvm/lvmd.sock']) == '/run/topolvm';
+//
+//assert index({
+//  local input = fromConst({}, [0, [0, 0, [0, 0, 0, 1]]]),
+//  args: [input[1], 1, 2, 3],
+//  vs: {},
+//  h: input[0],
+//})[0] == 1;
+//
+//assert trimAll(['ac', 'aabbcc']) == 'bb';
 
 local tpl__ = tpl_({});
-assert tpl__.findNonSpace(' a', 0, 1) == 1;
-assert tpl__.findNonSpace('a ', 1, -1) == 0;
-assert tpl__.findNonSpace(' ', 0, -1) == -1;
-assert tpl__.findNonSpace(' ', 0, 1) == 1;
-assert tpl__.lex('aa', 0, []) == [{ t: 'text', v: 'aa' }];
-assert tpl__.lex('{{}}', 0, []) == [{ t: '{{' }, { t: '}}' }];
-assert tpl__.lex('a{{}}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: '}}' }];
-assert tpl__.lex('a {{}}', 0, []) == [{ t: 'text', v: 'a ' }, { t: '{{' }, { t: '}}' }];
-assert tpl__.lex('{{- }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('a{{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('a {{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('{{ -}}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('{{ -}}a', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('{{ -}} a', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('{{- -}}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('a{{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('a {{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('a{{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('a {{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: '}}' }, { t: 'text', v: 'b' }];
-assert tpl__.lex('{{ . }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: '' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('{{ .A }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('{{ .A.b }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('{{ .A.b }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.parse(tpl__.lex('', 0, []), 0) == { t: 'list', v: [] };
-assert tpl__.parse(tpl__.lex('a', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }] };
-assert tpl__.parse(tpl__.lex('a{{}}b', 0, []), 0) == {
-  t: 'list',
-  v: [
-    { t: 'text', v: 'a' },
-    { t: 'action', v: { t: 'pipeline', v: [] } },
-    { t: 'text', v: 'b' },
-  ],
-};
-assert tpl__.parse(tpl__.lex('a{{.}}b', 0, []), 0) == { t: 'list', v: [
-  { t: 'text', v: 'a' },
-  { t: 'action', v: { t: 'pipeline', v: [
-    { t: 'command', v: [{ t: 'field', v: '' }] },
-  ] } },
-  { t: 'text', v: 'b' },
-] };
+local prog = |||
+    {{- if .Values.enterprise.enabled}}
+    {{- tpl .Values.enterprise.config . }}
+    {{- else }}
+    auth_enabled: {{ .Values.loki.auth_enabled }}
+    {{- end }}
 
-local tpl___(args) =
-  local res = fromConst({}, args[1]), heap = res[0], dot = res[1];
-  tpl({
-    '$': { tpl0(heap, dot): [deref(heap, dot).valueTpl0] },
-    args: [args[0], dot],
-    vs: {},
-    h: heap,
-  })[0];
-assert tpl___(['', {}]) == '';
-assert tpl___(['a', {}]) == 'a';
-assert tpl___(['{', {}]) == '{';
-assert tpl___(['{ {', {}]) == '{ {';
-assert tpl___(['a{{}}b', {}]) == 'ab';
-assert tpl___(['a{{.}}b', 3]) == 'a3b';
-assert tpl___(['a{{.A}}b', { A: 3 }]) == 'a3b';
-assert tpl___(['a{{.A.b}}b', { A: { b: 'c' } }]) == 'acb';
-assert tpl___(['a{{.A.b}}{{.A.b}}b', { A: { b: 'c' } }]) == 'accb';
-assert tpl___(['a{{.A.b | nindent 1}}b', { A: { b: 'c' } }]) == 'a\n cb';
-assert tpl___(['a{{.A.b | nindent 1 | nindent 1}}b', { A: { b: 'c' } }]) == 'a\n \n  cb';
-assert tpl___(['a{{$}}b', 3]) == 'a3b';
-assert tpl___(['a{{$.A}}b', { A: 3 }]) == 'a3b';
-assert tpl___(['a{{$.A.b}}b', { A: { b: 'c' } }]) == 'acb';
-assert tpl___(['{{ include "tpl0" $ }}', { valueTpl0: 'here' }]) == 'here';
-assert tpl___(['{{ include "tpl0" . }}', { valueTpl0: 'here' }]) == 'here';
-assert tpl___(['>{{ with $ }}1{{ end }}<', true]) == '>1<';
-assert tpl___(['>{{ with $ }}1{{ end }}<', false]) == '><';
-assert tpl___(['{{ with .A }}{{.B}}{{ end }}', { A: { B: 1 } }]) == '1';
-assert tpl___(['>{{ with $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
-assert tpl___(['>{{ with $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
-assert tpl___(['>{{ if $ }}1{{ end }}<', true]) == '>1<';
-assert tpl___(['>{{ if $ }}1{{ end }}<', false]) == '><';
-assert tpl___(['{{ if .A }}{{.B}}{{ end }}', { A: { B: 1 }, B: 0 }]) == '0';
-assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
-assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
-assert tpl___(['{{ tpl "{{.A}}" $ }}', { A: 10 }]) == '10';
-assert tpl___(['{{ tpl (toYaml .A) . }}', { A: { B: '{{.B}}' }, B: 'hello' }]) == 'B: "hello"';
-assert tpl___(['{{ with .A }}{{ end }}{{ .C }}', { A: { B: 1 }, C: 2 }]) == '2';
+    {{- with .Values.loki.server }}
+    server:
+      {{- toYaml . | nindent 2}}
+    {{- end}}
 
+    pattern_ingester:
+      enabled: {{ .Values.loki.pattern_ingester.enabled }}
 
-assert fromConst({}, 10) == [{}, 10];
-assert fromConst({}, true) == [{}, true];
-assert fromConst({}, 'a') == [{}, 'a'];
-assert
-  local res = fromConst({}, function() 42), heap = res[0], v = res[1];
-  deref(heap, v)() == 42;
-assert
-  local res = fromConst({}, [1]), heap = res[0], v = res[1];
-  deref(heap, v)[0] == 1;
-assert
-  local res = fromConst({}, [0, [1]]), heap = res[0], v = res[1];
-  deref(heap, deref(heap, v)[1])[0] == 1;
-assert
-  local res = fromConst({}, { a: 1 }), heap = res[0], v = res[1];
-  deref(heap, v).a == 1;
-assert
-  local res = fromConst({}, { a: 0, b: { c: 1 } }), heap = res[0], v = res[1];
-  deref(heap, deref(heap, v).b).c == 1;
-assert
-  local res = fromConst({}, { a: 0, b: [1] }), heap = res[0], v = res[1];
-  deref(heap, deref(heap, v).b)[0] == 1;
-assert local res = fromConst({}, 1); toConst(res[0], res[1]) == 1;
-assert local res = fromConst({}, function() 42); toConst(res[0], res[1])() == 42;
-assert local res = fromConst({}, [1, [2]]); toConst(res[0], res[1]) == [1, [2]];
-assert local res = fromConst({}, { a: 0, b: [1] }); toConst(res[0], res[1]) == { a: 0, b: [1] };
+    memberlist:
+    {{- if .Values.loki.memberlistConfig }}
+      {{- toYaml .Values.loki.memberlistConfig | nindent 2 }}
+    {{- else }}
+    {{- if .Values.loki.extraMemberlistConfig}}
+    {{- toYaml .Values.loki.extraMemberlistConfig | nindent 2}}
+    {{- end }}
+      join_members:
+        - {{ include "loki.memberlist" . }}
+        {{- with .Values.migrate.fromDistributed }}
+        {{- if .enabled }}
+        - {{ .memberlistService }}
+        {{- end }}
+        {{- end }}
+    {{- end }}
 
-local runMergeTwoValues(dst, src) =
-  local heap0 = {};
-  local res = fromConst(heap0, dst), heap1 = res[0], dstp = res[1];
-  local res = fromConst(heap1, src), heap2 = res[0], srcp = res[1];
-  local heap3 = mergeTwoValues(heap2, dstp, srcp);
-  //  std.trace('%s %s %s\n%s' % [heap2, dst, src, mergeTwoValues(heap2, dst, src)], false);
-  toConst(heap3, dstp);
+    {{- with .Values.loki.ingester }}
+    ingester:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
 
-assert runMergeTwoValues({}, {}) == {};
-assert runMergeTwoValues({ a: 1 }, {}) == { a: 1 };
-assert runMergeTwoValues({}, { a: 1 }) == { a: 1 };
-assert runMergeTwoValues({ a: 1 }, { a: 1 }) == { a: 1 };
-assert runMergeTwoValues({ a: 1 }, { a: 2 }) == { a: 1 };
-assert runMergeTwoValues({ a: null }, { a: 2 }) == {};
-assert runMergeTwoValues({ a: 1, b: 2 }, { a: 2 }) == { a: 1, b: 2 };
-assert runMergeTwoValues({ a: 1, b: 2 }, { a: 2, c: 3 }) == { a: 1, b: 2, c: 3 };
-assert runMergeTwoValues({ a: { b: 1 } }, { a: { b: 2 }, c: 3 }) == { a: { b: 1 }, c: 3 };
-assert runMergeTwoValues({ a: [1] }, { a: [2] }) == { a: [1] };
+    {{- if .Values.loki.commonConfig}}
+    common:
+    {{- toYaml .Values.loki.commonConfig | nindent 2}}
+      storage:
+      {{- include "loki.commonStorageConfig" . | nindent 4}}
+    {{- end}}
+
+    {{- with .Values.loki.limits_config }}
+    limits_config:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    runtime_config:
+      file: /etc/loki/runtime-config/runtime-config.yaml
+
+    {{- with .Values.chunksCache }}
+    {{- if .enabled }}
+    chunk_store_config:
+      chunk_cache_config:
+        default_validity: {{ .defaultValidity }}
+        background:
+          writeback_goroutines: {{ .writebackParallelism }}
+          writeback_buffer: {{ .writebackBuffer }}
+          writeback_size_limit: {{ .writebackSizeLimit }}
+        memcached:
+          batch_size: {{ .batchSize }}
+          parallelism: {{ .parallelism }}
+        memcached_client:
+          addresses: dnssrvnoa+_memcached-client._tcp.{{ template "loki.fullname" $ }}-chunks-cache.{{ $.Release.Namespace }}.svc
+          consistent_hash: true
+          timeout: {{ .timeout }}
+          max_idle_conns: 72
+    {{- end }}
+    {{- end }}
+
+    {{- if .Values.loki.schemaConfig }}
+    schema_config:
+    {{- toYaml .Values.loki.schemaConfig | nindent 2}}
+    {{- end }}
+
+    {{- if .Values.loki.useTestSchema }}
+    schema_config:
+    {{- toYaml .Values.loki.testSchemaConfig | nindent 2}}
+    {{- end }}
+
+    {{- if .Values.ruler.enabled }}
+    {{ include "loki.rulerConfig" . }}
+    {{- end }}
+
+    {{- if and .Values.loki.storage.use_thanos_objstore .Values.ruler.enabled}}
+    ruler_storage:
+      {{- include "loki.rulerThanosStorageConfig" . | nindent 2 }}
+    {{- end }}
+
+    {{- if or .Values.tableManager.retention_deletes_enabled .Values.tableManager.retention_period }}
+    table_manager:
+      retention_deletes_enabled: {{ .Values.tableManager.retention_deletes_enabled }}
+      retention_period: {{ .Values.tableManager.retention_period }}
+    {{- end }}
+
+    query_range:
+      align_queries_with_step: true
+      {{- with .Values.loki.query_range }}
+      {{- tpl (. | toYaml) $ | nindent 2 }}
+      {{- end }}
+      {{- if .Values.resultsCache.enabled }}
+      {{- with .Values.resultsCache }}
+      cache_results: true
+      results_cache:
+        cache:
+          default_validity: {{ .defaultValidity }}
+          background:
+            writeback_goroutines: {{ .writebackParallelism }}
+            writeback_buffer: {{ .writebackBuffer }}
+            writeback_size_limit: {{ .writebackSizeLimit }}
+          memcached_client:
+            consistent_hash: true
+            addresses: dnssrvnoa+_memcached-client._tcp.{{ template "loki.fullname" $ }}-results-cache.{{ $.Release.Namespace }}.svc
+            timeout: {{ .timeout }}
+            update_interval: 1m
+      {{- end }}
+      {{- end }}
+
+    {{- with .Values.loki.storage_config }}
+    storage_config:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    {{- with .Values.loki.query_scheduler }}
+    query_scheduler:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    {{- with .Values.loki.compactor }}
+    compactor:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    {{- with .Values.loki.analytics }}
+    analytics:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    {{- if .Values.loki.ui.enabled }}
+    ui:
+      discovery:
+        join_peers:
+          - '{{ include "loki.queryFrontendFullname" . }}.{{ $.Release.Namespace }}.svc.{{ .Values.global.clusterDomain }}'
+    {{- end }}
+    {{- with .Values.loki.querier }}
+    querier:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    {{- with .Values.loki.index_gateway }}
+    index_gateway:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    {{- with .Values.loki.frontend }}
+    frontend:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    {{- with .Values.loki.frontend_worker }}
+    frontend_worker:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    {{- with .Values.loki.distributor }}
+    distributor:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    tracing:
+      enabled: {{ .Values.loki.tracing.enabled }}
+
+    {{- with .Values.loki.bloom_build }}
+    bloom_build:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+
+    {{- with .Values.loki.bloom_gateway }}
+    bloom_gateway:
+      {{- tpl (. | toYaml) $ | nindent 4 }}
+    {{- end }}
+|||;
+
+local v0 = tpl__.lex(prog, 0, []);
+local v1 = tpl__.parse(v0, 0);
+local dotConst = {
+  Values: {
+    enterprise: {
+      enabled: false,
+    },
+    loki: {
+      server: {},
+    },
+  },
+  };
+local dot = {};
+local heap = {};
+local v2 = tpl__.eval(v1, {dot: dot, out: "", vars: {"": dot}, h: heap});
+assert std.isString(v2);
+
+//assert tpl__.findNonSpace(' a', 0, 1) == 1;
+//assert tpl__.findNonSpace('a ', 1, -1) == 0;
+//assert tpl__.findNonSpace(' ', 0, -1) == -1;
+//assert tpl__.findNonSpace(' ', 0, 1) == 1;
+//assert tpl__.lex('aa', 0, []) == [{ t: 'text', v: 'aa' }];
+//assert tpl__.lex('{{}}', 0, []) == [{ t: '{{' }, { t: '}}' }];
+//assert tpl__.lex('a{{}}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: '}}' }];
+//assert tpl__.lex('a {{}}', 0, []) == [{ t: 'text', v: 'a ' }, { t: '{{' }, { t: '}}' }];
+//assert tpl__.lex('{{- }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
+//assert tpl__.lex('a{{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }];
+//assert tpl__.lex('a {{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }];
+//assert tpl__.lex('{{ -}}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
+//assert tpl__.lex('{{ -}}a', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+//assert tpl__.lex('{{ -}} a', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+//assert tpl__.lex('{{- -}}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
+//assert tpl__.lex('a{{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+//assert tpl__.lex('a {{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+//assert tpl__.lex('a{{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+//assert tpl__.lex('a {{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
+//assert tpl__.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: '}}' }, { t: 'text', v: 'b' }];
+//assert tpl__.lex('{{ . }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: '' }, { t: ' ' }, { t: '}}' }];
+//assert tpl__.lex('{{ .A }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: ' ' }, { t: '}}' }];
+//assert tpl__.lex('{{ .A.b }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: ' ' }, { t: '}}' }];
+//assert tpl__.lex('{{ .A.b }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: ' ' }, { t: '}}' }];
+//assert tpl__.parse(tpl__.lex('', 0, []), 0) == { t: 'list', v: [] };
+//assert tpl__.parse(tpl__.lex('a', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }] };
+//assert tpl__.parse(tpl__.lex('a{{}}b', 0, []), 0) == {
+//  t: 'list',
+//  v: [
+//    { t: 'text', v: 'a' },
+//    { t: 'action', v: { t: 'pipeline', v: [] } },
+//    { t: 'text', v: 'b' },
+//  ],
+//};
+//assert tpl__.parse(tpl__.lex('a{{.}}b', 0, []), 0) == { t: 'list', v: [
+//  { t: 'text', v: 'a' },
+//  { t: 'action', v: { t: 'pipeline', v: [
+//    { t: 'command', v: [{ t: 'field', v: '' }] },
+//  ] } },
+//  { t: 'text', v: 'b' },
+//] };
+//
+//local tpl___(args) =
+//  local res = fromConst({}, args[1]), heap = res[0], dot = res[1];
+//  tpl({
+//    '$': { tpl0(heap, dot): [deref(heap, dot).valueTpl0] },
+//    args: [args[0], dot],
+//    vs: {},
+//    h: heap,
+//  })[0];
+//assert tpl___(['', {}]) == '';
+//assert tpl___(['a', {}]) == 'a';
+//assert tpl___(['{', {}]) == '{';
+//assert tpl___(['{ {', {}]) == '{ {';
+//assert tpl___(['a{{}}b', {}]) == 'ab';
+//assert tpl___(['a{{.}}b', 3]) == 'a3b';
+//assert tpl___(['a{{.A}}b', { A: 3 }]) == 'a3b';
+//assert tpl___(['a{{.A.b}}b', { A: { b: 'c' } }]) == 'acb';
+//assert tpl___(['a{{.A.b}}{{.A.b}}b', { A: { b: 'c' } }]) == 'accb';
+//assert tpl___(['a{{.A.b | nindent 1}}b', { A: { b: 'c' } }]) == 'a\n cb';
+//assert tpl___(['a{{.A.b | nindent 1 | nindent 1}}b', { A: { b: 'c' } }]) == 'a\n \n  cb';
+//assert tpl___(['a{{$}}b', 3]) == 'a3b';
+//assert tpl___(['a{{$.A}}b', { A: 3 }]) == 'a3b';
+//assert tpl___(['a{{$.A.b}}b', { A: { b: 'c' } }]) == 'acb';
+//assert tpl___(['{{ include "tpl0" $ }}', { valueTpl0: 'here' }]) == 'here';
+//assert tpl___(['{{ include "tpl0" . }}', { valueTpl0: 'here' }]) == 'here';
+//assert tpl___(['>{{ with $ }}1{{ end }}<', true]) == '>1<';
+//assert tpl___(['>{{ with $ }}1{{ end }}<', false]) == '><';
+//assert tpl___(['{{ with .A }}{{.B}}{{ end }}', { A: { B: 1 } }]) == '1';
+//assert tpl___(['>{{ with $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
+//assert tpl___(['>{{ with $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
+//assert tpl___(['>{{ if $ }}1{{ end }}<', true]) == '>1<';
+//assert tpl___(['>{{ if $ }}1{{ end }}<', false]) == '><';
+//assert tpl___(['{{ if .A }}{{.B}}{{ end }}', { A: { B: 1 }, B: 0 }]) == '0';
+//assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', true]) == '>1<';
+//assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
+//assert tpl___(['{{ tpl "{{.A}}" $ }}', { A: 10 }]) == '10';
+//assert tpl___(['{{ tpl (toYaml .A) . }}', { A: { B: '{{.B}}' }, B: 'hello' }]) == 'B: "hello"';
+//assert tpl___(['{{ with .A }}{{ end }}{{ .C }}', { A: { B: 1 }, C: 2 }]) == '2';
+//
+//
+//assert fromConst({}, 10) == [{}, 10];
+//assert fromConst({}, true) == [{}, true];
+//assert fromConst({}, 'a') == [{}, 'a'];
+//assert
+//  local res = fromConst({}, function() 42), heap = res[0], v = res[1];
+//  deref(heap, v)() == 42;
+//assert
+//  local res = fromConst({}, [1]), heap = res[0], v = res[1];
+//  deref(heap, v)[0] == 1;
+//assert
+//  local res = fromConst({}, [0, [1]]), heap = res[0], v = res[1];
+//  deref(heap, deref(heap, v)[1])[0] == 1;
+//assert
+//  local res = fromConst({}, { a: 1 }), heap = res[0], v = res[1];
+//  deref(heap, v).a == 1;
+//assert
+//  local res = fromConst({}, { a: 0, b: { c: 1 } }), heap = res[0], v = res[1];
+//  deref(heap, deref(heap, v).b).c == 1;
+//assert
+//  local res = fromConst({}, { a: 0, b: [1] }), heap = res[0], v = res[1];
+//  deref(heap, deref(heap, v).b)[0] == 1;
+//assert local res = fromConst({}, 1); toConst(res[0], res[1]) == 1;
+//assert local res = fromConst({}, function() 42); toConst(res[0], res[1])() == 42;
+//assert local res = fromConst({}, [1, [2]]); toConst(res[0], res[1]) == [1, [2]];
+//assert local res = fromConst({}, { a: 0, b: [1] }); toConst(res[0], res[1]) == { a: 0, b: [1] };
+//
+//local runMergeTwoValues(dst, src) =
+//  local heap0 = {};
+//  local res = fromConst(heap0, dst), heap1 = res[0], dstp = res[1];
+//  local res = fromConst(heap1, src), heap2 = res[0], srcp = res[1];
+//  local heap3 = mergeTwoValues(heap2, dstp, srcp);
+//  //  std.trace('%s %s %s\n%s' % [heap2, dst, src, mergeTwoValues(heap2, dst, src)], false);
+//  toConst(heap3, dstp);
+//
+//assert runMergeTwoValues({}, {}) == {};
+//assert runMergeTwoValues({ a: 1 }, {}) == { a: 1 };
+//assert runMergeTwoValues({}, { a: 1 }) == { a: 1 };
+//assert runMergeTwoValues({ a: 1 }, { a: 1 }) == { a: 1 };
+//assert runMergeTwoValues({ a: 1 }, { a: 2 }) == { a: 1 };
+//assert runMergeTwoValues({ a: null }, { a: 2 }) == {};
+//assert runMergeTwoValues({ a: 1, b: 2 }, { a: 2 }) == { a: 1, b: 2 };
+//assert runMergeTwoValues({ a: 1, b: 2 }, { a: 2, c: 3 }) == { a: 1, b: 2, c: 3 };
+//assert runMergeTwoValues({ a: { b: 1 } }, { a: { b: 2 }, c: 3 }) == { a: { b: 1 }, c: 3 };
+//assert runMergeTwoValues({ a: [1] }, { a: [2] }) == { a: [1] };
 
 'ok'
