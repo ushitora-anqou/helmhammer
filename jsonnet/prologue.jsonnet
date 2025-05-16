@@ -1436,7 +1436,7 @@ local dotConst = {
 local dot = {};
 local heap = {};
 local v2 = tpl__.eval(v1, {dot: dot, out: "", vars: {"": dot}, h: heap});
-assert std.isString(v2);
+assert std.isString(v2.out);
 
 //assert tpl__.findNonSpace(' a', 0, 1) == 1;
 //assert tpl__.findNonSpace('a ', 1, -1) == 0;
