@@ -534,6 +534,19 @@ func TestCompileChartValid(t *testing.T) {
 			// cat compiler/testdata/tempo-1.21.1-0.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "tempo" and .kind == "ConfigMap") | index(true)'
 			yamlPaths: []string{`/1/data/tempo.yaml`},
 		},
+
+		{
+			name:           "tempo: some values",
+			chartDir:       "thirdparty/tempo-1.21.1",
+			namespace:      "tempo",
+			valuesYaml:     "tempo-1.21.1-1.values.yaml",
+			expectedOutput: "tempo-1.21.1-1.expected",
+			patches: []string{
+				`{"op": "remove", "path": "/0/spec/template/metadata/annotations/checksum~1config"}`,
+			},
+			// cat compiler/testdata/tempo-1.21.1-0.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "tempo" and .kind == "ConfigMap") | index(true)'
+			yamlPaths: []string{`/1/data/tempo.yaml`},
+		},
 	}
 
 	for _, tt := range tests {

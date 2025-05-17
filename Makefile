@@ -122,6 +122,11 @@ $(eval $(call generate-expected-file,loki-6.29.0-1.expected, \
 $(eval $(call generate-expected-file,tempo-1.21.1-0.expected, \
 	helm template tempo thirdparty/tempo-1.21.1 \
 ))
+$(eval $(call generate-expected-file,tempo-1.21.1-1.expected, \
+	helm template tempo thirdparty/tempo-1.21.1 \
+		--include-crds --namespace tempo \
+		--values tempo-1.21.1-1.values.yaml \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -142,4 +147,5 @@ generate-all-expected-files: \
 	$(TESTDATA)/promtail-6.16.6-0.expected \
 	$(TESTDATA)/promtail-6.16.6-1.expected \
 	$(TESTDATA)/loki-6.29.0-1.expected \
-	$(TESTDATA)/tempo-1.21.1-0.expected
+	$(TESTDATA)/tempo-1.21.1-0.expected \
+	$(TESTDATA)/tempo-1.21.1-1.expected
