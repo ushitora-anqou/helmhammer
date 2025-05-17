@@ -544,7 +544,6 @@ local base(args0) = error 'base: not implemented';
 local camelcase(args0) = error 'camelcase: not implemented';
 local compact(args0) = error 'compact: not implemented';
 local dig(args0) = error 'dig: not implemented';
-local ext(args0) = error 'ext: not implemented';
 local first(args0) = error 'first: not implemented';
 local hasPrefix(args0) = error 'hasPrefix: not implemented';
 local kebabcase(args0) = error 'kebabcase: not implemented';
@@ -555,6 +554,17 @@ local until(args0) = error 'until: not implemented';
 local untitle(args0) = error 'untitle: not implemented';
 local urlParse(args0) = error 'urlParse: not implemented';
 local without(args0) = error 'without: not implemented';
+
+local ext_(path) =
+  assert std.isString(path);
+  local dots = std.findSubstr('.', path);
+  if std.length(dots) == 0 then ''
+  else path[dots[std.length(dots) - 1]:];
+
+local ext(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  [ext_(args[0]), vs, heap];
 
 local regexSplit(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
@@ -1400,5 +1410,9 @@ assert runMergeTwoValues({ a: 1, b: 2 }, { a: 2 }) == { a: 1, b: 2 };
 assert runMergeTwoValues({ a: 1, b: 2 }, { a: 2, c: 3 }) == { a: 1, b: 2, c: 3 };
 assert runMergeTwoValues({ a: { b: 1 } }, { a: { b: 2 }, c: 3 }) == { a: { b: 1 }, c: 3 };
 assert runMergeTwoValues({ a: [1] }, { a: [2] }) == { a: [1] };
+
+assert std.assertEqual(ext_('/a/b/c/bar.css'), '.css');
+assert std.assertEqual(ext_('/'), '');
+assert std.assertEqual(ext_(''), '');
 
 'ok'
