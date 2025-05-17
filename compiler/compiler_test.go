@@ -523,6 +523,17 @@ func TestCompileChartValid(t *testing.T) {
 			// ❯ cat compiler/testdata/loki-6.29.0-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "loki" and .kind == "ConfigMap") | index(true)'
 			yamlPaths: []string{`/5/data/config.yaml`},
 		},
+
+		{
+			name:           "tempo: empty",
+			chartDir:       "thirdparty/tempo-1.21.1",
+			expectedOutput: "tempo-1.21.1-0.expected",
+			patches: []string{
+				`{"op": "remove", "path": "/0/spec/template/metadata/annotations/checksum~1config"}`,
+			},
+			// cat compiler/testdata/tempo-1.21.1-0.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "tempo" and .kind == "ConfigMap") | index(true)'
+			yamlPaths: []string{`/1/data/tempo.yaml`},
+		},
 	}
 
 	for _, tt := range tests {

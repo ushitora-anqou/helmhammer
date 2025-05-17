@@ -39,6 +39,7 @@ $(eval $(call download-chart,cert-manager-v1.17.2,https://charts.jetstack.io/cha
 $(eval $(call download-chart,argo-cd-7.9.0,https://github.com/argoproj/argo-helm/releases/download/argo-cd-7.9.0/argo-cd-7.9.0.tgz,argo-cd))
 $(eval $(call download-chart,promtail-6.16.6,https://github.com/grafana/helm-charts/releases/download/promtail-6.16.6/promtail-6.16.6.tgz,promtail))
 $(eval $(call download-chart,loki-6.29.0,https://github.com/grafana/helm-charts/releases/download/helm-loki-6.29.0/loki-6.29.0.tgz,loki))
+$(eval $(call download-chart,tempo-1.21.1,https://github.com/grafana/helm-charts/releases/download/tempo-1.21.1/tempo-1.21.1.tgz,tempo))
 
 .PHONY: download-all-charts
 download-all-charts: \
@@ -49,7 +50,8 @@ download-all-charts: \
 	$(TESTDATA_THIRDPARTY)/cert-manager-v1.17.2 \
 	$(TESTDATA_THIRDPARTY)/argo-cd-7.9.0 \
 	$(TESTDATA_THIRDPARTY)/promtail-6.16.6 \
-	$(TESTDATA_THIRDPARTY)/loki-6.29.0
+	$(TESTDATA_THIRDPARTY)/loki-6.29.0 \
+	$(TESTDATA_THIRDPARTY)/tempo-1.21.1
 
 define generate-expected-file
 $$(TESTDATA)/$(1):
@@ -117,6 +119,9 @@ $(eval $(call generate-expected-file,loki-6.29.0-1.expected, \
 		--include-crds --namespace loki \
 		--values loki-6.29.0-1.values.yaml \
 ))
+$(eval $(call generate-expected-file,tempo-1.21.1-0.expected, \
+	helm template tempo thirdparty/tempo-1.21.1 \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -136,4 +141,5 @@ generate-all-expected-files: \
 	$(TESTDATA)/argo-cd-7.9.0-1.expected \
 	$(TESTDATA)/promtail-6.16.6-0.expected \
 	$(TESTDATA)/promtail-6.16.6-1.expected \
-	$(TESTDATA)/loki-6.29.0-1.expected
+	$(TESTDATA)/loki-6.29.0-1.expected \
+	$(TESTDATA)/tempo-1.21.1-0.expected
