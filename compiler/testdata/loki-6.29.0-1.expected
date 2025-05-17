@@ -1,0 +1,817 @@
+[
+  {
+    "apiVersion": "apps/v1",
+    "kind": "DaemonSet",
+    "metadata": {
+      "name": "loki-canary",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2",
+        "app.kubernetes.io/component": "canary"
+      }
+    },
+    "spec": {
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "loki",
+          "app.kubernetes.io/instance": "loki",
+          "app.kubernetes.io/component": "canary"
+        }
+      },
+      "updateStrategy": {
+        "rollingUpdate": {
+          "maxUnavailable": 1
+        },
+        "type": "RollingUpdate"
+      },
+      "template": {
+        "metadata": {
+          "labels": {
+            "app.kubernetes.io/name": "loki",
+            "app.kubernetes.io/instance": "loki",
+            "app.kubernetes.io/component": "canary"
+          }
+        },
+        "spec": {
+          "serviceAccountName": "loki-canary",
+          "securityContext": {
+            "fsGroup": 10001,
+            "runAsGroup": 10001,
+            "runAsNonRoot": true,
+            "runAsUser": 10001
+          },
+          "containers": [
+            {
+              "name": "loki-canary",
+              "image": "docker.io/grafana/loki-canary:3.4.2",
+              "imagePullPolicy": "IfNotPresent",
+              "args": [
+                "-addr=loki-gateway.loki.svc.cluster.local.:80",
+                "-labelname=pod",
+                "-labelvalue=$(POD_NAME)",
+                "-push=true"
+              ],
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "capabilities": {
+                  "drop": [
+                    "ALL"
+                  ]
+                },
+                "readOnlyRootFilesystem": true
+              },
+              "volumeMounts": null,
+              "ports": [
+                {
+                  "name": "http-metrics",
+                  "containerPort": 3500,
+                  "protocol": "TCP"
+                }
+              ],
+              "env": [
+                {
+                  "name": "POD_NAME",
+                  "valueFrom": {
+                    "fieldRef": {
+                      "fieldPath": "metadata.name"
+                    }
+                  }
+                }
+              ],
+              "readinessProbe": {
+                "httpGet": {
+                  "path": "/metrics",
+                  "port": "http-metrics"
+                },
+                "initialDelaySeconds": 15,
+                "timeoutSeconds": 1
+              }
+            }
+          ],
+          "volumes": null
+        }
+      }
+    }
+  },
+  {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+      "name": "loki-gateway",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2",
+        "app.kubernetes.io/component": "gateway"
+      }
+    },
+    "spec": {
+      "replicas": 1,
+      "strategy": {
+        "type": "RollingUpdate"
+      },
+      "revisionHistoryLimit": 10,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "loki",
+          "app.kubernetes.io/instance": "loki",
+          "app.kubernetes.io/component": "gateway"
+        }
+      },
+      "template": {
+        "metadata": {
+          "annotations": {
+            "checksum/config": "7c25c2e5c8d10d46d97ac1811e16ee845bf776bf7543c05f7820088b14912662"
+          },
+          "labels": {
+            "app.kubernetes.io/name": "loki",
+            "app.kubernetes.io/instance": "loki",
+            "app.kubernetes.io/component": "gateway"
+          }
+        },
+        "spec": {
+          "serviceAccountName": "loki",
+          "enableServiceLinks": true,
+          "securityContext": {
+            "fsGroup": 101,
+            "runAsGroup": 101,
+            "runAsNonRoot": true,
+            "runAsUser": 101
+          },
+          "terminationGracePeriodSeconds": 30,
+          "containers": [
+            {
+              "name": "nginx",
+              "image": "docker.io/nginxinc/nginx-unprivileged:1.27-alpine",
+              "imagePullPolicy": "IfNotPresent",
+              "ports": [
+                {
+                  "name": "http-metrics",
+                  "containerPort": 8080,
+                  "protocol": "TCP"
+                }
+              ],
+              "readinessProbe": {
+                "httpGet": {
+                  "path": "/",
+                  "port": "http-metrics"
+                },
+                "initialDelaySeconds": 15,
+                "timeoutSeconds": 1
+              },
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "capabilities": {
+                  "drop": [
+                    "ALL"
+                  ]
+                },
+                "readOnlyRootFilesystem": true
+              },
+              "volumeMounts": [
+                {
+                  "name": "config",
+                  "mountPath": "/etc/nginx"
+                },
+                {
+                  "name": "tmp",
+                  "mountPath": "/tmp"
+                },
+                {
+                  "name": "docker-entrypoint-d-override",
+                  "mountPath": "/docker-entrypoint.d"
+                }
+              ],
+              "resources": {}
+            }
+          ],
+          "affinity": {
+            "podAntiAffinity": {
+              "requiredDuringSchedulingIgnoredDuringExecution": [
+                {
+                  "labelSelector": {
+                    "matchLabels": {
+                      "app.kubernetes.io/component": "gateway"
+                    }
+                  },
+                  "topologyKey": "kubernetes.io/hostname"
+                }
+              ]
+            }
+          },
+          "volumes": [
+            {
+              "name": "config",
+              "configMap": {
+                "name": "loki-gateway"
+              }
+            },
+            {
+              "name": "tmp",
+              "emptyDir": {}
+            },
+            {
+              "name": "docker-entrypoint-d-override",
+              "emptyDir": {}
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "apiVersion": "apps/v1",
+    "kind": "StatefulSet",
+    "metadata": {
+      "name": "loki",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2",
+        "app.kubernetes.io/component": "single-binary",
+        "app.kubernetes.io/part-of": "memberlist"
+      }
+    },
+    "spec": {
+      "replicas": 1,
+      "podManagementPolicy": "Parallel",
+      "updateStrategy": {
+        "rollingUpdate": {
+          "partition": 0
+        }
+      },
+      "serviceName": "loki-headless",
+      "revisionHistoryLimit": 10,
+      "persistentVolumeClaimRetentionPolicy": {
+        "whenDeleted": "Delete",
+        "whenScaled": "Delete"
+      },
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "loki",
+          "app.kubernetes.io/instance": "loki",
+          "app.kubernetes.io/component": "single-binary"
+        }
+      },
+      "template": {
+        "metadata": {
+          "annotations": {
+            "checksum/config": "2576438434e481a486acfbe6ae71b49ccb0fdd8da73000c8fb0f7bbb38eebaea"
+          },
+          "labels": {
+            "app.kubernetes.io/name": "loki",
+            "app.kubernetes.io/instance": "loki",
+            "app.kubernetes.io/component": "single-binary",
+            "app.kubernetes.io/part-of": "memberlist"
+          }
+        },
+        "spec": {
+          "serviceAccountName": "loki",
+          "automountServiceAccountToken": true,
+          "enableServiceLinks": true,
+          "securityContext": {
+            "fsGroup": 10001,
+            "runAsGroup": 10001,
+            "runAsNonRoot": true,
+            "runAsUser": 10001
+          },
+          "terminationGracePeriodSeconds": 30,
+          "containers": [
+            {
+              "name": "loki-sc-rules",
+              "image": "kiwigrid/k8s-sidecar:1.30.2",
+              "imagePullPolicy": "IfNotPresent",
+              "env": [
+                {
+                  "name": "METHOD",
+                  "value": "WATCH"
+                },
+                {
+                  "name": "LABEL",
+                  "value": "loki_rule"
+                },
+                {
+                  "name": "FOLDER",
+                  "value": "/rules"
+                },
+                {
+                  "name": "RESOURCE",
+                  "value": "both"
+                },
+                {
+                  "name": "WATCH_SERVER_TIMEOUT",
+                  "value": "60"
+                },
+                {
+                  "name": "WATCH_CLIENT_TIMEOUT",
+                  "value": "60"
+                },
+                {
+                  "name": "LOG_LEVEL",
+                  "value": "INFO"
+                }
+              ],
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "capabilities": {
+                  "drop": [
+                    "ALL"
+                  ]
+                },
+                "readOnlyRootFilesystem": true
+              },
+              "volumeMounts": [
+                {
+                  "name": "sc-rules-volume",
+                  "mountPath": "/rules"
+                }
+              ]
+            },
+            {
+              "name": "loki",
+              "image": "docker.io/grafana/loki:3.4.2",
+              "imagePullPolicy": "IfNotPresent",
+              "args": [
+                "-config.file=/etc/loki/config/config.yaml",
+                "-target=all"
+              ],
+              "ports": [
+                {
+                  "name": "http-metrics",
+                  "containerPort": 3100,
+                  "protocol": "TCP"
+                },
+                {
+                  "name": "grpc",
+                  "containerPort": 9095,
+                  "protocol": "TCP"
+                },
+                {
+                  "name": "http-memberlist",
+                  "containerPort": 7946,
+                  "protocol": "TCP"
+                }
+              ],
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "capabilities": {
+                  "drop": [
+                    "ALL"
+                  ]
+                },
+                "readOnlyRootFilesystem": true
+              },
+              "readinessProbe": {
+                "httpGet": {
+                  "path": "/ready",
+                  "port": "http-metrics"
+                },
+                "initialDelaySeconds": 30,
+                "timeoutSeconds": 1
+              },
+              "volumeMounts": [
+                {
+                  "name": "tmp",
+                  "mountPath": "/tmp"
+                },
+                {
+                  "name": "config",
+                  "mountPath": "/etc/loki/config"
+                },
+                {
+                  "name": "runtime-config",
+                  "mountPath": "/etc/loki/runtime-config"
+                },
+                {
+                  "name": "storage",
+                  "mountPath": "/var/loki"
+                },
+                {
+                  "name": "sc-rules-volume",
+                  "mountPath": "/rules"
+                }
+              ],
+              "resources": {}
+            }
+          ],
+          "affinity": {
+            "podAntiAffinity": {
+              "requiredDuringSchedulingIgnoredDuringExecution": [
+                {
+                  "labelSelector": {
+                    "matchLabels": {
+                      "app.kubernetes.io/component": "single-binary"
+                    }
+                  },
+                  "topologyKey": "kubernetes.io/hostname"
+                }
+              ]
+            }
+          },
+          "volumes": [
+            {
+              "name": "tmp",
+              "emptyDir": {}
+            },
+            {
+              "name": "config",
+              "configMap": {
+                "name": "loki",
+                "items": [
+                  {
+                    "key": "config.yaml",
+                    "path": "config.yaml"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "runtime-config",
+              "configMap": {
+                "name": "loki-runtime"
+              }
+            },
+            {
+              "name": "sc-rules-volume",
+              "emptyDir": {}
+            }
+          ]
+        }
+      },
+      "volumeClaimTemplates": [
+        {
+          "apiVersion": "v1",
+          "kind": "PersistentVolumeClaim",
+          "metadata": {
+            "name": "storage"
+          },
+          "spec": {
+            "accessModes": [
+              "ReadWriteOnce"
+            ],
+            "storageClassName": "topolvm-ext4",
+            "resources": {
+              "requests": {
+                "storage": "1Gi"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "kind": "ClusterRole",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2"
+      },
+      "name": "loki-clusterrole"
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resources": [
+          "configmaps",
+          "secrets"
+        ],
+        "verbs": [
+          "get",
+          "watch",
+          "list"
+        ]
+      }
+    ]
+  },
+  {
+    "kind": "ClusterRoleBinding",
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "metadata": {
+      "name": "loki-clusterrolebinding",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2"
+      }
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "name": "loki",
+        "namespace": "loki"
+      }
+    ],
+    "roleRef": {
+      "kind": "ClusterRole",
+      "name": "loki-clusterrole",
+      "apiGroup": "rbac.authorization.k8s.io"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ConfigMap",
+    "metadata": {
+      "name": "loki",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2"
+      }
+    },
+    "data": {
+      "config.yaml": "\nauth_enabled: false\nbloom_build:\n  builder:\n    planner_address: \"\"\n  enabled: false\nbloom_gateway:\n  client:\n    addresses: \"\"\n  enabled: false\ncommon:\n  compactor_address: 'http://loki:3100'\n  path_prefix: /var/loki\n  replication_factor: 1\n  storage:\n    filesystem:\n      chunks_directory: /var/loki/chunks\n      rules_directory: /var/loki/rules\ncompactor:\n  delete_request_store: filesystem\n  retention_enabled: true\nfrontend:\n  scheduler_address: \"\"\n  tail_proxy_url: \"\"\nfrontend_worker:\n  scheduler_address: \"\"\nindex_gateway:\n  mode: simple\nlimits_config:\n  max_cache_freshness_per_query: 10m\n  query_timeout: 300s\n  reject_old_samples: true\n  reject_old_samples_max_age: 168h\n  retention_period: 4w\n  split_queries_by_interval: 15m\n  volume_enabled: true\nmemberlist:\n  join_members:\n  - loki-memberlist\npattern_ingester:\n  enabled: false\nquery_range:\n  align_queries_with_step: true\nruler:\n  storage:\n    type: local\n  wal:\n    dir: /var/loki/ruler-wal\nruntime_config:\n  file: /etc/loki/runtime-config/runtime-config.yaml\nschema_config:\n  configs:\n  - from: \"2024-04-01\"\n    index:\n      period: 24h\n      prefix: index_\n    object_store: 'filesystem'\n    schema: v13\n    store: tsdb\nserver:\n  grpc_listen_port: 9095\n  http_listen_port: 3100\n  http_server_read_timeout: 600s\n  http_server_write_timeout: 600s\nstorage_config:\n  bloom_shipper:\n    working_directory: /var/loki/data/bloomshipper\n  boltdb_shipper:\n    index_gateway_client:\n      server_address: \"\"\n  hedging:\n    at: 250ms\n    max_per_second: 20\n    up_to: 3\n  tsdb_shipper:\n    index_gateway_client:\n      server_address: \"\"\ntracing:\n  enabled: false\n"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ConfigMap",
+    "metadata": {
+      "name": "loki-gateway",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2",
+        "app.kubernetes.io/component": "gateway"
+      }
+    },
+    "data": {
+      "nginx.conf": "worker_processes  5;  ## Default: 1\nerror_log  /dev/stderr;\npid        /tmp/nginx.pid;\nworker_rlimit_nofile 8192;\n\nevents {\n  worker_connections  4096;  ## Default: 1024\n}\n\nhttp {\n  client_body_temp_path /tmp/client_temp;\n  proxy_temp_path       /tmp/proxy_temp_path;\n  fastcgi_temp_path     /tmp/fastcgi_temp;\n  uwsgi_temp_path       /tmp/uwsgi_temp;\n  scgi_temp_path        /tmp/scgi_temp;\n\n  client_max_body_size  4M;\n\n  proxy_read_timeout    600; ## 10 minutes\n  proxy_send_timeout    600;\n  proxy_connect_timeout 600;\n\n  proxy_http_version    1.1;\n\n  default_type application/octet-stream;\n  log_format   main '$remote_addr - $remote_user [$time_local]  $status '\n        '\"$request\" $body_bytes_sent \"$http_referer\" '\n        '\"$http_user_agent\" \"$http_x_forwarded_for\"';\n  access_log   /dev/stderr  main;\n\n  sendfile     on;\n  tcp_nopush   on;\n  resolver kube-dns.kube-system.svc.cluster.local.;\n  \n\n  server {\n    listen             8080;\n    listen             [::]:8080;\n\n    location = / {\n      return 200 'OK';\n      auth_basic off;\n    }\n\n    ########################################################\n    # Configure backend targets\n    location ^~ /ui {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n\n    # Distributor\n    location = /api/prom/push {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /loki/api/v1/push {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /distributor/ring {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /otlp/v1/logs {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n\n    # Ingester\n    location = /flush {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location ^~ /ingester/ {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /ingester {\n      internal;        # to suppress 301\n    }\n\n    # Ring\n    location = /ring {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n\n    # MemberListKV\n    location = /memberlist {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n\n    # Ruler\n    location = /ruler/ring {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /api/prom/rules {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location ^~ /api/prom/rules/ {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /loki/api/v1/rules {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location ^~ /loki/api/v1/rules/ {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /prometheus/api/v1/alerts {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /prometheus/api/v1/rules {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n\n    # Compactor\n    location = /compactor/ring {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /loki/api/v1/delete {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /loki/api/v1/cache/generation_numbers {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n\n    # IndexGateway\n    location = /indexgateway/ring {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n\n    # QueryScheduler\n    location = /scheduler/ring {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n\n    # Config\n    location = /config {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n\n\n    # QueryFrontend, Querier\n    location = /api/prom/tail {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n      proxy_set_header Upgrade $http_upgrade;\n      proxy_set_header Connection \"upgrade\";\n    }\n    location = /loki/api/v1/tail {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n      proxy_set_header Upgrade $http_upgrade;\n      proxy_set_header Connection \"upgrade\";\n    }\n    location ^~ /api/prom/ {\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /api/prom {\n      internal;        # to suppress 301\n    }\n    # if the X-Query-Tags header is empty, set a noop= without a value as empty values are not logged\n    set $query_tags $http_x_query_tags;\n    if ($query_tags !~* '') {\n      set $query_tags \"noop=\";\n    }\n    location ^~ /loki/api/v1/ {\n      # pass custom headers set by Grafana as X-Query-Tags which are logged as key/value pairs in metrics.go log messages\n      proxy_set_header X-Query-Tags \"${query_tags},user=${http_x_grafana_user},dashboard_id=${http_x_dashboard_uid},dashboard_title=${http_x_dashboard_title},panel_id=${http_x_panel_id},panel_title=${http_x_panel_title},source_rule_uid=${http_x_rule_uid},rule_name=${http_x_rule_name},rule_folder=${http_x_rule_folder},rule_version=${http_x_rule_version},rule_source=${http_x_rule_source},rule_type=${http_x_rule_type}\";\n      proxy_pass       http://loki.loki.svc.cluster.local:3100$request_uri;\n    }\n    location = /loki/api/v1 {\n      internal;        # to suppress 301\n    }\n  }\n}\n"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ConfigMap",
+    "metadata": {
+      "name": "loki-runtime",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2"
+      }
+    },
+    "data": {
+      "runtime-config.yaml": "{}\n"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "loki-helm-test",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2",
+        "app.kubernetes.io/component": "helm-test"
+      },
+      "annotations": {
+        "helm.sh/hook": "test"
+      }
+    },
+    "spec": {
+      "containers": [
+        {
+          "name": "loki-helm-test",
+          "image": "docker.io/grafana/loki-helm-test:ewelch-distributed-helm-chart-17db5ee",
+          "env": [
+            {
+              "name": "CANARY_SERVICE_ADDRESS",
+              "value": "http://loki-canary:3500/metrics"
+            },
+            {
+              "name": "CANARY_PROMETHEUS_ADDRESS",
+              "value": ""
+            },
+            {
+              "name": "CANARY_TEST_TIMEOUT",
+              "value": "1m"
+            }
+          ],
+          "args": [
+            "-test.v"
+          ]
+        }
+      ],
+      "restartPolicy": "Never"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "name": "loki",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2"
+      },
+      "annotations": null
+    },
+    "spec": {
+      "type": "ClusterIP",
+      "ports": [
+        {
+          "name": "http-metrics",
+          "port": 3100,
+          "targetPort": "http-metrics",
+          "protocol": "TCP"
+        },
+        {
+          "name": "grpc",
+          "port": 9095,
+          "targetPort": "grpc",
+          "protocol": "TCP"
+        }
+      ],
+      "selector": {
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/component": "single-binary"
+      }
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "name": "loki-canary",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2",
+        "app.kubernetes.io/component": "canary"
+      },
+      "annotations": null
+    },
+    "spec": {
+      "type": "ClusterIP",
+      "ports": [
+        {
+          "name": "http-metrics",
+          "port": 3500,
+          "targetPort": "http-metrics",
+          "protocol": "TCP"
+        }
+      ],
+      "selector": {
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/component": "canary"
+      }
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "name": "loki-gateway",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2",
+        "app.kubernetes.io/component": "gateway",
+        "prometheus.io/service-monitor": "false"
+      },
+      "annotations": null
+    },
+    "spec": {
+      "type": "ClusterIP",
+      "ports": [
+        {
+          "name": "http-metrics",
+          "port": 80,
+          "targetPort": "http-metrics",
+          "protocol": "TCP"
+        }
+      ],
+      "selector": {
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/component": "gateway"
+      }
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "name": "loki-headless",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2",
+        "variant": "headless",
+        "prometheus.io/service-monitor": "false"
+      },
+      "annotations": null
+    },
+    "spec": {
+      "clusterIP": "None",
+      "ports": [
+        {
+          "name": "http-metrics",
+          "port": 3100,
+          "targetPort": "http-metrics",
+          "protocol": "TCP"
+        }
+      ],
+      "selector": {
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki"
+      }
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "name": "loki-memberlist",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2"
+      },
+      "annotations": null
+    },
+    "spec": {
+      "type": "ClusterIP",
+      "clusterIP": "None",
+      "ports": [
+        {
+          "name": "tcp",
+          "port": 7946,
+          "targetPort": "http-memberlist",
+          "protocol": "TCP"
+        }
+      ],
+      "selector": {
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/part-of": "memberlist"
+      }
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+      "name": "loki",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2"
+      }
+    },
+    "automountServiceAccountToken": true
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+      "name": "loki-canary",
+      "namespace": "loki",
+      "labels": {
+        "helm.sh/chart": "loki-6.29.0",
+        "app.kubernetes.io/name": "loki",
+        "app.kubernetes.io/instance": "loki",
+        "app.kubernetes.io/version": "3.4.2",
+        "app.kubernetes.io/component": "canary"
+      }
+    },
+    "automountServiceAccountToken": true
+  }
+]

@@ -38,6 +38,7 @@ $(eval $(call download-chart,sidekiq-prometheus-exporter-0.2.1,https://github.co
 $(eval $(call download-chart,cert-manager-v1.17.2,https://charts.jetstack.io/charts/cert-manager-v1.17.2.tgz,cert-manager))
 $(eval $(call download-chart,argo-cd-7.9.0,https://github.com/argoproj/argo-helm/releases/download/argo-cd-7.9.0/argo-cd-7.9.0.tgz,argo-cd))
 $(eval $(call download-chart,promtail-6.16.6,https://github.com/grafana/helm-charts/releases/download/promtail-6.16.6/promtail-6.16.6.tgz,promtail))
+$(eval $(call download-chart,loki-6.29.0,https://github.com/grafana/helm-charts/releases/download/helm-loki-6.29.0/loki-6.29.0.tgz,loki))
 
 .PHONY: download-all-charts
 download-all-charts: \
@@ -47,7 +48,8 @@ download-all-charts: \
 	$(TESTDATA_THIRDPARTY)/sidekiq-prometheus-exporter-0.2.1 \
 	$(TESTDATA_THIRDPARTY)/cert-manager-v1.17.2 \
 	$(TESTDATA_THIRDPARTY)/argo-cd-7.9.0 \
-	$(TESTDATA_THIRDPARTY)/promtail-6.16.6
+	$(TESTDATA_THIRDPARTY)/promtail-6.16.6 \
+	$(TESTDATA_THIRDPARTY)/loki-6.29.0
 
 define generate-expected-file
 $$(TESTDATA)/$(1):
@@ -110,6 +112,11 @@ $(eval $(call generate-expected-file,promtail-6.16.6-1.expected, \
 		--include-crds --namespace promtail \
 		--values promtail-6.16.6-1.values.yaml \
 ))
+$(eval $(call generate-expected-file,loki-6.29.0-1.expected, \
+	helm template loki thirdparty/loki-6.29.0 \
+		--include-crds --namespace loki \
+		--values loki-6.29.0-1.values.yaml \
+))
 
 .PHONY: generate-all-expected-files
 generate-all-expected-files: \
@@ -128,4 +135,5 @@ generate-all-expected-files: \
 	$(TESTDATA)/argo-cd-7.9.0-0.expected \
 	$(TESTDATA)/argo-cd-7.9.0-1.expected \
 	$(TESTDATA)/promtail-6.16.6-0.expected \
-	$(TESTDATA)/promtail-6.16.6-1.expected
+	$(TESTDATA)/promtail-6.16.6-1.expected \
+	$(TESTDATA)/loki-6.29.0-1.expected

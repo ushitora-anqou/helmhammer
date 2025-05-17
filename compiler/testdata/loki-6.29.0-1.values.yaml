@@ -1,0 +1,29 @@
+deploymentMode: SingleBinary
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+  limits_config:
+    retention_period: 4w
+  useTestSchema: true
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: topolvm-ext4
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false

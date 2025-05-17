@@ -509,6 +509,20 @@ func TestCompileChartValid(t *testing.T) {
 				`/3/stringData/promtail.yaml`,
 			},
 		},
+
+		{
+			name:           "loki: some values",
+			chartDir:       "thirdparty/loki-6.29.0",
+			namespace:      "loki",
+			valuesYaml:     "loki-6.29.0-1.values.yaml",
+			expectedOutput: "loki-6.29.0-1.expected",
+			patches: []string{
+				`{"op": "remove", "path": "/1/spec/template/metadata/annotations/checksum~1config"}`,
+				`{"op": "remove", "path": "/2/spec/template/metadata/annotations/checksum~1config"}`,
+			},
+			// ❯ cat compiler/testdata/loki-6.29.0-1.expected|jq 'sort_by([.apiVersion, .kind, .metadata.namespace, .metadata.name]) | map(.metadata.name == "loki" and .kind == "ConfigMap") | index(true)'
+			yamlPaths: []string{`/5/data/config.yaml`},
+		},
 	}
 
 	for _, tt := range tests {
@@ -579,6 +593,7 @@ func TestCompileChartValid(t *testing.T) {
 				jsonnetExpr.CallNamedArgs["values"] = jsonnet.ConvertIntoJsonnet(values)
 			}
 			vm := gojsonnet.MakeVM()
+			vm.MaxStack = 1000
 			gotString, err := vm.EvaluateAnonymousSnippet(
 				"file.jsonnet",
 				jsonnetExpr.StringWithPrologue(),
