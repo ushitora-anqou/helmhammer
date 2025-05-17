@@ -540,6 +540,22 @@ local _empty(heap, v) =
   else if std.isNumber(v) then
     v == 0;
 
+local base(args0) = error 'base: not implemented';
+local camelcase(args0) = error 'camelcase: not implemented';
+local compact(args0) = error 'compact: not implemented';
+local dig(args0) = error 'dig: not implemented';
+local ext(args0) = error 'ext: not implemented';
+local first(args0) = error 'first: not implemented';
+local hasPrefix(args0) = error 'hasPrefix: not implemented';
+local kebabcase(args0) = error 'kebabcase: not implemented';
+local reverse(args0) = error 'reverse: not implemented';
+local splitList(args0) = error 'splitList: not implemented';
+local unset(args0) = error 'unset: not implemented';
+local until(args0) = error 'until: not implemented';
+local untitle(args0) = error 'untitle: not implemented';
+local urlParse(args0) = error 'urlParse: not implemented';
+local without(args0) = error 'without: not implemented';
+
 local regexSplit(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
   assert std.length(args) == 3;

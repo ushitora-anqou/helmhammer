@@ -863,15 +863,23 @@ func compilePredefinedFunctions(
 	case
 		"and",
 		"append",
+		"base",
+		"camelcase",
 		"coalesce",
+		"compact",
 		"deepCopy",
 		"default",
 		"dict",
+		"dig",
 		"empty",
+		"ext",
+		"first",
 		"get",
+		"hasPrefix",
 		"include",
 		"index",
 		"join",
+		"kebabcase",
 		"last",
 		"len",
 		"list",
@@ -880,10 +888,17 @@ func compilePredefinedFunctions(
 		"not",
 		"or",
 		"regexSplit",
+		"reverse",
 		"set",
+		"splitList",
 		"tpl",
 		"tuple",
-		"uniq":
+		"unset",
+		"until",
+		"untitle",
+		"urlParse",
+		"uniq",
+		"without":
 		resultName := state.GenerateBindName()
 		newState := state.New(
 			[]*jsonnet.LocalBind{{
