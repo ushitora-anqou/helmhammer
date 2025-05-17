@@ -488,7 +488,6 @@ local regexReplaceAllLiteral(args) =
     '3.4.2'
   else error ('regexReplaceAllLiteral: not implemented: %s' % [trimFunctions(args)]);
 
-
 local ternary(args) =
   assert std.length(args) == 3;
   assert std.isBoolean(args[2]);
@@ -540,6 +539,29 @@ local _empty(heap, v) =
     !v
   else if std.isNumber(v) then
     v == 0;
+
+local regexSplit(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 3;
+  local regex = args[0], s = args[1], n = args[2];
+  assert std.isString(regex);
+  assert std.isString(s);
+  assert std.isNumber(n);
+  // FIXME: implement
+  if regex == ':' && n == -1 then
+    local res = fromConst(heap, std.split(s, ':')), newheap = res[0], v = res[1];
+    [v, vs, newheap]
+  else
+    error 'regexSplit: not implemented: %s' % [args];
+
+local last(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  assert isAddr(args[0]);
+  local list = deref(heap, args[0]);
+  assert std.isArray(list);
+  if std.length(list) == 0 then [null, vs, heap]
+  else [list[std.length(list) - 1], vs, heap];
 
 local uniq(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;

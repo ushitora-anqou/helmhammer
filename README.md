@@ -22,8 +22,13 @@ jsonnet main.jsonnet
   - `lookup`
   - `now`
 - limited and/or incompatible support for the following functions in Helm:
-  - `tpl`
-  - `regexReplaceAll`
   - `mergeOverwrite`
+  - `merge`
+  - `mustRegexReplaceAllLiteral`
+  - `regexReplaceAllLiteral`
+  - `regexReplaceAll`
+  - `regexSplit`
+  - `semverCompare`
+  - `tpl`
 - output of `toYaml` function in Helm may be different from authentic one.
 - `Capabilities.APIVersions` in Helm is an object that has only `Has` field.
