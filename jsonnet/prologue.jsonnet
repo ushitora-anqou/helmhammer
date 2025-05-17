@@ -540,7 +540,6 @@ local _empty(heap, v) =
   else if std.isNumber(v) then
     v == 0;
 
-local base(args0) = error 'base: not implemented';
 local camelcase(args0) = error 'camelcase: not implemented';
 local compact(args0) = error 'compact: not implemented';
 local dig(args0) = error 'dig: not implemented';
@@ -554,6 +553,20 @@ local until(args0) = error 'until: not implemented';
 local untitle(args0) = error 'untitle: not implemented';
 local urlParse(args0) = error 'urlParse: not implemented';
 local without(args0) = error 'without: not implemented';
+
+local base_(path) =
+  assert std.isString(path);
+  if path == '' then '.'
+  else if path == '/' then '/'
+  else
+    local parts = std.findSubstr('/', path);
+    if std.length(parts) == 0 then path
+    else path[parts[std.length(parts) - 1] + 1:];
+
+local base(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  [base_(args[0]), vs, heap];
 
 local ext_(path) =
   assert std.isString(path);
@@ -1414,5 +1427,9 @@ assert runMergeTwoValues({ a: [1] }, { a: [2] }) == { a: [1] };
 assert std.assertEqual(ext_('/a/b/c/bar.css'), '.css');
 assert std.assertEqual(ext_('/'), '');
 assert std.assertEqual(ext_(''), '');
+
+assert std.assertEqual(base_('/a/b'), 'b');
+assert std.assertEqual(base_('/'), '/');
+assert std.assertEqual(base_(''), '.');
 
 'ok'
