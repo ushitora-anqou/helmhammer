@@ -1107,6 +1107,7 @@ local tpl_(templates) =
       printf(args): printf(args.args),
       and(args): std.foldl(function(acc, x) acc && isTrueOnHeap(args.heap, x), args.args, true),
       or(args): std.foldl(function(acc, x) acc || isTrueOnHeap(args.heap, x), args.args, false),
+      default(args): default(args)[0],
     },
 
     local evalCommand(command, final, s0) =
