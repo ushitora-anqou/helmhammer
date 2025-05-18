@@ -922,6 +922,7 @@ local tpl_(templates) =
             else if v == 'end' then { t: 'end' }
             else if v == 'true' then { t: 'true' }
             else if v == 'false' then { t: 'false' }
+            else if v == 'range' then { t: 'range' }
             else { t: 'id', v: v };
           lexInsideAction(str, j, out + [token]) tailstrict
         else error ('lexInsideAction: unexpected char: %s' % [c]),
@@ -1035,7 +1036,7 @@ local tpl_(templates) =
     local parseAction(toks, i0) =
       local i = findNonSpaceToken(toks, i0);
       local tok = toks[i];
-      if tok.t == 'with' || tok.t == 'if' then
+      if tok.t == 'with' || tok.t == 'if' || tok.t == 'range' then
         local res = parseControl(toks, i + 1), j = res[0], node = res[1];
         [j, { t: tok.t, v: node }]
       else if tok.t == 'else' || tok.t == 'end' then
@@ -1183,6 +1184,23 @@ local tpl_(templates) =
           else
             s0;
         evalPop(finalState, mark)
+      else if node.t == 'range' then
+        assert !std.objectHas(node.v.pipe, 'd') : 'not implemented';
+        assert node.v.elseList == null : 'not implemented';
+        local mark0 = evalMark(s0);
+        local res = evalPipeline(node.v.pipe, s0), s1 = res[0], pipeVal = res[1];
+        local oneInteration(s, val) =
+          eval(node.v.list, s { dot: val });
+        local finalState =
+          if pipeVal == null then ''
+          else
+            local vals = deref(s1.h, pipeVal);
+            if std.isArray(vals) then
+              std.foldl(oneInteration, vals, s1) { dot: s1.dot }
+            else if std.isObject(vals) then
+              std.foldl(oneInteration, std.objectValues(vals), s1) { dot: s1.dot }
+            else error 'eval: unexpected pipeline for range';
+        evalPop(finalState, mark0)
       else error 'eval: unexpected node',
 
     strIndex: strIndex,
@@ -1449,6 +1467,8 @@ assert tpl___(['{{ $v := .A }}{{ $v }}', { A: 42 }]) == '42';
 assert tpl___(['{{ $v := .A }}{{ $v }}{{ $v = .B }}{{ $v }}', { A: 42, B: 10 }]) == '4210';
 assert tpl___(['{{ $v := .A }}{{ $v }}{{ if true }}{{ $v }}{{ $v := .B }}{{ $v }}{{ end }}{{ $v }}', { A: 0, B: 1 }]) == '0010';
 assert tpl___(['{{ $v := .A }}{{ $v }}{{ if true }}{{ $v }}{{ $v = .B }}{{ $v }}{{ end }}{{ $v }}', { A: 0, B: 1 }]) == '0011';
+assert tpl___(['{{ range .A }}{{ . }}{{ end }}', { A: [1, 2] }]) == '12';
+assert tpl___(['{{ range .A }}{{ . }}{{ end }}', { A: { one: 1, two: 2 } }]) == '12';
 
 assert fromConst({}, 10) == [{}, 10];
 assert fromConst({}, true) == [{}, true];
