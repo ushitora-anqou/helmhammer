@@ -1106,6 +1106,12 @@ local tpl_(templates) =
         [s0, op.v]
       else if op.t == 'pipeline' then
         evalPipeline(op, s0)
+      else if op.t == 'id' then
+        // function call with no arguments
+        if op.v == 'list' then
+          local res = fromConst(s0.h, []), newheap = res[0], v = res[1];
+          [s0 { h: newheap }, v]
+        else error 'evalOperand: not implemented function'
       else
         error ('evalOperand: unknown operand: %s' % [op]),
 
