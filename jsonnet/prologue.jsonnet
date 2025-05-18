@@ -377,9 +377,11 @@ local min(args) =
 
 local hasKey(args) =
   assert std.length(args) == 2;
-  assert std.isObject(args[0]);
   assert std.isString(args[1]);
-  std.objectHas(args[0], args[1]);
+  if args[0] == null then false
+  else
+    assert std.isObject(args[0]);
+    std.objectHas(args[0], args[1]);
 
 local b64enc(args) =
   assert std.length(args) == 1;
