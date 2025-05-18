@@ -512,7 +512,8 @@ func CallChartMain(
 	templateBasePath string,
 	capabilities *Expr,
 	keys []string, defaultValues *Expr, initialHeap *Expr,
-	crds [][]byte, body *Expr) *Expr {
+	crds [][]byte, body *Expr, files map[string]*Expr,
+) *Expr {
 	exprKeys := []*Expr{}
 	for _, key := range keys {
 		exprKeys = append(exprKeys, &Expr{
@@ -545,6 +546,7 @@ func CallChartMain(
 			initialHeap,
 			{Kind: EList, List: crdsList},
 			body,
+			Map(files),
 		},
 	}
 }

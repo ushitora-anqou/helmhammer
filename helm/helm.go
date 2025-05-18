@@ -23,6 +23,7 @@ type Chart struct {
 	CRDObjects       []helmchart.CRD
 	TemplateBasePath string
 	Capabilities     *chartutil.Capabilities
+	Files            map[string][]byte
 }
 
 func Load(chartDir string) (*Chart, error) {
@@ -54,6 +55,11 @@ func Load(chartDir string) (*Chart, error) {
 	}
 	sort.Strings(keys)
 
+	files := map[string][]byte{}
+	for _, file := range chart.Files {
+		files[file.Name] = file.Data
+	}
+
 	return &Chart{
 		Template:         tmpls,
 		RenderedKeys:     keys,
@@ -64,6 +70,7 @@ func Load(chartDir string) (*Chart, error) {
 		CRDObjects:       chart.CRDObjects(),
 		TemplateBasePath: path.Join(chart.ChartFullPath(), "templates"),
 		Capabilities:     chartutil.DefaultCapabilities.Copy(),
+		Files:            files,
 	}, nil
 }
 

@@ -154,12 +154,12 @@ local field(heap, receiver0, fieldName, args) =
     else if std.length(args) != 0 then
       error ('field: invalid arguments: %s' % [fieldName])
     else
-      receiver[fieldName]  // return non-dereferenced value
+      [heap, receiver[fieldName]]  // return non-dereferenced value
   else
     if std.length(args) != 0 then
       error ('field: invalid arguments: %s' % [fieldName])
     else
-      null;
+      [heap, null];
 //std.trace('%s %s' % [trimFunctions(receiver), fieldName], null),
 
 local _join(heap, ary) =
@@ -1297,6 +1297,33 @@ local parseKubeVersion(src) =
     GitVersion: self.Version,
   };
 
+local glob(heap, files, pattern) =
+  // FIXME: implement
+  local list =
+    if pattern == 'files/dashboards/**.yaml' then
+      {
+        [fileName]: files[fileName]
+        for fileName in std.filter(
+          function(fileName)
+            std.startsWith(fileName, 'files/dashboards/') &&
+            std.endsWith(fileName, '.yaml'),
+          std.objectFields(files),
+        )
+      }
+    else if pattern == 'files/rules/**.yaml' then
+      {
+        [fileName]: files[fileName]
+        for fileName in std.filter(
+          function(fileName)
+            std.startsWith(fileName, 'files/rules/') &&
+            std.endsWith(fileName, '.yaml'),
+          std.objectFields(files),
+        )
+      }
+    else
+      error ('glob: not implemented: "%s"' % pattern);
+  fromConst(heap, list);
+
 local chartMain(
   chartName,
   chartVersion,
@@ -1309,6 +1336,7 @@ local chartMain(
   defaultValues,
   initialHeap,
   crds,
+  templates,
   files,
       ) =
   function(values={}, namespace='default', includeCrds=false, kubeVersion='1.32.0')
@@ -1332,10 +1360,20 @@ local chartMain(
               assert std.length(args) == 1;
               assert std.isString(args[0]);
               // FIXME: support resource name like "apps/v1/Deployment"
-              std.member(capabilities.APIVersions, args[0]),
+              [heap, std.member(capabilities.APIVersions, args[0])],
           },
         },
         Template: {},  // filled in runFile
+        Files: {
+          Get(heap, args):
+            assert std.length(args) == 1;
+            assert std.isString(args[0]);
+            [heap, files[args[0]]],
+          Glob(heap, args):
+            assert std.length(args) == 1;
+            assert std.isString(args[0]);
+            glob(heap, files, args[0]),
+        },
       }),
       heap1 = dotRes[0],
       dot = dotRes[1],
@@ -1347,7 +1385,7 @@ local chartMain(
             deref(heap2, dot).Template,
             { Name: key, BasePath: templateBasePath },
           );
-        files[key](heap3, dot)[0],
+        templates[key](heap3, dot)[0],
       flatten(ary) =
         local loop(i, out) =
           if i >= std.length(ary) then out

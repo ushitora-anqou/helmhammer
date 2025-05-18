@@ -36,7 +36,7 @@ func (u U) TrueFalse(b bool) string {
 func (u U) TrueFalseJsonnet() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind: jsonnet.ERaw,
-		Raw:  `function(heap, args) if args[0] then "true" else ""`,
+		Raw:  `function(heap, args) [heap, if args[0] then "true" else ""]`,
 	}
 }
 
@@ -69,8 +69,8 @@ func (t T) Method0Jsonnet() *jsonnet.Expr {
 		Kind:           jsonnet.EFunction,
 		FunctionParams: []string{"heap", "args"},
 		FunctionBody: &jsonnet.Expr{
-			Kind:          jsonnet.EStringLiteral,
-			StringLiteral: "M0",
+			Kind: jsonnet.ERaw,
+			Raw:  `[heap, "M0"]`,
 		},
 	}
 }
@@ -83,7 +83,10 @@ func (t T) Method1Jsonnet() *jsonnet.Expr {
 	return &jsonnet.Expr{
 		Kind:           jsonnet.EFunction,
 		FunctionParams: []string{"heap", "args"},
-		FunctionBody:   jsonnet.IndexInt("args", 0),
+		FunctionBody: &jsonnet.Expr{
+			Kind: jsonnet.ERaw,
+			Raw:  `[heap, args[0]]`,
+		},
 	}
 }
 
@@ -97,7 +100,7 @@ func (t T) Method2Jsonnet() *jsonnet.Expr {
 		FunctionParams: []string{"heap", "args"},
 		FunctionBody: &jsonnet.Expr{
 			Kind: jsonnet.ERaw,
-			Raw:  `"Method2: %d %s" % [args[0], args[1]]`,
+			Raw:  `[heap, "Method2: %d %s" % [args[0], args[1]]]`,
 		},
 	}
 }
@@ -112,10 +115,10 @@ func (t T) Method3Jsonnet() *jsonnet.Expr {
 		FunctionParams: []string{"heap", "args"},
 		FunctionBody: &jsonnet.Expr{
 			Kind: jsonnet.ERaw,
-			Raw: `"Method3: %s" % [(
+			Raw: `[heap, "Method3: %s" % [(
 				if args[0] == null then "<nil>"
 				else error "not implemented"
-			)]`,
+			)]]`,
 		},
 	}
 }
@@ -135,10 +138,10 @@ func (t T) MAddJsonnet() *jsonnet.Expr {
 function(heap, args)
 	assert std.isNumber(args[0]);
 	assert isAddr(args[1]);
-	std.map(
+	[heap, std.map(
 		function(x) x + args[0],
 		deref(heap, args[1]),
-	)`,
+	)]`,
 		),
 	}
 }
@@ -617,7 +620,7 @@ func TestCompileChartValid(t *testing.T) {
 				jsonnetExpr.CallNamedArgs["values"] = jsonnet.ConvertIntoJsonnet(values)
 			}
 			vm := gojsonnet.MakeVM()
-			vm.MaxStack = 1000
+			vm.MaxStack = 2000
 			gotString, err := vm.EvaluateAnonymousSnippet(
 				"file.jsonnet",
 				jsonnetExpr.StringWithPrologue(),

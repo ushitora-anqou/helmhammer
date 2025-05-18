@@ -53,13 +53,21 @@ func CompileChart(chart *helm.Chart) (*jsonnet.Expr, error) {
 		return nil, err
 	}
 
+	compiledFiles := map[string]*jsonnet.Expr{}
+	for name, data := range chart.Files {
+		compiledFiles[name] = &jsonnet.Expr{
+			Kind:          jsonnet.EStringLiteral,
+			StringLiteral: string(data),
+		}
+	}
+
 	expr = jsonnet.CallChartMain(
 		chart.Name, chart.Version, chart.AppVersion,
 		chart.Name, "Helm",
 		chart.TemplateBasePath,
 		jsonnet.ConvertIntoJsonnet(chart.Capabilities),
 		chart.RenderedKeys, defaultValues, initialHeap,
-		crds, expr,
+		crds, expr, compiledFiles,
 	)
 
 	return expr, nil
@@ -422,7 +430,7 @@ func compileChain(
 
 func compileField(
 	e *env.T,
-	receiver *jsonnet.Expr,
+	initialReceiver *jsonnet.Expr,
 	ident []string,
 	args []parse.Node,
 	final *jsonnet.Expr,
@@ -434,25 +442,50 @@ func compileField(
 
 	return argsState.Use(
 		func(vs, h *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
-			for i, id := range ident {
-				compiledArgs := &jsonnet.Expr{
-					Kind: jsonnet.EList,
-					List: []*jsonnet.Expr{},
-				}
-				if i == len(ident)-1 {
-					compiledArgs = argsExpr
-				}
-				receiver = jsonnet.CallField(
-					h,
-					receiver,
-					&jsonnet.Expr{
-						Kind:          jsonnet.EStringLiteral,
-						StringLiteral: id,
-					},
-					compiledArgs,
-				)
+			if len(ident) == 0 {
+				return initialReceiver, state.New(nil, vs, h), nil
 			}
-			return receiver, state.New(nil, vs, h), nil
+
+			receiver := initialReceiver
+			for i := range len(ident) - 1 {
+				receiver = &jsonnet.Expr{
+					Kind: jsonnet.EIndex,
+					BinOpLHS: jsonnet.CallField(
+						h,
+						receiver,
+						&jsonnet.Expr{
+							Kind:          jsonnet.EStringLiteral,
+							StringLiteral: ident[i],
+						},
+						&jsonnet.Expr{
+							Kind: jsonnet.EList,
+							List: []*jsonnet.Expr{},
+						},
+					),
+					BinOpRHS: &jsonnet.Expr{
+						Kind:       jsonnet.EIntLiteral,
+						IntLiteral: 1,
+					},
+				}
+			}
+
+			resultName := state.GenerateBindName()
+			newState := state.New(
+				[]*jsonnet.LocalBind{
+					{Name: resultName, Body: jsonnet.CallField(
+						h,
+						receiver,
+						&jsonnet.Expr{
+							Kind:          jsonnet.EStringLiteral,
+							StringLiteral: ident[len(ident)-1],
+						},
+						argsExpr,
+					)},
+				},
+				vs,
+				jsonnet.IndexInt(resultName, 0),
+			)
+			return jsonnet.IndexInt(resultName, 1), newState, nil
 		},
 	)
 }
