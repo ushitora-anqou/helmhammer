@@ -900,6 +900,8 @@ local tpl_(templates) =
           lexInsideAction(str, i + 1, out + [{ t: c }]) tailstrict
         else if isSpace(c) then
           lexInsideAction(str, findNonSpace(str, i + 1, 1), out + [{ t: ' ' }]) tailstrict
+        else if c == '=' then
+          lexInsideAction(str, i + 1, out + [{ t: '=' }]) tailstrict
         else if c == ':' && str[i + 1] == '=' then
           lexInsideAction(str, i + 2, out + [{ t: ':=' }]) tailstrict
         else if c == '\\' && (str[i + 1] == '"' || str[i + 1] == '`') then
@@ -918,6 +920,8 @@ local tpl_(templates) =
             else if v == 'if' then { t: 'if' }
             else if v == 'else' then { t: 'else' }
             else if v == 'end' then { t: 'end' }
+            else if v == 'true' then { t: 'true' }
+            else if v == 'false' then { t: 'false' }
             else { t: 'id', v: v };
           lexInsideAction(str, j, out + [token]) tailstrict
         else error ('lexInsideAction: unexpected char: %s' % [c]),
@@ -945,6 +949,10 @@ local tpl_(templates) =
         [i + 1, { t: 'number', v: tok.v }]
       else if tok.t == 'string' then
         [i + 1, { t: 'string', v: tok.v }]
+      else if tok.t == 'true' then
+        [i + 1, { t: 'bool', v: true }]
+      else if tok.t == 'false' then
+        [i + 1, { t: 'bool', v: false }]
       else if tok.t == '(' then
         local res = parseAction(toks, i + 1), j = res[0], node = res[1];
         assert node.t == 'action';
@@ -984,12 +992,26 @@ local tpl_(templates) =
           local res = parseCommand(toks, i), j = res[0], node = res[1];
           loop(j, commands + [node]);
       local i = findNonSpaceToken(toks, i0);
-      if toks[i].t == 'var' && toks[i + 1].t == ':=' then
+      if toks[i].t == 'var' &&
+         (toks[i + 1].t == ':=' || toks[i + 1].t == '=')
+      then
         local res = loop(i + 2, []), j = res[0], commands = res[1];
-        [j, { t: 'pipeline', v: commands, d: [{ id: toks[i].v }] }]
-      else if toks[i].t == 'var' && toks[i + 1].t == ' ' && toks[i + 2].t == ':=' then
+        [j, {
+          t: 'pipeline',
+          v: commands,
+          d: [{ id: toks[i].v }],
+          isa: toks[i + 1].t == '=',
+        }]
+      else if toks[i].t == 'var' && toks[i + 1].t == ' ' &&
+              (toks[i + 2].t == ':=' || toks[i + 2].t == '=')
+      then
         local res = loop(i + 3, []), j = res[0], commands = res[1];
-        [j, { t: 'pipeline', v: commands, d: [{ id: toks[i].v }] }]
+        [j, {
+          t: 'pipeline',
+          v: commands,
+          d: [{ id: toks[i].v }],
+          isa: toks[i + 2].t == '=',
+        }]
       else
         local res = loop(i, []), j = res[0], commands = res[1];
         [j, { t: 'pipeline', v: commands }],
@@ -1041,6 +1063,27 @@ local tpl_(templates) =
       if j < std.length(toks) then error 'parse: unexpected end'
       else node,
 
+    local evalMark(s) =
+      std.length(s.vars),
+
+    local evalPop(s, mark) =
+      s { vars: s.vars[std.length(s.vars) - mark:] },
+
+    local evalPushVar(s, name, value) =
+      s { vars: [{ name: name, value: value }] + s.vars },
+
+    local evalSetVar(s, name, value) =
+      local aux(i) =
+        if i >= std.length(s.vars) then error ('evalSetVar: variable not found: ' + name)
+        else if s.vars[i].name == name then
+          s.vars[:i] + [{ name: name, value: value }] + s.vars[i + 1:]
+        else
+          aux(i + 1) tailstrict;
+      s { vars: aux(0) },
+
+    local evalGetVar(s, name) =
+      std.filter(function(v) v.name == name, s.vars)[0].value,
+
     local evalOperand(op, s0) =
       if op.t == 'chain' then
         local res = evalOperand(op.v[0], s0), s = res[0], val = res[1];
@@ -1048,8 +1091,8 @@ local tpl_(templates) =
       else if op.t == 'field' then
         [s0, if op.v == '' then s0.dot else deref(s0.h, s0.dot)[op.v]]
       else if op.t == 'var' then
-        [s0, s0.vars[op.v]]
-      else if op.t == 'number' || op.t == 'string' then
+        [s0, evalGetVar(s0, op.v)]
+      else if op.t == 'number' || op.t == 'string' || op.t == 'bool' then
         [s0, op.v]
       else if op.t == 'pipeline' then
         evalPipeline(op, s0)
@@ -1099,7 +1142,7 @@ local tpl_(templates) =
 
     local evalPipeline(node, s0) =
       local commands = node.v;
-      local decls = if std.objectHas(node, "d") then node.d else null;
+      local decls = if std.objectHas(node, 'd') then node.d else null;
       local acc =
         std.foldl(
           function(acc, command)
@@ -1112,7 +1155,12 @@ local tpl_(templates) =
       local s = acc.s;
       local v = if acc.final == null then '' else acc.final;
       if decls == null then [s, v]
-      else [acc.s { vars+: { [decls[0].id]: v } }, ""],
+      else
+        local s1 =
+          if node.isa
+          then evalSetVar(acc.s, decls[0].id, v)
+          else evalPushVar(acc.s, decls[0].id, v);
+        [s1, ''],
 
     local eval(node, s0) =
       if node.t == 'text' then
@@ -1124,14 +1172,17 @@ local tpl_(templates) =
         local res = evalPipeline(node.v, s0), s = res[0], val = res[1];
         s { out+: std.toString(val) }
       else if node.t == 'with' || node.t == 'if' then
+        local mark = evalMark(s0);
         local res = evalPipeline(node.v.pipe, s0), s = res[0], pipeVal = res[1];
-        if isTrueOnHeap(s0.h, pipeVal) then
-          local s1 = eval(node.v.list, if node.t == 'if' then s else s { dot: pipeVal });
-          s1 { dot: s.dot }
-        else if node.v.elseList != null then
-          eval(node.v.elseList, s) tailstrict
-        else
-          s0
+        local finalState =
+          if isTrueOnHeap(s0.h, pipeVal) then
+            local s1 = eval(node.v.list, if node.t == 'if' then s else s { dot: pipeVal });
+            s1 { dot: s.dot }
+          else if node.v.elseList != null then
+            eval(node.v.elseList, s) tailstrict
+          else
+            s0;
+        evalPop(finalState, mark)
       else error 'eval: unexpected node',
 
     strIndex: strIndex,
@@ -1153,7 +1204,7 @@ local tpl_(templates) =
       {
         dot: dot,
         out: '',
-        vars: { ''/* $ */: dot },
+        vars: [{ name: ''/* $ */, value: dot }],
         h: heap,
       },
     ).out;
@@ -1395,6 +1446,9 @@ assert tpl___(['{{ tpl (toYaml .A) . }}', { A: { B: '{{.B}}' }, B: 'hello' }]) =
 assert tpl___(['{{ with .A }}{{ end }}{{ .C }}', { A: { B: 1 }, C: 2 }]) == '2';
 assert tpl___(['{{`{{`}}', {}]) == '{{';
 assert tpl___(['{{ $v := .A }}{{ $v }}', { A: 42 }]) == '42';
+assert tpl___(['{{ $v := .A }}{{ $v }}{{ $v = .B }}{{ $v }}', { A: 42, B: 10 }]) == '4210';
+assert tpl___(['{{ $v := .A }}{{ $v }}{{ if true }}{{ $v }}{{ $v := .B }}{{ $v }}{{ end }}{{ $v }}', { A: 0, B: 1 }]) == '0010';
+assert tpl___(['{{ $v := .A }}{{ $v }}{{ if true }}{{ $v }}{{ $v = .B }}{{ $v }}{{ end }}{{ $v }}', { A: 0, B: 1 }]) == '0011';
 
 assert fromConst({}, 10) == [{}, 10];
 assert fromConst({}, true) == [{}, true];
