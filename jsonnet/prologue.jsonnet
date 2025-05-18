@@ -1085,12 +1085,21 @@ local tpl_(templates) =
     local evalGetVar(s, name) =
       std.filter(function(v) v.name == name, s.vars)[0].value,
 
+    local evalFields(s, initialReceiver, fields) =
+      std.foldl(
+        function(receiver, field)
+          if receiver == null then null
+          else std.get(deref(s.h, receiver), field),
+        fields,
+        initialReceiver,
+      ),
+
     local evalOperand(op, s0) =
       if op.t == 'chain' then
         local res = evalOperand(op.v[0], s0), s = res[0], val = res[1];
-        [s, std.foldl(function(acc, field) deref(s0.h, acc)[field], op.v[1], val)]
+        [s, evalFields(s0, val, op.v[1])]
       else if op.t == 'field' then
-        [s0, if op.v == '' then s0.dot else deref(s0.h, s0.dot)[op.v]]
+        [s0, if op.v == '' then s0.dot else evalFields(s0, s0.dot, [op.v])]
       else if op.t == 'var' then
         [s0, evalGetVar(s0, op.v)]
       else if op.t == 'number' || op.t == 'string' || op.t == 'bool' then
@@ -1155,7 +1164,7 @@ local tpl_(templates) =
           { s: s0, final: null },
         );
       local s = acc.s;
-      local v = if acc.final == null then '' else acc.final;
+      local v = acc.final;
       if decls == null then [s, v]
       else
         local s1 =
@@ -1172,7 +1181,7 @@ local tpl_(templates) =
       else if node.t == 'action' then
         assert node.v.t == 'pipeline';
         local res = evalPipeline(node.v, s0), s = res[0], val = res[1];
-        s { out+: std.toString(val) }
+        if val == null then s else s { out+: std.toString(val) }
       else if node.t == 'with' || node.t == 'if' then
         local mark = evalMark(s0);
         local res = evalPipeline(node.v.pipe, s0), s = res[0], pipeVal = res[1];
