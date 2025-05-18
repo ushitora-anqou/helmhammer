@@ -900,6 +900,8 @@ local tpl_(templates) =
           lexInsideAction(str, i + 1, out + [{ t: c }]) tailstrict
         else if isSpace(c) then
           lexInsideAction(str, findNonSpace(str, i + 1, 1), out + [{ t: ' ' }]) tailstrict
+        else if c == ':' && str[i + 1] == '=' then
+          lexInsideAction(str, i + 2, out + [{ t: ':=' }]) tailstrict
         else if c == '\\' && (str[i + 1] == '"' || str[i + 1] == '`') then
           local res = lexString(str, i + 1, str[i + 1]), j = res[0], v = res[1];
           lexInsideAction(str, j, out + [{ t: 'string', v: v }]) tailstrict
@@ -973,15 +975,24 @@ local tpl_(templates) =
           loop(j, operands + [node]);
       loop(i, []),
 
-    local parsePipeline(toks, i) =
+    local parsePipeline(toks, i0) =
       local loop(i0, commands) =
         local i = findNonSpaceToken(toks, i0);
         if toks[i].t == '}}' || toks[i].t == ')' then
-          [i + 1, { t: 'pipeline', v: commands }]
+          [i + 1, commands]
         else
           local res = parseCommand(toks, i), j = res[0], node = res[1];
           loop(j, commands + [node]);
-      loop(i, []),
+      local i = findNonSpaceToken(toks, i0);
+      if toks[i].t == 'var' && toks[i + 1].t == ':=' then
+        local res = loop(i + 2, []), j = res[0], commands = res[1];
+        [j, { t: 'pipeline', v: commands, d: [{ id: toks[i].v }] }]
+      else if toks[i].t == 'var' && toks[i + 1].t == ' ' && toks[i + 2].t == ':=' then
+        local res = loop(i + 3, []), j = res[0], commands = res[1];
+        [j, { t: 'pipeline', v: commands, d: [{ id: toks[i].v }] }]
+      else
+        local res = loop(i, []), j = res[0], commands = res[1];
+        [j, { t: 'pipeline', v: commands }],
 
     local parseControl(toks, i) =
       local res = parsePipeline(toks, i), j = res[0], pipe = res[1];
@@ -997,7 +1008,7 @@ local tpl_(templates) =
       if toks[l1].t != 'end' || toks[l2].t != '}}' then
         error 'parseControl: end not found'
       else
-        [l2 + 1, { pipe: pipe.v, list: list, elseList: elseList }],
+        [l2 + 1, { pipe: pipe, list: list, elseList: elseList }],
 
     local parseAction(toks, i0) =
       local i = findNonSpaceToken(toks, i0);
@@ -1041,7 +1052,7 @@ local tpl_(templates) =
       else if op.t == 'number' || op.t == 'string' then
         [s0, op.v]
       else if op.t == 'pipeline' then
-        evalPipeline(op.v, s0)
+        evalPipeline(op, s0)
       else
         error ('evalOperand: unknown operand: %s' % [op]),
 
@@ -1086,7 +1097,9 @@ local tpl_(templates) =
       else
         evalOperand(op0, s0),
 
-    local evalPipeline(commands, s0) =
+    local evalPipeline(node, s0) =
+      local commands = node.v;
+      local decls = if std.objectHas(node, "d") then node.d else null;
       local acc =
         std.foldl(
           function(acc, command)
@@ -1096,7 +1109,10 @@ local tpl_(templates) =
           commands,
           { s: s0, final: null },
         );
-      [acc.s, if acc.final == null then '' else acc.final],
+      local s = acc.s;
+      local v = if acc.final == null then '' else acc.final;
+      if decls == null then [s, v]
+      else [acc.s { vars+: { [decls[0].id]: v } }, ""],
 
     local eval(node, s0) =
       if node.t == 'text' then
@@ -1105,7 +1121,7 @@ local tpl_(templates) =
         std.foldl(function(s, node) eval(node, s), node.v, s0)
       else if node.t == 'action' then
         assert node.v.t == 'pipeline';
-        local res = evalPipeline(node.v.v, s0), s = res[0], val = res[1];
+        local res = evalPipeline(node.v, s0), s = res[0], val = res[1];
         s { out+: std.toString(val) }
       else if node.t == 'with' || node.t == 'if' then
         local res = evalPipeline(node.v.pipe, s0), s = res[0], pipeVal = res[1];
@@ -1377,7 +1393,8 @@ assert tpl___(['>{{ if $ }}1{{ else }}0{{ end }}<', false]) == '>0<';
 assert tpl___(['{{ tpl "{{.A}}" $ }}', { A: 10 }]) == '10';
 assert tpl___(['{{ tpl (toYaml .A) . }}', { A: { B: '{{.B}}' }, B: 'hello' }]) == 'B: "hello"';
 assert tpl___(['{{ with .A }}{{ end }}{{ .C }}', { A: { B: 1 }, C: 2 }]) == '2';
-
+assert tpl___(['{{`{{`}}', {}]) == '{{';
+assert tpl___(['{{ $v := .A }}{{ $v }}', { A: 42 }]) == '42';
 
 assert fromConst({}, 10) == [{}, 10];
 assert fromConst({}, true) == [{}, true];
