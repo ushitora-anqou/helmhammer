@@ -506,16 +506,16 @@ func escapeString(s string, escapeSingleQuote bool, escapeDoubleQuote bool) stri
 	return b.String()
 }
 
-func CallChartMain(
-	chartName, chartVersion, chartAppVersion string,
-	releaseName, releaseService string,
-	templateBasePath string,
-	capabilities *Expr,
-	keys []string, defaultValues *Expr, initialHeap *Expr,
-	crds [][]byte, body *Expr, files map[string]*Expr,
+func CallChartMetadata(
+	name, version, appVersion, templateBasePath, condition string,
+	renderedKeys []string,
+	defaultValues *Expr,
+	crds [][]byte,
+	compiledFiles map[string]*Expr,
+	compiledSubChartMetadata []*Expr,
 ) *Expr {
 	exprKeys := []*Expr{}
-	for _, key := range keys {
+	for _, key := range renderedKeys {
 		exprKeys = append(exprKeys, &Expr{
 			Kind:          EStringLiteral,
 			StringLiteral: key,
@@ -532,22 +532,27 @@ func CallChartMain(
 
 	return &Expr{
 		Kind:     ECall,
-		CallFunc: Index("chartMain"),
+		CallFunc: Index("chartMetadata"),
 		CallArgs: []*Expr{
-			{Kind: EStringLiteral, StringLiteral: chartName},
-			{Kind: EStringLiteral, StringLiteral: chartVersion},
-			{Kind: EStringLiteral, StringLiteral: chartAppVersion},
-			{Kind: EStringLiteral, StringLiteral: releaseName},
-			{Kind: EStringLiteral, StringLiteral: releaseService},
+			{Kind: EStringLiteral, StringLiteral: name},
+			{Kind: EStringLiteral, StringLiteral: version},
+			{Kind: EStringLiteral, StringLiteral: appVersion},
 			{Kind: EStringLiteral, StringLiteral: templateBasePath},
-			capabilities,
+			{Kind: EStringLiteral, StringLiteral: condition},
 			{Kind: EList, List: exprKeys},
 			defaultValues,
-			initialHeap,
 			{Kind: EList, List: crdsList},
-			body,
-			Map(files),
+			Map(compiledFiles),
+			{Kind: EList, List: compiledSubChartMetadata},
 		},
+	}
+}
+
+func CallChartMain(capabilities, rootChart, initialHeap, body *Expr) *Expr {
+	return &Expr{
+		Kind:     ECall,
+		CallFunc: Index("chartMain"),
+		CallArgs: []*Expr{capabilities, rootChart, initialHeap, body},
 	}
 }
 
@@ -685,18 +690,6 @@ func deepAllocateCollection(heap map[int]*Expr, collection *Expr) (*Expr, error)
 	), nil
 }
 
-func DeepAllocate(src any) (*Expr, *Expr, error) {
-	heap := map[int]*Expr{}
-	vExpr, err := deepAllocate(heap, src)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	realHeap := map[string]*Expr{}
-	for i, v := range heap {
-		realHeap[strconv.Itoa(i)] = v
-	}
-	hExpr := Map(realHeap)
-
-	return vExpr, hExpr, nil
+func DeepAllocate(heap map[int]*Expr, src any) (*Expr, error) {
+	return deepAllocate(heap, src)
 }

@@ -14,27 +14,29 @@ import (
 )
 
 type Chart struct {
-	Template         *template.Template
-	RenderedKeys     []string
-	Values           map[string]any
 	Name             string
 	Version          string
 	AppVersion       string
-	CRDObjects       []helmchart.CRD
 	TemplateBasePath string
-	Capabilities     *chartutil.Capabilities
+	Condition        string
+	RenderedKeys     []string
+	Values           map[string]any
+	CRDObjects       []helmchart.CRD
 	Files            map[string][]byte
+	SubCharts        []*Chart
 }
 
-func Load(chartDir string) (*Chart, error) {
-	chart, err := loader.Load(chartDir)
-	if err != nil {
-		return nil, err
-	}
-	basePath := chart.ChartFullPath()
+type RootChart struct {
+	*Chart
+	Capabilities *chartutil.Capabilities
+	Template     *template.Template
+}
 
-	tmpls := template.New(chartDir)
-	tmpls.Funcs(funcMap())
+func loadChartsRecursively(
+	tmpls *template.Template,
+	chart *helmchart.Chart,
+) (*Chart, error) {
+	basePath := chart.ChartFullPath()
 	for _, tmpl := range chart.Templates {
 		if tmpl == nil {
 			continue
@@ -60,8 +62,19 @@ func Load(chartDir string) (*Chart, error) {
 		files[file.Name] = file.Data
 	}
 
+	subCharts := []*Chart{}
+	for _, dep := range chart.Dependencies() {
+		subChart, err := loadChartsRecursively(tmpls, dep)
+		if err != nil {
+			return nil, err
+		}
+		subCharts = append(subCharts, subChart)
+	}
+	for i, dep := range chart.Metadata.Dependencies {
+		subCharts[i].Condition = dep.Condition
+	}
+
 	return &Chart{
-		Template:         tmpls,
 		RenderedKeys:     keys,
 		Values:           chart.Values,
 		Name:             chart.Metadata.Name,
@@ -69,8 +82,29 @@ func Load(chartDir string) (*Chart, error) {
 		AppVersion:       chart.Metadata.AppVersion,
 		CRDObjects:       chart.CRDObjects(),
 		TemplateBasePath: path.Join(chart.ChartFullPath(), "templates"),
-		Capabilities:     chartutil.DefaultCapabilities.Copy(),
 		Files:            files,
+		SubCharts:        subCharts,
+		Condition:        "",
+	}, nil
+}
+
+func Load(chartDir string) (*RootChart, error) {
+	chart, err := loader.Load(chartDir)
+	if err != nil {
+		return nil, err
+	}
+
+	tmpls := template.New(chartDir)
+	tmpls.Funcs(funcMap())
+	rootChart, err := loadChartsRecursively(tmpls, chart)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RootChart{
+		Chart:        rootChart,
+		Template:     tmpls,
+		Capabilities: chartutil.DefaultCapabilities.Copy(),
 	}, nil
 }
 
@@ -92,6 +126,7 @@ func funcMap() template.FuncMap {
 		"include":       func(string, any) string { return "not implemented" },
 		"tpl":           func(string, any) any { return "not implemented" },
 		"required":      func(string, any) (any, error) { return "not implemented", nil },
+		"lookup":        func(string, any) (any, error) { return "not implemented", nil },
 	}
 
 	maps.Copy(f, extra)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"text/template"
 	"text/template/parse"
@@ -37,18 +38,16 @@ func sequential[Item any](
 	return acc, curState, nil
 }
 
-func CompileChart(chart *helm.Chart) (*jsonnet.Expr, error) {
-	expr, err := Compile(chart.Template)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile template: %w", err)
-	}
-
+func compileChartMetadata(
+	initialHeap map[int]*jsonnet.Expr,
+	chart *helm.Chart,
+) (*jsonnet.Expr, error) {
 	crds := [][]byte{}
 	for _, crd := range chart.CRDObjects {
 		crds = append(crds, crd.File.Data)
 	}
 
-	defaultValues, initialHeap, err := jsonnet.DeepAllocate(chart.Values)
+	defaultValues, err := jsonnet.DeepAllocate(initialHeap, chart.Values)
 	if err != nil {
 		return nil, err
 	}
@@ -61,16 +60,52 @@ func CompileChart(chart *helm.Chart) (*jsonnet.Expr, error) {
 		}
 	}
 
-	expr = jsonnet.CallChartMain(
-		chart.Name, chart.Version, chart.AppVersion,
-		chart.Name, "Helm",
-		chart.TemplateBasePath,
-		jsonnet.ConvertIntoJsonnet(chart.Capabilities),
-		chart.RenderedKeys, defaultValues, initialHeap,
-		crds, expr, compiledFiles,
-	)
+	compiledSubCharts := []*jsonnet.Expr{}
+	for _, subChart := range chart.SubCharts {
+		compiledSubChart, err := compileChartMetadata(initialHeap, subChart)
+		if err != nil {
+			return nil, err
+		}
+		compiledSubCharts = append(compiledSubCharts, compiledSubChart)
+	}
 
-	return expr, nil
+	return jsonnet.CallChartMetadata(
+		chart.Name,
+		chart.Version,
+		chart.AppVersion,
+		chart.TemplateBasePath,
+		chart.Condition,
+		chart.RenderedKeys,
+		defaultValues,
+		crds,
+		compiledFiles,
+		compiledSubCharts,
+	), nil
+}
+
+func CompileChart(chart *helm.RootChart) (*jsonnet.Expr, error) {
+	expr, err := Compile(chart.Template)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile template: %w", err)
+	}
+
+	initialHeap := map[int]*jsonnet.Expr{}
+	rootChart, err := compileChartMetadata(initialHeap, chart.Chart)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile chart metadata: %w", err)
+	}
+
+	convertedInitialHeap := map[string]*jsonnet.Expr{}
+	for i, v := range initialHeap {
+		convertedInitialHeap[strconv.Itoa(i)] = v
+	}
+
+	return jsonnet.CallChartMain(
+		jsonnet.ConvertIntoJsonnet(chart.Capabilities),
+		rootChart,
+		jsonnet.Map(convertedInitialHeap),
+		expr,
+	), nil
 }
 
 func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
@@ -896,8 +931,10 @@ func compilePredefinedFunctions(
 	case
 		"and",
 		"append",
+		"b64dec",
 		"base",
 		"camelcase",
+		"clean",
 		"coalesce",
 		"compact",
 		"deepCopy",
@@ -907,6 +944,7 @@ func compilePredefinedFunctions(
 		"empty",
 		"ext",
 		"first",
+		"ge",
 		"get",
 		"hasPrefix",
 		"include",
@@ -916,21 +954,28 @@ func compilePredefinedFunctions(
 		"last",
 		"len",
 		"list",
+		"lookup",
+		"lt",
 		"merge",
 		"mergeOverwrite",
 		"not",
 		"or",
+		"randAlphaNum",
+		"regexFind",
+		"regexMatch",
 		"regexSplit",
 		"reverse",
 		"set",
 		"splitList",
+		"sub",
 		"tpl",
 		"tuple",
+		"typeOf",
+		"uniq",
 		"unset",
 		"until",
 		"untitle",
 		"urlParse",
-		"uniq",
 		"without":
 		resultName := state.GenerateBindName()
 		newState := state.New(
