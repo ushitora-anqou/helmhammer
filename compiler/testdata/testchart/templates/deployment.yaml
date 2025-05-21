@@ -1,3 +1,6 @@
+metadata:
+  name: testchart
+
 testSet:
 - {{ .Values.testSet.v }}
 {{ $v1 := set .Values.testSet "v" 1 }}
@@ -29,3 +32,8 @@ testKubeVersion:
   minor: {{ .Capabilities.KubeVersion.Minor }}
   version: {{ .Capabilities.KubeVersion.Version }}
   t2: {{ .Capabilities.KubeVersion.GitVersion }}
+
+testSubChartsTop:
+  t1: {{ .Values.testSubCharts.A }}
+  t2: {{ .Subcharts.subchart1.Values.A }}
+  t3: {{ .Subcharts.subchart1.Subcharts.subchart2.Values.B }}

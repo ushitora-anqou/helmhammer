@@ -16,3 +16,13 @@ testMergeOverwrite:
       key1: value1
       key2: value2
       key3: value3
+
+testSubCharts:
+  A: topA
+
+subchart1:
+  enabled: true
+  A: overwritten mid
+
+subchart3:
+  enabled: true

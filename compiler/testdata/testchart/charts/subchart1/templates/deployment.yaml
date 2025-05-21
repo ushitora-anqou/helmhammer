@@ -1,0 +1,7 @@
+metadata:
+  name: subchart1
+
+testSubChartsMid:
+  t1: {{ .Values.A }}
+  t2: {{ .Values.B }}
+  t3: {{ .Values.global.A }}

@@ -1,5 +1,28 @@
 [
   {
+    "metadata": {
+      "name": "subchart1"
+    },
+    "testSubChartsMid": {
+      "t1": "overwritten mid",
+      "t2": "midB",
+      "t3": "injected globalA"
+    }
+  },
+  {
+    "metadata": {
+      "name": "subchart2"
+    },
+    "testSubChartsBot": {
+      "t1": "injected botA",
+      "t2": "botB",
+      "t3": "injected globalA"
+    }
+  },
+  {
+    "metadata": {
+      "name": "testchart"
+    },
     "testSet": [
       0,
       1,
@@ -25,6 +48,11 @@
       "minor": 32,
       "version": "v1.32.0",
       "t2": "v1.32.0"
+    },
+    "testSubChartsTop": {
+      "t1": "topA",
+      "t2": "overwritten mid",
+      "t3": "botB"
     }
   }
 ]

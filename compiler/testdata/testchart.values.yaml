@@ -1,0 +1,8 @@
+A: injected topA
+subchart1:
+  subchart2:
+    A: injected botA
+global:
+  A: injected globalA
+subchart3:
+  enabled: false

@@ -549,12 +549,96 @@ func compileVariable(
 }
 
 func compileFunction(
-	env *env.T,
+	e *env.T,
 	node *parse.IdentifierNode,
 	args []parse.Node,
 	final *jsonnet.Expr,
 ) (*jsonnet.Expr, *state.T, error) {
-	argsExpr, argsState, err := compileArgs(env, args, final)
+	if node.Ident == "and" || node.Ident == "or" { // short circuit
+		if len(args) <= 1 {
+			if final == nil {
+				return nil, nil, errors.New("and/or with no args")
+			}
+			return final, e.State(), nil
+		}
+
+		vExpr := &jsonnet.Expr{}
+		ifExpr, newState, err := sequential(
+			e,
+			args[1:],
+			func(e *env.T, i int, arg parse.Node, acc *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
+				vExpr, newState, err := compileArg(e, arg)
+				if err != nil {
+					return nil, nil, err
+				}
+				return newState.Use(func(vs, h *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
+					if node.Ident == "and" {
+						acc.IfThen = &jsonnet.Expr{
+							Kind:   jsonnet.EIf,
+							IfCond: jsonnet.CallIsTrueOnHeap(h, vExpr),
+							IfThen: nil,
+							IfElse: &jsonnet.Expr{
+								Kind: jsonnet.EList,
+								List: []*jsonnet.Expr{vExpr, vs, h},
+							},
+						}
+						acc = acc.IfThen
+					} else /* or */ {
+						acc.IfElse = &jsonnet.Expr{
+							Kind:   jsonnet.EIf,
+							IfCond: jsonnet.CallIsTrueOnHeap(h, vExpr),
+							IfThen: &jsonnet.Expr{
+								Kind: jsonnet.EList,
+								List: []*jsonnet.Expr{vExpr, vs, h},
+							},
+							IfElse: nil,
+						}
+						acc = acc.IfElse
+					}
+					return acc, state.New(nil, vs, h), nil
+				})
+			},
+			vExpr,
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return newState.Use(func(vs, h *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
+			if node.Ident == "and" {
+				vExpr = vExpr.IfThen
+
+				if final == nil {
+					ifExpr.IfThen = ifExpr.IfElse
+				} else {
+					ifExpr.IfThen = &jsonnet.Expr{
+						Kind: jsonnet.EList,
+						List: []*jsonnet.Expr{final, e.VS(), e.H()},
+					}
+				}
+			} else /* or */ {
+				vExpr = vExpr.IfElse
+
+				if final == nil {
+					ifExpr.IfElse = ifExpr.IfThen
+				} else {
+					ifExpr.IfElse = &jsonnet.Expr{
+						Kind: jsonnet.EList,
+						List: []*jsonnet.Expr{final, e.VS(), e.H()},
+					}
+				}
+			}
+
+			resultName := state.GenerateBindName()
+
+			return jsonnet.IndexInt(resultName, 0),
+				state.New([]*jsonnet.LocalBind{
+					{Name: resultName, Body: vExpr},
+				}, jsonnet.IndexInt(resultName, 1), jsonnet.IndexInt(resultName, 2)), nil
+		})
+	}
+
+	argsExpr, argsState, err := compileArgs(e, args, final)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -562,14 +646,14 @@ func compileFunction(
 	return argsState.Use(
 		func(vs, h *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
 			if vExpr, newState, ok := compilePredefinedFunctions(
-				env.WithVSAndH(vs, h),
+				e.WithVSAndH(vs, h),
 				node.Ident,
 				argsExpr,
 			); ok {
 				return vExpr, newState, nil
 			}
 
-			if _, ok := env.GetVariable(node.Ident); !ok {
+			if _, ok := e.GetVariable(node.Ident); !ok {
 				return nil, nil, fmt.Errorf("function not found: %s", node.Ident)
 			}
 
@@ -860,7 +944,6 @@ func compilePredefinedFunctions(
 		"indent",
 		"int",
 		"int64",
-		"kindIs",
 		"lower",
 		"min",
 		"mul",
@@ -903,7 +986,6 @@ func compilePredefinedFunctions(
 		"now",
 		"omit",
 		"toJson",
-		"toRawJson",
 		"toYaml",
 		"typeIs":
 		resultName := state.GenerateBindName()
@@ -929,6 +1011,7 @@ func compilePredefinedFunctions(
 		return jsonnet.IndexInt(resultName, 1), newState, true
 
 	case
+		"add1",
 		"and",
 		"append",
 		"b64dec",
@@ -944,13 +1027,20 @@ func compilePredefinedFunctions(
 		"empty",
 		"ext",
 		"first",
+		"fromYamlArray",
 		"ge",
+		"genCA",
+		"genSignedCert",
 		"get",
 		"hasPrefix",
+		"hasSuffix",
 		"include",
 		"index",
 		"join",
 		"kebabcase",
+		"keys",
+		"kindIs",
+		"kindOf",
 		"last",
 		"len",
 		"list",
@@ -958,6 +1048,8 @@ func compilePredefinedFunctions(
 		"lt",
 		"merge",
 		"mergeOverwrite",
+		"mustMerge",
+		"mustUniq",
 		"not",
 		"or",
 		"randAlphaNum",
@@ -966,8 +1058,11 @@ func compilePredefinedFunctions(
 		"regexSplit",
 		"reverse",
 		"set",
+		"sortAlpha",
+		"split",
 		"splitList",
 		"sub",
+		"toRawJson",
 		"tpl",
 		"tuple",
 		"typeOf",
@@ -975,6 +1070,7 @@ func compilePredefinedFunctions(
 		"unset",
 		"until",
 		"untitle",
+		"upper",
 		"urlParse",
 		"without":
 		resultName := state.GenerateBindName()

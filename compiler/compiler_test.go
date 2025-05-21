@@ -354,7 +354,13 @@ func TestCompileChartValid(t *testing.T) {
 		yamlPaths                                             []string
 	}{
 		{name: "skeleton", chartDir: "skeleton", expectedOutput: "skeleton.expected"},
-		{name: "testchart", chartDir: "testchart", expectedOutput: "testchart.expected"},
+
+		{
+			name:           "testchart",
+			chartDir:       "testchart",
+			valuesYaml:     "testchart.values.yaml",
+			expectedOutput: "testchart.expected",
+		},
 
 		{
 			name:           "topolvm 0: empty values",

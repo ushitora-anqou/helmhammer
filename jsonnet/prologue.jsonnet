@@ -4,6 +4,13 @@ local trimFunctions(x) =
   else if std.isArray(x) then std.map(trimFunctions, x)
   else if std.isObject(x) then std.mapWithKey(function(k, v) trimFunctions(v), x);
 
+local objectRemoveKey(obj, key) = {
+  // cf. https://github.com/google/go-jsonnet/issues/808
+  [k]: obj[k]
+  for k in std.objectFields(obj)
+  if k != key
+};
+
 local allocate(heap, v) =
   local
     pointer = std.toString(std.length(heap)),
@@ -14,7 +21,7 @@ local isAddr(v) =
   std.isObject(v) && std.length(v) == 1 && std.objectHas(v, 'p');
 
 local deref(heap, addr) =
-  if isAddr(addr) then heap[addr.p] else error 'deref: not addr';
+  if isAddr(addr) then heap[addr.p] else error ('deref: not addr: %s' % [addr]);
 
 local assign(heap, addr, v) =
   if isAddr(addr) then
@@ -162,20 +169,6 @@ local field(heap, receiver0, fieldName, args) =
       [heap, null];
 //std.trace('%s %s' % [trimFunctions(receiver), fieldName], null),
 
-local _join(heap, ary) =
-  std.join(
-    '',
-    std.map(
-      function(x)
-        if x == null then 'null'
-        else if std.isString(x) then x
-        else if std.isNumber(x) || std.isBoolean(x) then std.toString(x)
-        //else if std.isArray(x) || std.isObject(x) then error 'join: stringifing arrays or objects is not implemented yet'
-        else error ('_join: unexpected type of value: %s' % [x]),
-      ary,
-    ),
-  );
-
 local isTrueOnHeap(heap, v) =
   if isAddr(v) then
     local w = deref(heap, v);
@@ -256,6 +249,9 @@ local trimSuffix(args) =
     args[1];
 
 local trunc(args) =
+  assert std.length(args) == 2;
+  assert std.isNumber(args[0]);
+  assert std.isString(args[1]);
   if args[0] >= 0 then
     std.substr(args[1], 0, args[0])
   else
@@ -460,16 +456,17 @@ local trim(args) =
 local omit(args) =
   assert std.length(args) >= 1;
   assert std.isObject(args[0]);
-  std.foldl(std.objectRemoveKey, args[1:], args[0]);
+  std.foldl(objectRemoveKey, args[1:], args[0]);
 
 local regexReplaceAll(args) =
-  // ["[^-A-Za-z0-9_.]", "v2.14.11", "-"]
   assert std.length(args) == 3;
   assert std.isString(args[0]);
   assert std.isString(args[1]);
   assert std.isString(args[2]);
   if args[0] == '[^-A-Za-z0-9_.]' && args[1] == 'v2.14.11' then
     'v2.14.11'
+  else if args[0] == '(.*)(@sha.*)' && std.findSubstr('@sha', args[1]) == [] && args[2] == '${1}' then
+    args[1]
   else
     error ('regexReplaceAll: not implemented: %s' % [args]);
 
@@ -499,6 +496,10 @@ local semverCompare(args) =
   // FIXME
   if (args[0] == '>=1.13-0' || args[0] == '>= 1.23-0' || args[0] == '>=1.21-0') && args[1] == 'v1.32.0' then
     true
+  else if args[0] == '<3.14.0' && args[1] == 'v3.17' then
+    false
+  else if args[0] == '>=1.4.0-0' && args[1] == '1.9.1' then
+    true
   else
     error ('semverCompare: not implemented: %s' % [args]);
 
@@ -514,40 +515,32 @@ local div(args) =
   assert std.length(args) == 2;
   toInt(args[0]) / toInt(args[1]);
 
-local append(args) = error ('append: not implemented: %s' % [trimFunctions(args)]);
-local b64dec(args0) = error "b64dec: not implemented";
-local camelcase(args0) = error 'camelcase: not implemented';
+local add1(args) = error ('add1: not implemented: %s' % [trimFunctions(args)]);
 local ceil(args) = error ('ceil: not implemented: %s' % [trimFunctions(args)]);
 local clean(args) = error ('clean: not implemented: %s' % [trimFunctions(args)]);
-local compact(args0) = error 'compact: not implemented';
 local dateInZone(args) = error 'dateInZone: not implemented';
-local dig(args0) = error 'dig: not implemented';
 local divf(args) = error ('divf: not implemented: %s' % [trimFunctions(args)]);
 local first(args0) = error 'first: not implemented';
 local fromJson(args) = error ('fromJson: not implemented: %s' % [trimFunctions(args)]);
-local ge(args0) = error "ge: not implemented";
-local hasPrefix(args0) = error 'hasPrefix: not implemented';
-local join(args) = error ('join: not implemented: %s' % [trimFunctions(args)]);
-local kebabcase(args0) = error 'kebabcase: not implemented';
-local kindIs(args) = error ('kindIs: not implemented: %s' % [trimFunctions(args)]);
-local lookup(args0) = error 'lookup: not implemented';
+local fromYamlArray(args) = error ('fromYamlArray: not implemented: %s' % [trimFunctions(args)]);
+local ge(args0) = error 'ge: not implemented';
+local genCA(args) = error ('genCA: not implemented: %s' % [trimFunctions(args)]);
+local genSignedCert(args) = error ('genSignedCert: not implemented: %s' % [trimFunctions(args)]);
+local hasSuffix(args) = error ('hasSuffix: not implemented: %s' % [trimFunctions(args)]);
 local lt(args) = error ('lt: not implemented: %s' % [trimFunctions(args)]);
 local mulf(args) = error ('mulf: not implemented: %s' % [trimFunctions(args)]);
+local mustUniq(args) = error ('mustUniq: not implemented: %s' % [trimFunctions(args)]);
 local now(args) = error 'now: not implemented';
-local randAlphaNum(args0) = error "typeOf: not implemented";
+local randAlphaNum(args0) = error 'randAlphaNum: not implemented';
 local regexFind(args0) = error 'regexMatch: not implemented';
 local regexMatch(args0) = error 'regexMatch: not implemented';
 local reverse(args0) = error 'reverse: not implemented';
-local splitList(args0) = error 'splitList: not implemented';
-local sub(args0) = error "sub: not implemented";
+local sub(args0) = error 'sub: not implemented';
 local toJson(args) = error ('toJson: not implemented: %s' % [trimFunctions(args)]);
-local toRawJson(args) = error 'toRawJson: not implemented';
 local typeIs(args) = error 'typeIs: not implemented';
-local typeOf(args0) = error "typeOf: not implemented";
+local typeOf(args0) = error 'typeOf: not implemented';
 local until(args0) = error 'until: not implemented';
-local untitle(args0) = error 'untitle: not implemented';
 local urlParse(args0) = error 'urlParse: not implemented';
-local without(args0) = error 'without: not implemented';
 
 local _empty(heap, v) =
   if v == null then
@@ -563,6 +556,215 @@ local _empty(heap, v) =
   else if std.isNumber(v) then
     v == 0;
 
+local keys(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  local v = std.flattenArrays(std.map(function(dict) std.objectFields(dict), args));
+  local res = allocate(heap, v), heap1 = res[0], p = res[1];
+  [p, vs, heap1];
+
+local _strval(heap, x) =
+  if x == null then 'null'
+  else if std.isString(x) then x
+  else if std.isNumber(x) || std.isBoolean(x) then std.toString(x)
+  else error '_strval: not implemented';
+
+local _join(heap, ary) =
+  std.join(
+    '',
+    std.map(
+      function(x) _strval(heap, x),
+      ary,
+    ),
+  );
+
+local _strslice(heap, v) =
+  if isAddr(v) then
+    local dv = deref(heap, v);
+    if std.isArray(dv) then std.map(function(x) _strval(heap, x), dv)
+    else error '_strslice: invalid argument'
+  else if std.isString(v) then [v]
+  else error '_strslice: invalid argument';
+
+local sortAlpha(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  local a = _strslice(heap, args[0]);
+  local res = allocate(heap, std.sort(a)), heap1 = res[0], p = res[1];
+  [p, vs, heap1];
+
+local split(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 2;
+  local sep = args[0], orig = args[1];
+  assert std.isString(sep);
+  assert std.isString(orig);
+  local parts = std.split(orig, sep);
+  local v = { ['_' + i]: parts[i] for i in std.range(0, std.length(parts) - 1) };
+  local res = allocate(heap, v), heap1 = res[0], objP = res[1];
+  [objP, vs, heap];
+
+local splitList(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 2;
+  local sep = args[0], orig = args[1];
+  assert std.isString(sep);
+  assert std.isString(orig);
+  local parts = std.split(orig, sep);
+  local res = allocate(heap, parts), heap1 = res[0], aryP = res[1];
+  [aryP, vs, heap1];
+
+local upper(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  local str = args[0];
+  [std.asciiUpper(str), vs, heap];
+
+local lookup(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  local res = fromConst(heap, {}), heap1 = res[0], objP = res[1];
+  [objP, vs, heap1];
+
+local compact(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  local list = deref(heap, args[0]);
+  assert std.isArray(list);
+  local filtered = std.filter(function(x) !_empty(heap, x), list);
+  local res = allocate(heap, filtered), heap1 = res[0], filteredP = res[1];
+  [filteredP, vs, heap];
+
+local untitle(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  local str = args[0];
+  assert std.isString(str);
+  local v = std.join(
+    '',
+    std.map(
+      function(word)
+        if word == '' then ''
+        else std.asciiLower(word[0]) + word[1:],
+      std.split(str, ' '),
+    ),
+  );
+  [v, vs, heap];
+
+local kebabcase(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  local str = args[0];
+  assert std.isString(str);
+  local lAlphaNum = std.set(std.stringChars('abcdefghijklmnopqrstuvwxyz0123456789'));
+  local uAlpha = std.set(std.stringChars('ABCDEFGHIJKLMNOPQRSTUVWXYZ'));
+  local aux(i, out) =
+    if i >= std.length(str) then out
+    else if str[i] == '-' then
+      aux(i + 1, out + '-') tailstrict
+    else if std.setMember(str[i], lAlphaNum) then
+      aux(i + 1, out + str[i]) tailstrict
+    else if std.setMember(str[i], uAlpha) then
+      aux(i + 1, out + '-' + std.asciiLower(str[i])) tailstrict
+    else
+      error ('kebabcase: not implemented: %s' % [str]);
+  [aux(0, ''), vs, heap];
+
+local camelcase(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  local str = args[0];
+  assert std.isString(str);
+  local strSet = std.set(std.stringChars(str));
+  local lAlphaSet = std.set(std.stringChars('abcdefghijklmnopqrstuvwxyz0123456789'));
+  local lAlphaMinusSet = std.set(std.stringChars('abcdefghijklmnopqrstuvwxyz0123456789-'));
+  if std.setDiff(strSet, lAlphaSet) == [] then
+    [std.asciiUpper(str[0]) + str[1:], vs, heap]
+  else if std.setDiff(strSet, lAlphaMinusSet) == [] then
+    [std.join('', std.map(function(x) std.asciiUpper(x), std.split(str, '-'))), vs, heap]
+  else error ('camelcase: not implemented: %s' % [str]);
+
+local join(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 2;
+  local sep = args[0];
+  assert std.isString(sep);
+  [std.join(sep, _strslice(heap, args[1])), vs, heap];
+
+local append(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 2;
+  local list = deref(heap, args[0]), v = args[1];
+  assert std.isArray(list);
+  local newList = list + [v];
+  local res = allocate(heap, newList), heap1 = res[0], newListP = res[1];
+  [newListP, vs, heap1];
+
+local dig(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) >= 3;
+  local keys = args[0:std.length(args) - 2], default = args[std.length(args) - 2], dict = args[std.length(args) - 1];
+  local aux(i, cur) =
+    if i == std.length(keys) then cur
+    else if keys[i] in cur then aux(i + 1, cur[keys[i]]) tailstrict
+    else default;
+  local v = aux(0, dict);
+  [v, vs, heap];
+
+local hasPrefix(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  local v = std.startsWith(args[1], args[0]);
+  [v, vs, heap];
+
+local _deepEqual(x, y) =
+  if isAddr(x) || isAddr(y) then error '_deepEqual: not implemented'
+  else x == y;
+
+local without(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) >= 1;
+  local list = deref(heap, args[0]), omit = args[1:];
+  local filtered =
+    std.filter(
+      function(x)
+        !std.any(std.map(function(y) _deepEqual(x, y), omit)),
+      list,
+    );
+  local res = allocate(heap, filtered), heap1 = res[0], newListP = res[1];
+  [newListP, vs, heap1];
+
+local _kindOf(heap, v) =
+  if v == null then 'invalid'
+  else if std.isString(v) then 'string'
+  else if std.isNumber(v) then 'float64'
+  else if std.isBoolean(v) then 'bool'
+  else if std.isObject(deref(heap, v)) then 'map'
+  else if std.isArray(deref(heap, v)) then 'array'
+  else if std.isFunction(deref(heap, v)) then 'func'
+  else 'invalid';
+
+local kindIs(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 2;
+  assert std.isString(args[0]);
+  local v = args[0] == _kindOf(heap, args[1]);
+  [v, vs, heap];
+
+local kindOf(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  [_kindOf(heap, args[0]), vs, heap];
+
+local b64dec(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  assert std.isString(args[0]);
+  local v = std.base64DecodeBytes(args[0]);
+  [v, vs, heap];
+
+local toRawJson(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  local v = std.manifestJson(toConst(heap, args[0]));
+  [v, vs, heap];
+
 local unset(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
   assert std.length(args) == 2;
@@ -571,7 +773,7 @@ local unset(args0) =
   assert isAddr(objp);
   local objv = deref(heap, objp);
   assert std.isObject(objv);
-  local newobjv = std.objectRemoveKey(objv, key);
+  local newobjv = objectRemoveKey(objv, key);
   local newheap = assign(heap, objp, newobjv);
   [objp, vs, newheap];
 
@@ -611,6 +813,12 @@ local regexSplit(args0) =
   if regex == ':' && n == -1 then
     local res = fromConst(heap, std.split(s, ':')), newheap = res[0], v = res[1];
     [v, vs, newheap]
+  else if regex == '[-_.]' && n == -1 then
+    local ary1 = std.split(s, '-');
+    local ary2 = std.flattenArrays(std.map(function(s) std.split(s, '_'), ary1));
+    local ary3 = std.flattenArrays(std.map(function(s) std.split(s, '.'), ary2));
+    local res = fromConst(heap, ary3), newHeap = res[0], v = res[1];
+    [v, vs, newHeap]
   else
     error 'regexSplit: not implemented: %s' % [args];
 
@@ -709,16 +917,18 @@ local index(args0) =
   assert std.length(args) >= 2;
   local v = std.foldl(
     function(addr, arg)
-      local v = deref(heap, addr);
-      if std.isObject(v) then
-        if !std.isString(arg) then error 'index: key is not a string'
-        else if std.objectHas(v, arg) then v[arg]
-        else null
-      else if std.isArray(v) then
-        if !std.isNumber(arg) then error 'index: key is not an integer'
-        else if arg < std.length(v) then v[arg]
-        else null
-      else null,
+      if addr == null then null
+      else
+        local v = deref(heap, addr);
+        if std.isObject(v) then
+          if !std.isString(arg) then error 'index: key is not a string'
+          else if std.objectHas(v, arg) then v[arg]
+          else null
+        else if std.isArray(v) then
+          if !std.isNumber(arg) then error 'index: key is not an integer'
+          else if arg < std.length(v) then v[arg]
+          else null
+        else null,
     args[1:],
     args[0],
   );
@@ -772,6 +982,10 @@ local mergeOverwrite(args0) =
 local merge(args0) =
   // FIXME: implement mergo
   mergeOverwrite(args0);
+
+local mustMerge(args0) =
+  // FIXME: implement mergo
+  merge(args0);
 
 local _set(heap, objp, key, newValue) =
   assert std.isString(key);
@@ -1141,13 +1355,21 @@ local tpl_(templates) =
         error ('evalOperand: unknown operand: %s' % [op]),
 
     local predefinedFuncs = {
-      indent(args): indent(args.args),
-      nindent(args): nindent(args.args),
-      toYaml(args): toYaml([toConst(args.heap, args.args[0])]),
-      printf(args): printf(args.args),
-      and(args): std.foldl(function(acc, x) acc && isTrueOnHeap(args.heap, x), args.args, true),
-      or(args): std.foldl(function(acc, x) acc || isTrueOnHeap(args.heap, x), args.args, false),
-      default(args): default(args)[0],
+      indent(args): [indent(args.args), args.vs, args.h],
+      nindent(args): [nindent(args.args), args.vs, args.h],
+      toYaml(args): [toYaml([toConst(args.h, args.args[0])]), args.vs, args.h],
+      printf(args): [printf(args.args), args.vs, args.h],
+      and(args): [std.foldl(function(acc, x) acc && isTrueOnHeap(args.heap, x), args.args, true), args.vs, args.h],
+      or(args): [std.foldl(function(acc, x) acc || isTrueOnHeap(args.heap, x), args.args, false), args.vs, args.h],
+      default(args): default(args),
+      ternary(args): [ternary(args.args), args.vs, args.h],
+      replace(args): [replace(args.args), args.vs, args.h],
+      b64dec(args): b64dec(args),
+      not(args): not(args),
+      empty(args): empty(args),
+      index(args): index(args),
+      append(args): append(args),
+      join(args): join(args),
     },
 
     local evalCommand(command, final, s0) =
@@ -1166,7 +1388,8 @@ local tpl_(templates) =
             s = res[0],
             args = res[1];
           local args1 = if final == null then args else args + [final];
-          [s, predefinedFuncs[op0.v]({ heap: s0.h, args: args1 })]
+          local res = predefinedFuncs[op0.v]({ h: s.h, args: args1, vs: 'no vs' });
+          [s { h: res[2] }, res[0]]
         else if op0.v == 'template' || op0.v == 'include' then
           local res = evalOperand(command.v[1], s0), s1 = res[0], name = res[1];
           local res = evalOperand(command.v[2], s1), s2 = res[0], newDot = res[1];
@@ -1282,7 +1505,7 @@ local mergeTwoValues(heap, dstp, srcp) =
         local dst = deref(heap, dstp);
         if std.objectHas(dst, key) then
           if dst[key] == null then
-            assign(heap, dstp, std.objectRemoveKey(dst, key))
+            assign(heap, dstp, objectRemoveKey(dst, key))
           else if
             isAddr(dst[key]) && std.isObject(deref(heap, dst[key])) &&
             isAddr(src[key]) && std.isObject(deref(heap, src[key]))
@@ -1362,100 +1585,116 @@ local
       subCharts: subCharts,
     };
 
-local constructValues(heap, values, meta) =
+local constructValues(heap, values, meta, release, capabilities) =
   local mergeRecursively(heap, values, meta) =
     local heap1 = mergeTwoValues(heap, values, meta.defaultValues);
-    std.foldl(
-      function(heap, meta)
-        local
-          res =
-            local objv = deref(heap, values);
-            if std.objectHas(objv, meta.name) then
-              [heap, objv[meta.name]]
-            else
-              local res = allocate(heap, {}), heap1 = res[0], addr = res[1];
-              local newobjv = objv { [meta.name]: addr };
-              local heap2 = assign(heap1, values, newobjv);
-              [heap2, addr],
-          heap1 = res[0],
-          subValues = res[1];
-        mergeRecursively(heap1, subValues, meta),
-      meta.subCharts,
-      heap1,
-    );
+    local
+      res = std.foldl(
+        function(acc, meta)
+          local heap = acc[0], subCharts = acc[1];
+          local
+            res =
+              local objv = deref(heap, values);
+              if std.objectHas(objv, meta.name) then
+                [heap, objv[meta.name]]
+              else
+                local res = allocate(heap, {}), heap1 = res[0], addr = res[1];
+                local newobjv = objv { [meta.name]: addr };
+                local heap2 = assign(heap1, values, newobjv);
+                [heap2, addr],
+            heap1 = res[0],
+            subValues = res[1];
+          local
+            res = mergeRecursively(heap1, subValues, meta),
+            heap2 = res[0],
+            dotp = res[1];
+          [heap2, subCharts { [meta.name]: dotp }],
+        meta.subCharts,
+        [heap1, {}],
+      ),
+      heap2 = res[0],
+      subCharts = res[1];
+    local
+      res = fromConst(heap2, {
+        Chart: {
+          Name: meta.name,
+          Version: meta.version,
+          AppVersion: meta.appVersion,
+        },
+        Release: release,
+        Capabilities: capabilities,
+        Files: {
+          Get(heap, args):
+            assert std.length(args) == 1;
+            assert std.isString(args[0]);
+            [heap, meta.files[args[0]]],
+          Glob(heap, args):
+            assert std.length(args) == 1;
+            assert std.isString(args[0]);
+            glob(heap, meta.files, args[0]),
+        },
+
+        // Filled later
+        Values: {},
+        Template: {},
+        Subcharts: {},
+      }),
+      heap3 = res[0],
+      dotp = res[1];
+    local heap4 = assign(heap3, deref(heap3, dotp).Values, deref(heap3, values));
+    local heap5 = assign(heap4, deref(heap4, dotp).Subcharts, subCharts);
+    [heap5, dotp];
   mergeRecursively(heap, values, meta);
 
-local doesConditionSatisfy(condition, values) =
+local doesConditionSatisfy(heap, condition, dotp) =
   if condition == '' then true
   else
-    local fields = std.split(condition, ".");
+    local fields = std.split(condition, '.');
+    local values = deref(heap, dotp).Values;
     local result = std.foldl(
-      function(val, field) if val != null && field in val then val[field] else null,
+      function(val, field)
+        if val == null then null
+        else
+          local derefedVal = deref(heap, val);
+          if field in derefedVal then derefedVal[field] else null,
       fields,
       values,
     );
     result == true;
 
-local renderChart(heap, templates, values, meta, release, capabilities) =
-  if !doesConditionSatisfy(meta.condition, values) then []
-  else
-    local
-      res = fromConst(
-        heap,
-        {
-          Chart: {
-            Name: meta.name,
-            Version: meta.version,
-            AppVersion: meta.appVersion,
-          },
-          Release: release,
-          Capabilities: capabilities,
-          Files: {
-            Get(heap, args):
-              assert std.length(args) == 1;
-              assert std.isString(args[0]);
-              [heap, meta.files[args[0]]],
-            Glob(heap, args):
-              assert std.length(args) == 1;
-              assert std.isString(args[0]);
-              glob(heap, meta.files, args[0]),
-          },
-
-          // Filled later
-          Values: {},
-          Template: {},
-        }
-      ),
-      heap1 = res[0],
-      dot = res[1];
-    local heap2 = assign(heap1, deref(heap1, dot).Values, deref(heap1, values));
-    local mainOutput =
-      std.foldl(
-        function(out, key)
+local renderChart(heap, templates, dotp, meta, release) =
+  local heap2 = heap;
+  local mainOutput =
+    std.foldl(
+      function(out, key)
+        local
+          heap3 = assign(
+            heap2,
+            deref(heap2, dotp).Template,
+            { Name: key, BasePath: meta.templateBasePath },
+          );
+        out + [templates[key](heap3, dotp)[0]],
+      meta.renderedKeys,
+      [],
+    );
+  local subChartsOutput =
+    std.map(
+      function(subChart)
+        if !doesConditionSatisfy(heap, subChart.condition, dotp) then []
+        else
           local
-            heap3 = assign(
-              heap2,
-              deref(heap2, dot).Template,
-              { Name: key, BasePath: meta.templateBasePath },
-            );
-          out + [templates[key](heap3, dot)[0]],
-        meta.renderedKeys,
-        [],
-      );
-    local subChartsOutput =
-      std.map(
-        function(subChart)
-          local
-            derefedValues = deref(heap, values),
-            derefedSubValues = deref(heap, derefedValues[subChart.name]),
-            derefedGlobalValues = deref(heap, derefedValues.global);
+            derefedDot = deref(heap, dotp),
+            subDot = deref(heap, derefedDot.Subcharts)[subChart.name],
+            derefedSubValues = deref(heap, deref(heap, subDot).Values),
+            globalValues = deref(heap, derefedDot.Values).global;
           local res = allocate(heap, {}), heap1 = res[0], subValues = res[1];
           local heap2 = assign(heap1, subValues, derefedSubValues);
-          local heap3 = _set(heap2, subValues, 'global', derefedGlobalValues);
-          renderChart(heap3, templates, subValues, subChart, release, capabilities),
-        meta.subCharts,
-      );
-    mainOutput + std.flattenArrays(subChartsOutput);
+          local heap3 = _set(heap2, subValues, 'global', globalValues);
+          local heap4 = _set(heap3, subDot, 'Values', subValues);
+          renderChart(heap4, templates, subDot, subChart, release),
+      meta.subCharts,
+    );
+  mainOutput + std.flattenArrays(subChartsOutput);
 
 local flatten(ary) =
   local loop(i, out) =
@@ -1479,34 +1718,37 @@ local parseManifests(src) =
   if parsed == null || std.isArray(parsed) then parsed
   else [parsed];
 
-local chartMain(capabilities, rootChartMetadata, initialHeap, templates) =
+local chartMain(capabilities0, rootChartMetadata, initialHeap, templates) =
   function(values={}, namespace='default', includeCrds=false, kubeVersion='1.32.0', releaseName=rootChartMetadata.name)
-    local values1 = values + {
-      global: if "global" in super then super.global else {},
+    local values1 = values {
+      global: if 'global' in super then super.global else {},
     };
     local res = fromConst(initialHeap, values1), heap1 = res[0], valuesp = res[1];
-    local heap2 = constructValues(heap1, valuesp, rootChartMetadata);
     local release = {
       Name: releaseName,
       Namespace: namespace,
       Service: 'Helm',
     };
+    local capabilities = capabilities0 {
+      KubeVersion: parseKubeVersion(kubeVersion),
+      APIVersions: {  // FIXME: APIVersions should behave as an array, too.
+        Has(heap, args):
+          assert std.length(args) == 1;
+          assert std.isString(args[0]);
+          // FIXME: support resource name like "apps/v1/Deployment"
+          [heap, std.member(capabilities0.APIVersions, args[0])],
+      },
+    };
+    local
+      res = constructValues(heap1, valuesp, rootChartMetadata, release, capabilities),
+      heap2 = res[0],
+      dotp = res[1];
     local renderedManifests = renderChart(
       heap2,
       templates,
-      valuesp,
+      dotp,
       rootChartMetadata,
       release,
-      capabilities {
-        KubeVersion: parseKubeVersion(kubeVersion),
-        APIVersions: {  // FIXME: APIVersions should behave as an array, too.
-          Has(heap, args):
-            assert std.length(args) == 1;
-            assert std.isString(args[0]);
-            // FIXME: support resource name like "apps/v1/Deployment"
-            [heap, std.member(capabilities.APIVersions, args[0])],
-        },
-      },
     );
     std.filter(
       function(x) x != null,
