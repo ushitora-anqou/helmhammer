@@ -631,7 +631,7 @@ local compact(args0) =
   assert std.isArray(list);
   local filtered = std.filter(function(x) !_empty(heap, x), list);
   local res = allocate(heap, filtered), heap1 = res[0], filteredP = res[1];
-  [filteredP, vs, heap];
+  [filteredP, vs, heap1];
 
 local untitle(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
