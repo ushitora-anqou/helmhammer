@@ -539,7 +539,6 @@ local sub(args0) = error 'sub: not implemented';
 local toJson(args) = error ('toJson: not implemented: %s' % [trimFunctions(args)]);
 local typeIs(args) = error 'typeIs: not implemented';
 local typeOf(args0) = error 'typeOf: not implemented';
-local until(args0) = error 'until: not implemented';
 local urlParse(args0) = error 'urlParse: not implemented';
 
 local _empty(heap, v) =
@@ -555,6 +554,17 @@ local _empty(heap, v) =
     !v
   else if std.isNumber(v) then
     v == 0;
+
+local until(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  assert std.length(args) == 1;
+  local count = args[0];
+  assert std.isNumber(count);
+  if count < 0 then error "until: not implemented"
+  else
+    local v = std.range(0, count - 1);
+    local res = allocate(heap, v), heap1 = res[0], p = res[1];
+    [p, vs, heap1];
 
 local keys(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
