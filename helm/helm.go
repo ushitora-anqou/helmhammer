@@ -1,8 +1,10 @@
 package helm
 
 import (
+	"errors"
 	"maps"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"text/template"
@@ -70,9 +72,18 @@ func loadChartsRecursively(
 		}
 		subCharts = append(subCharts, subChart)
 	}
-	for i, dep := range chart.Metadata.Dependencies {
-		subCharts[i].Condition = dep.Condition
+	for _, dep := range chart.Metadata.Dependencies {
+		index := slices.IndexFunc(subCharts, func(c *Chart) bool {
+			return c.Name == dep.Name
+		})
+		if index == -1 {
+			return nil, errors.New("invalid helm chart: missing dependency")
+		}
+		subCharts[index].Condition = dep.Condition
 	}
+	slices.SortFunc(subCharts, func(l, r *Chart) int {
+		return strings.Compare(l.Name, r.Name)
+	})
 
 	return &Chart{
 		RenderedKeys:     keys,

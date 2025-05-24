@@ -3,6 +3,8 @@ package jsonnet
 import (
 	_ "embed"
 	"errors"
+	"maps"
+	"slices"
 
 	"fmt"
 	"reflect"
@@ -39,14 +41,14 @@ type Expr struct {
 	IfElse         *Expr
 	CallFunc       *Expr
 	CallArgs       []*Expr
-	CallNamedArgs  map[string]*Expr
+	CallNamedArgs  []*NamedArg
 	IntLiteral     int
 	IndexListHead  *Expr
 	IndexListTail  []string
 	IDName         string
 	LocalBinds     []*LocalBind
 	LocalBody      *Expr
-	Map            map[*Expr]*Expr
+	Map            []*MapEntry
 	FunctionParams []string
 	FunctionBody   *Expr
 	BinOpLHS       *Expr
@@ -128,8 +130,8 @@ func (e *Expr) String() string {
 		for _, arg := range e.CallArgs {
 			printedArgs = append(printedArgs, arg.String())
 		}
-		for name, arg := range e.CallNamedArgs {
-			printedArgs = append(printedArgs, fmt.Sprintf("%s=%s", name, arg.String()))
+		for _, arg := range e.CallNamedArgs {
+			printedArgs = append(printedArgs, fmt.Sprintf("%s=%s", arg.Name, arg.Arg.String()))
 		}
 		b.WriteString(strings.Join(printedArgs, ", "))
 
@@ -220,7 +222,9 @@ func (e *Expr) String() string {
 		b := strings.Builder{}
 		b.WriteString("{")
 		cnt := 0
-		for k, v := range e.Map {
+		for _, entry := range e.Map {
+			k := entry.K
+			v := entry.V
 			cnt++
 			switch k.Kind {
 			case EID:
@@ -267,6 +271,15 @@ type LocalBind struct {
 	Body *Expr
 }
 
+type NamedArg struct {
+	Name string
+	Arg  *Expr
+}
+
+type MapEntry struct {
+	K, V *Expr
+}
+
 //go:embed prologue.jsonnet
 var prologue string
 
@@ -305,7 +318,7 @@ func Index(id string, keys ...string) *Expr {
 }
 
 // get [lhs] + [rhs], where rhs is a map.
-func AddMap(lhs *Expr, rhs map[*Expr]*Expr) *Expr {
+func AddMap(lhs *Expr, rhs []*MapEntry) *Expr {
 	if len(rhs) == 0 {
 		return lhs
 	}
@@ -401,13 +414,16 @@ func ConvertIntoJsonnet(data any) *Expr {
 		if v.IsNil() {
 			return &Expr{Kind: ENull}
 		}
-		exprMap := map[*Expr]*Expr{}
+		exprMap := []*MapEntry{}
 		iter := v.MapRange()
 		for iter.Next() {
-			exprMap[&Expr{
-				Kind:          EStringLiteral,
-				StringLiteral: iter.Key().Interface().(string),
-			}] = ConvertIntoJsonnet(iter.Value().Interface())
+			exprMap = append(exprMap, &MapEntry{
+				K: &Expr{
+					Kind:          EStringLiteral,
+					StringLiteral: iter.Key().Interface().(string),
+				},
+				V: ConvertIntoJsonnet(iter.Value().Interface()),
+			})
 		}
 		return &Expr{
 			Kind: EMap,
@@ -415,17 +431,20 @@ func ConvertIntoJsonnet(data any) *Expr {
 		}
 
 	case reflect.Struct:
-		exprMap := map[*Expr]*Expr{}
+		exprMap := []*MapEntry{}
 		ty := v.Type()
 		for i := range ty.NumField() {
 			field := ty.Field(i)
 			if !field.IsExported() {
 				continue
 			}
-			exprMap[&Expr{
-				Kind:          EStringLiteral,
-				StringLiteral: field.Name,
-			}] = ConvertIntoJsonnet(v.FieldByIndex(field.Index).Interface())
+			exprMap = append(exprMap, &MapEntry{
+				K: &Expr{
+					Kind:          EStringLiteral,
+					StringLiteral: field.Name,
+				},
+				V: ConvertIntoJsonnet(v.FieldByIndex(field.Index).Interface()),
+			})
 		}
 		for i := range ty.NumMethod() {
 			mthd := ty.Method(i)
@@ -434,10 +453,13 @@ func ConvertIntoJsonnet(data any) *Expr {
 				continue
 			}
 			ret := v.MethodByName(mthd.Name + "Jsonnet").Call([]reflect.Value{})
-			exprMap[&Expr{
-				Kind:          EStringLiteral,
-				StringLiteral: mthd.Name,
-			}] = ret[0].Interface().(*Expr)
+			exprMap = append(exprMap, &MapEntry{
+				K: &Expr{
+					Kind:          EStringLiteral,
+					StringLiteral: mthd.Name,
+				},
+				V: ret[0].Interface().(*Expr),
+			})
 		}
 		return &Expr{
 			Kind: EMap,
@@ -557,9 +579,12 @@ func CallChartMain(capabilities, rootChart, initialHeap, body *Expr) *Expr {
 }
 
 func Map(src map[string]*Expr) *Expr {
-	m := map[*Expr]*Expr{}
-	for k, v := range src {
-		m[&Expr{Kind: EStringLiteral, StringLiteral: k}] = v
+	m := make([]*MapEntry, 0, len(src))
+	for _, k := range slices.Sorted(maps.Keys(src)) {
+		m = append(m, &MapEntry{
+			K: &Expr{Kind: EStringLiteral, StringLiteral: k},
+			V: src[k],
+		})
 	}
 	return &Expr{
 		Kind: EMap,
@@ -604,11 +629,11 @@ func CallToConst(heap *Expr, v *Expr) *Expr {
 	}
 }
 
-func deepAllocate(heap map[int]*Expr, src any) (*Expr, error) {
+func deepAllocate(heap []*Expr, src any) (*Expr, []*Expr, error) {
 	v := reflect.ValueOf(src)
 
 	if !v.IsValid() {
-		return &Expr{Kind: ENull}, nil
+		return &Expr{Kind: ENull}, heap, nil
 	}
 
 	switch v.Kind() {
@@ -621,11 +646,11 @@ func deepAllocate(heap map[int]*Expr, src any) (*Expr, error) {
 	case reflect.Float64:
 		fallthrough
 	case reflect.String:
-		return ConvertIntoJsonnet(src), nil
+		return ConvertIntoJsonnet(src), heap, nil
 
 	case reflect.Pointer:
 		if v.IsNil() {
-			return &Expr{Kind: ENull}, nil
+			return &Expr{Kind: ENull}, heap, nil
 		}
 		return deepAllocate(heap, reflect.Indirect(v).Interface())
 
@@ -634,9 +659,9 @@ func deepAllocate(heap map[int]*Expr, src any) (*Expr, error) {
 		for i := range v.Len() {
 			var expr *Expr
 			var err error
-			expr, err = deepAllocate(heap, v.Index(i).Interface())
+			expr, heap, err = deepAllocate(heap, v.Index(i).Interface())
 			if err != nil {
-				return nil, err
+				return nil, heap, err
 			}
 			exprs = append(exprs, expr)
 		}
@@ -644,52 +669,57 @@ func deepAllocate(heap map[int]*Expr, src any) (*Expr, error) {
 
 	case reflect.Map:
 		if v.IsNil() {
-			return &Expr{Kind: ENull}, nil
+			return &Expr{Kind: ENull}, heap, nil
 		}
-		exprs := map[string]*Expr{}
+
+		entries := map[string]any{}
 		for iter := v.MapRange(); iter.Next(); {
-			var expr *Expr
-			var err error
-			expr, err = deepAllocate(heap, iter.Value().Interface())
-			if err != nil {
-				return nil, err
-			}
-			exprs[iter.Key().Interface().(string)] = expr
+			entries[iter.Key().Interface().(string)] = iter.Value().Interface()
 		}
-		return deepAllocateCollection(heap, Map(exprs))
+
+		return deepAllocateMap(heap, entries)
 
 	case reflect.Struct:
-		exprs := map[string]*Expr{}
+		entries := map[string]any{}
 		ty := v.Type()
 		for i := range ty.NumField() {
 			field := ty.Field(i)
 			if !field.IsExported() {
 				continue
 			}
-			var expr *Expr
-			var err error
-			expr, err = deepAllocate(heap, v.FieldByIndex(field.Index).Interface())
-			if err != nil {
-				return nil, err
-			}
-			exprs[field.Name] = expr
+			entries[field.Name] = v.FieldByIndex(field.Index).Interface()
 		}
-		return deepAllocateCollection(heap, Map(exprs))
+
+		return deepAllocateMap(heap, entries)
 	}
 
-	return nil, errors.New("deepAllocate: unknown type")
+	return nil, heap, errors.New("deepAllocate: unknown type")
 }
 
-func deepAllocateCollection(heap map[int]*Expr, collection *Expr) (*Expr, error) {
+func deepAllocateMap(heap []*Expr, entries map[string]any) (*Expr, []*Expr, error) {
+	exprs := map[string]*Expr{}
+	for _, k := range slices.Sorted(maps.Keys(entries)) {
+		var expr *Expr
+		var err error
+		expr, heap, err = deepAllocate(heap, entries[k])
+		if err != nil {
+			return nil, heap, err
+		}
+		exprs[k] = expr
+	}
+	return deepAllocateCollection(heap, Map(exprs))
+}
+
+func deepAllocateCollection(heap []*Expr, collection *Expr) (*Expr, []*Expr, error) {
 	pointer := len(heap)
-	heap[pointer] = collection
+	heap = append(heap, collection)
 	return Map(
 		map[string]*Expr{
 			"p": {Kind: EStringLiteral, StringLiteral: strconv.Itoa(pointer)},
 		},
-	), nil
+	), heap, nil
 }
 
-func DeepAllocate(heap map[int]*Expr, src any) (*Expr, error) {
+func DeepAllocate(heap []*Expr, src any) (*Expr, []*Expr, error) {
 	return deepAllocate(heap, src)
 }

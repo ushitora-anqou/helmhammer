@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -39,17 +40,19 @@ func sequential[Item any](
 }
 
 func compileChartMetadata(
-	initialHeap map[int]*jsonnet.Expr,
+	initialHeap []*jsonnet.Expr,
 	chart *helm.Chart,
-) (*jsonnet.Expr, error) {
+) (*jsonnet.Expr, []*jsonnet.Expr, error) {
 	crds := [][]byte{}
 	for _, crd := range chart.CRDObjects {
 		crds = append(crds, crd.File.Data)
 	}
 
-	defaultValues, err := jsonnet.DeepAllocate(initialHeap, chart.Values)
+	var defaultValues *jsonnet.Expr
+	var err error
+	defaultValues, initialHeap, err = jsonnet.DeepAllocate(initialHeap, chart.Values)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	compiledFiles := map[string]*jsonnet.Expr{}
@@ -62,9 +65,10 @@ func compileChartMetadata(
 
 	compiledSubCharts := []*jsonnet.Expr{}
 	for _, subChart := range chart.SubCharts {
-		compiledSubChart, err := compileChartMetadata(initialHeap, subChart)
+		var compiledSubChart *jsonnet.Expr
+		compiledSubChart, initialHeap, err = compileChartMetadata(initialHeap, subChart)
 		if err != nil {
-			return nil, err
+			return nil, initialHeap, err
 		}
 		compiledSubCharts = append(compiledSubCharts, compiledSubChart)
 	}
@@ -80,7 +84,7 @@ func compileChartMetadata(
 		crds,
 		compiledFiles,
 		compiledSubCharts,
-	), nil
+	), initialHeap, nil
 }
 
 func CompileChart(chart *helm.RootChart) (*jsonnet.Expr, error) {
@@ -89,8 +93,9 @@ func CompileChart(chart *helm.RootChart) (*jsonnet.Expr, error) {
 		return nil, fmt.Errorf("failed to compile template: %w", err)
 	}
 
-	initialHeap := map[int]*jsonnet.Expr{}
-	rootChart, err := compileChartMetadata(initialHeap, chart.Chart)
+	initialHeap := []*jsonnet.Expr{}
+	var rootChart *jsonnet.Expr
+	rootChart, initialHeap, err = compileChartMetadata(initialHeap, chart.Chart)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile chart metadata: %w", err)
 	}
@@ -109,17 +114,28 @@ func CompileChart(chart *helm.RootChart) (*jsonnet.Expr, error) {
 }
 
 func Compile(tmpl0 *template.Template) (*jsonnet.Expr, error) {
-	compiledTemplates := map[*jsonnet.Expr]*jsonnet.Expr{}
+	sortedTemplates := []*template.Template{}
 	for _, tmpl := range tmpl0.Templates() {
+		sortedTemplates = append(sortedTemplates, tmpl)
+	}
+	slices.SortFunc(sortedTemplates, func(l, r *template.Template) int {
+		return strings.Compare(l.Name(), r.Name())
+	})
+
+	compiledTemplates := []*jsonnet.MapEntry{}
+	for _, tmpl := range sortedTemplates {
 		globalEnv := env.New(tmpl0)
 		compiledTemplate, err := compile(globalEnv, tmpl.Root)
 		if err != nil {
 			return nil, err
 		}
-		compiledTemplates[&jsonnet.Expr{
-			Kind:          jsonnet.EStringLiteral,
-			StringLiteral: tmpl.Name(),
-		}] = compiledTemplate
+		compiledTemplates = append(compiledTemplates, &jsonnet.MapEntry{
+			K: &jsonnet.Expr{
+				Kind:          jsonnet.EStringLiteral,
+				StringLiteral: tmpl.Name(),
+			},
+			V: compiledTemplate,
+		})
 	}
 
 	return &jsonnet.Expr{
@@ -299,17 +315,20 @@ func compilePipeline(e *env.T, pipe *parse.PipeNode) (*jsonnet.Expr, *state.T, e
 		func(vs, h *jsonnet.Expr) (*jsonnet.Expr, *state.T, error) {
 			pipeExprName := state.GenerateBindName()
 
-			assignments := map[*jsonnet.Expr]*jsonnet.Expr{}
+			assignments := []*jsonnet.MapEntry{}
 			for _, variable := range pipe.Decl {
 				if pipe.IsAssign {
 					e.AssignVariable(variable.Ident[0])
 				} else {
 					e.DefineVariable(variable.Ident[0])
 				}
-				assignments[&jsonnet.Expr{
-					Kind:          jsonnet.EStringLiteral,
-					StringLiteral: variable.Ident[0],
-				}] = jsonnet.Index(pipeExprName)
+				assignments = append(assignments, &jsonnet.MapEntry{
+					K: &jsonnet.Expr{
+						Kind:          jsonnet.EStringLiteral,
+						StringLiteral: variable.Ident[0],
+					},
+					V: jsonnet.Index(pipeExprName),
+				})
 			}
 
 			if len(assignments) == 0 {
@@ -790,24 +809,33 @@ func compileRange(e *env.T, node *parse.RangeNode) (*jsonnet.Expr, *state.T, err
 				}
 			}
 
-			assignments := map[*jsonnet.Expr]*jsonnet.Expr{}
+			assignments := []*jsonnet.MapEntry{}
 			switch len(node.Pipe.Decl) {
 			case 0:
 			// do nothing
 			case 1:
-				assignments[&jsonnet.Expr{
-					Kind:          jsonnet.EStringLiteral,
-					StringLiteral: node.Pipe.Decl[0].Ident[0],
-				}] = jsonnet.Index(dotName)
+				assignments = append(assignments, &jsonnet.MapEntry{
+					K: &jsonnet.Expr{
+						Kind:          jsonnet.EStringLiteral,
+						StringLiteral: node.Pipe.Decl[0].Ident[0],
+					},
+					V: jsonnet.Index(dotName),
+				})
 			case 2:
-				assignments[&jsonnet.Expr{
-					Kind:          jsonnet.EStringLiteral,
-					StringLiteral: node.Pipe.Decl[0].Ident[0],
-				}] = jsonnet.Index("i")
-				assignments[&jsonnet.Expr{
-					Kind:          jsonnet.EStringLiteral,
-					StringLiteral: node.Pipe.Decl[1].Ident[0],
-				}] = jsonnet.Index(dotName)
+				assignments = append(assignments, &jsonnet.MapEntry{
+					K: &jsonnet.Expr{
+						Kind:          jsonnet.EStringLiteral,
+						StringLiteral: node.Pipe.Decl[0].Ident[0],
+					},
+					V: jsonnet.Index("i"),
+				})
+				assignments = append(assignments, &jsonnet.MapEntry{
+					K: &jsonnet.Expr{
+						Kind:          jsonnet.EStringLiteral,
+						StringLiteral: node.Pipe.Decl[1].Ident[0],
+					},
+					V: jsonnet.Index(dotName),
+				})
 			default:
 				return nil, nil, fmt.Errorf("compileNode: not implemented: len(node.Pipe.Decl) > 2")
 			}

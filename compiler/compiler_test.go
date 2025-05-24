@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/ushitora-anqou/helmhammer/compiler"
+	"github.com/ushitora-anqou/helmhammer/compiler/state"
 	"github.com/ushitora-anqou/helmhammer/helm"
 	"github.com/ushitora-anqou/helmhammer/jsonnet"
 	"sigs.k8s.io/yaml"
@@ -604,18 +605,24 @@ func TestCompileChartValid(t *testing.T) {
 
 			chart, err := helm.Load(filepath.Join(testdataDir, tt.chartDir))
 			require.NoError(t, err)
+
+			state.ResetGenID()
 			compiledChart, err := compiler.CompileChart(chart)
 			require.NoError(t, err)
+
 			jsonnetExpr := &jsonnet.Expr{
 				Kind:     jsonnet.ECall,
 				CallFunc: compiledChart,
 				CallArgs: []*jsonnet.Expr{},
-				CallNamedArgs: map[string]*jsonnet.Expr{
-					"includeCrds": {Kind: jsonnet.ETrue},
+				CallNamedArgs: []*jsonnet.NamedArg{
+					{Name: "includeCrds", Arg: &jsonnet.Expr{Kind: jsonnet.ETrue}},
 				},
 			}
 			if tt.namespace != "" {
-				jsonnetExpr.CallNamedArgs["namespace"] = jsonnet.ConvertIntoJsonnet(tt.namespace)
+				jsonnetExpr.CallNamedArgs = append(jsonnetExpr.CallNamedArgs, &jsonnet.NamedArg{
+					Name: "namespace",
+					Arg:  jsonnet.ConvertIntoJsonnet(tt.namespace),
+				})
 			}
 			if tt.valuesYaml != "" {
 				valuesYaml, err := os.ReadFile(filepath.Join(testdataDir, tt.valuesYaml))
@@ -623,7 +630,10 @@ func TestCompileChartValid(t *testing.T) {
 				var values any
 				err = yaml.Unmarshal(valuesYaml, &values)
 				require.NoError(t, err)
-				jsonnetExpr.CallNamedArgs["values"] = jsonnet.ConvertIntoJsonnet(values)
+				jsonnetExpr.CallNamedArgs = append(jsonnetExpr.CallNamedArgs, &jsonnet.NamedArg{
+					Name: "values",
+					Arg:  jsonnet.ConvertIntoJsonnet(values),
+				})
 			}
 			vm := gojsonnet.MakeVM()
 			vm.MaxStack = 2000
@@ -662,6 +672,12 @@ func TestCompileChartValid(t *testing.T) {
 
 				assert.Equal(t, expectedParsed, gotParsed)
 			}
+
+			state.ResetGenID()
+			compiledChart1, err := compiler.CompileChart(chart)
+			require.NoError(t, err)
+			assert.Equal(t, compiledChart.String(), compiledChart1.String())
+
 		})
 	}
 }

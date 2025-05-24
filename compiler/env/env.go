@@ -2,6 +2,8 @@ package env
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"text/template"
 
 	"github.com/ushitora-anqou/helmhammer/compiler/state"
@@ -142,8 +144,9 @@ func (e *T) WithScope(
 			// { ..., NAME: vs.[name], ... }
 			// if v is assigned in the scope
 			// for (name, v) in env.variables
-			assignedVars := make(map[*jsonnet.Expr]*jsonnet.Expr)
-			for name, v := range newEnv.scope.variables {
+			assignedVars := []*jsonnet.MapEntry{}
+			for _, name := range slices.Sorted(maps.Keys(newEnv.scope.variables)) {
+				v := newEnv.scope.variables[name]
 				if v.defined {
 					continue
 				}
@@ -154,14 +157,17 @@ func (e *T) WithScope(
 				}
 
 				// { ..., NAME: sX.vs.NAME, ... }
-				assignedVars[&jsonnet.Expr{
-					Kind:          jsonnet.EStringLiteral,
-					StringLiteral: name,
-				}] = &jsonnet.Expr{
-					Kind:          jsonnet.EIndexList,
-					IndexListHead: vs,
-					IndexListTail: []string{name},
-				}
+				assignedVars = append(assignedVars, &jsonnet.MapEntry{
+					K: &jsonnet.Expr{
+						Kind:          jsonnet.EStringLiteral,
+						StringLiteral: name,
+					},
+					V: &jsonnet.Expr{
+						Kind:          jsonnet.EIndexList,
+						IndexListHead: vs,
+						IndexListTail: []string{name},
+					},
+				})
 			}
 
 			if len(assignedVars) == 0 {

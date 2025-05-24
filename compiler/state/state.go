@@ -64,6 +64,10 @@ func (t *T) PrependLocalBind(b *jsonnet.LocalBind) {
 
 var nextGenID = 0
 
+func ResetGenID() {
+	nextGenID = 0
+}
+
 func genid() int {
 	nextGenID++
 	return nextGenID
