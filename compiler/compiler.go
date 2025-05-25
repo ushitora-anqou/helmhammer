@@ -1013,7 +1013,6 @@ func compilePredefinedFunctions(
 		"hasKey",
 		"now",
 		"omit",
-		"toJson",
 		"toYaml",
 		"typeIs":
 		resultName := state.GenerateBindName()
@@ -1090,6 +1089,7 @@ func compilePredefinedFunctions(
 		"split",
 		"splitList",
 		"sub",
+		"toJson",
 		"toRawJson",
 		"tpl",
 		"tuple",

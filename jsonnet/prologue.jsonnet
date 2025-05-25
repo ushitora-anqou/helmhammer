@@ -1015,7 +1015,6 @@ local regexFind(args0) = error 'regexMatch: not implemented';
 local regexMatch(args0) = error 'regexMatch: not implemented';
 local reverse(args0) = error 'reverse: not implemented';
 local sub(args0) = error 'sub: not implemented';
-local toJson(args) = error ('toJson: not implemented: %s' % [trimFunctions(args)]);
 local typeIs(args) = error 'typeIs: not implemented';
 local typeOf(args0) = error 'typeOf: not implemented';
 local urlParse(args0) = error 'urlParse: not implemented';
@@ -1250,6 +1249,11 @@ local b64dec(args0) =
   [v, vs, heap];
 
 local toRawJson(args0) =
+  local args = args0.args, vs = args0.vs, heap = args0.h;
+  local v = std.manifestJson(toConst(heap, args[0]));
+  [v, vs, heap];
+
+local toJson(args0) =
   local args = args0.args, vs = args0.vs, heap = args0.h;
   local v = std.manifestJson(toConst(heap, args[0]));
   [v, vs, heap];
