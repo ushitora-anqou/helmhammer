@@ -13,21 +13,40 @@ local objectRemoveKey(obj, key) = {
 
 local allocate(heap, v) =
   local
-    pointer = std.toString(std.length(heap)),
+    pointer = std.toString(if 'pf' in heap then std.length(heap) - 1 else std.length(heap)),
     heap1 = heap { [pointer]: v };
-  [heap1, { p: pointer }];
+  [heap1, { p: std.get(heap1, 'pf', default=[]) + [pointer] }];
+
+local allocateChildHeap(heap) =
+  local res = allocate(heap, {}), heap1 = res[0], p = res[1];
+  local childHeap = { pf: p.p };
+  [heap1, childHeap];
 
 local isAddr(v) =
-  std.isObject(v) && std.length(v) == 1 && std.objectHas(v, 'p');
+  std.isObject(v) && std.length(v) <= 1 && std.objectHas(v, 'p');
 
 local deref(heap, addr) =
-  if isAddr(addr) then heap[addr.p] else error ('deref: not addr: %s' % [addr]);
+  if !isAddr(addr) then
+    error ('deref: not addr: %s' % [addr])
+  else
+    std.foldl(function(heap, part) heap[part], addr.p, heap);
 
 local assign(heap, addr, v) =
-  if isAddr(addr) then
-    heap { [addr.p]: v }
+  if !isAddr(addr) then
+    error ('assign: invalid addr: %s' % [trimFunctions(addr)])
   else
-    error ('assign: invalid addr: %s' % [trimFunctions(addr)]);
+    //assert !('pf' in heap) || addr.p[0:std.length(heap.pf)] == heap.pf; // too slow
+    local parts = if 'pf' in heap then addr.p[std.length(heap.pf):] else addr.p;
+    assert std.length(parts) >= 1;
+    local aux(heap, i) =
+      if i == std.length(parts) - 1 then
+        heap { [parts[i]]: v }
+      else
+        heap { [parts[i]]: aux(heap[parts[i]], i + 1) };
+    aux(heap, 0);
+
+local assignChildHeap(heap, childHeap) =
+  assign(heap, { p: childHeap.pf }, childHeap);
 
 local arrayReplace(ary, index, newItem) =
   std.mapWithIndex(
@@ -36,90 +55,60 @@ local arrayReplace(ary, index, newItem) =
   );
 
 local fromConst(heap, src) =
-  if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
-    [heap, src]
-  else
-    local aux(heap, queue0, out) =
+  local aux(heap, src) =
+    if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
+      [heap, src]
+    else if std.isFunction(src) then
+      local res = allocate(heap, src), heap1 = res[0], p = res[1];
+      [heap1, p]
+    else if std.isArray(src) then
       local
-        first = queue0[0],
-        queue = queue0[1],
-        src = first[0],
-        k = first[1];
-      if std.length(queue0) == 0 then [heap, out]
-      else if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then
-        local res = k(heap, src, out), heap1 = res[0], out1 = res[1];
-        aux(heap1, queue, out1) tailstrict
-      else if std.isFunction(src) then
-        local res = allocate(heap, src), heap1 = res[0], v = res[1];
-        local res = k(heap1, v, out), heap2 = res[0], out1 = res[1];
-        aux(heap2, queue, out1) tailstrict
-      else if std.isArray(src) then
-        local res = allocate(heap, src), heap1 = res[0], aryp = res[1];
-        local res = k(heap1, aryp, out), heap2 = res[0], out1 = res[1];
-        local queue1 =
+        res =
           std.foldl(
-            function(queue, x) [x, queue],
-            std.mapWithIndex(
-              function(index, item)
-                [
-                  item,
-                  function(heap, itemv, out)
-                    [
-                      assign(
-                        heap,
-                        aryp,
-                        arrayReplace(deref(heap, aryp), index, itemv),
-                      ),
-                      out,
-                    ],
-                ],
-              src,
-            ),
-            queue,
-          );
-        aux(heap2, queue1, out1) tailstrict
-      else if std.isObject(src) then
-        local res = allocate(heap, src), heap1 = res[0], objp = res[1];
-        local res = k(heap1, objp, out), heap2 = res[0], out1 = res[1];
-        local queue1 =
+            function(acc, item)
+              local heap = acc[0], ary = acc[1];
+              if item == null ||
+                 std.isNumber(item) || std.isString(item) || std.isBoolean(item) ||
+                 std.isFunction(item)
+              then
+                local res = aux(heap, item), heap1 = res[0], out = res[1];
+                [heap1, ary + [out]]
+              else
+                local res = allocateChildHeap(heap), heap1 = res[0], childHeap = res[1];
+                local res = aux(childHeap, item), childHeap2 = res[0], out = res[1];
+                local heap2 = assignChildHeap(heap1, childHeap2);
+                [heap2, ary + [out]],
+            src,
+            [heap, []],
+          ),
+        heap1 = res[0],
+        out = res[1];
+      allocate(heap1, out)
+    else if std.isObject(src) then
+      local
+        res =
           std.foldl(
-            function(queue, x) [x, queue],
-            std.map(
-              function(key)
-                [
-                  src[key],
-                  function(heap, value, out)
-                    if src[key] == value then [heap, out]
-                    else [
-                      assign(
-                        heap,
-                        objp,
-                        deref(heap, objp) + { [key]: value },
-                      ),
-                      out,
-                    ],
-                ],
-              std.objectFields(src),
-            ),
-            queue,
-          );
-        aux(heap2, queue1, out1) tailstrict
-      else
-        error 'fromConst: unknown type';
-    aux(
-      heap,
-      [
-        [
-          src,
-          function(heap, itemv, _out) [
-            heap,
-            itemv,  // set out
-          ],
-        ],
-        [],
-      ],
-      null,
-    ) tailstrict;
+            function(acc, key)
+              local heap = acc[0], obj = acc[1], value = src[key];
+              if value == null ||
+                 std.isNumber(value) || std.isString(value) || std.isBoolean(value) ||
+                 std.isFunction(value)
+              then
+                local res = aux(heap, value), heap1 = res[0], out = res[1];
+                [heap1, obj { [key]: out }]
+              else
+                local res = allocateChildHeap(heap), heap1 = res[0], childHeap = res[1];
+                local res = aux(childHeap, value), childHeap2 = res[0], out = res[1];
+                local heap2 = assignChildHeap(heap1, childHeap2);
+                [heap2, obj { [key]: out }],
+            std.objectFields(src),
+            [heap, {}],
+          ),
+        heap1 = res[0],
+        out = res[1];
+      allocate(heap1, out)
+    else error 'fromConst: unknown type';
+  aux(heap, src);
 
 local toConst(heap, src) =
   if src == null || std.isNumber(src) || std.isString(src) || std.isBoolean(src) then

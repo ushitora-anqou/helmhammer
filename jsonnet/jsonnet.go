@@ -715,7 +715,9 @@ func deepAllocateCollection(heap []*Expr, collection *Expr) (*Expr, []*Expr, err
 	heap = append(heap, collection)
 	return Map(
 		map[string]*Expr{
-			"p": {Kind: EStringLiteral, StringLiteral: strconv.Itoa(pointer)},
+			"p": {Kind: EList, List: []*Expr{{
+				Kind: EStringLiteral, StringLiteral: strconv.Itoa(pointer),
+			}}},
 		},
 	), heap, nil
 }
