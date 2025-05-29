@@ -1502,21 +1502,83 @@ local strIndex(pat, str, start) =
     else pos;
   loop(0, 0) tailstrict;
 
+local isSpace(c) =
+  c == ' ' || c == '\n' || c == '\r' || c == '\t';
+
+local findNonSpace(str, i, step) =
+  local c = str[i];
+  if i < 0 || i >= std.length(str) then
+    i
+  else if isSpace(c) then
+    findNonSpace(str, i + step, step) tailstrict
+  else
+    i;
+
+local isAlphanumeric(ch) =
+  local c = std.codepoint(ch);
+  ch == '_' ||
+  std.codepoint('a') <= c && c <= std.codepoint('z') ||
+  std.codepoint('A') <= c && c <= std.codepoint('Z') ||
+  std.codepoint('0') <= c && c <= std.codepoint('9');
+
+local isNumeric(ch) =
+  local c = std.codepoint(ch);
+  std.codepoint('0') <= c && c <= std.codepoint('9');
+
+local splitActions(str) =
+  local parts = std.split(str, '{{');
+  local loop(i, pos, out) =
+    if i >= std.length(parts) then out
+    else if i == 0 then
+      loop(i + 1, pos + std.length(parts[i]), out) tailstrict
+    else
+      loop(i + 1, pos + 2 + std.length(parts[i]), out + [pos]) tailstrict;
+  loop(0, 0, []) tailstrict;
+
 local tpl_(templates) =
   {
-    local isSpace(c) =
-      c == ' ' || c == '\n' || c == '\r' || c == '\t',
-
-    local findNonSpace(str, i, step) =
-      local c = str[i];
-      if i < 0 || i >= std.length(str) then
-        i
-      else if isSpace(c) then
-        findNonSpace(str, i + step, step)
+    local lexText(i0, str, nextAction, actions, out, skipLeadingSpaces) =
+      assert i0 < std.length(str) : 'lexText: unexpected eof';
+      local i =
+        if skipLeadingSpaces then findNonSpace(str, i0, 1)
+        else i0;
+      if i >= std.length(str) then
+        out
+      else if nextAction == std.length(actions) then
+        out + [{ t: 'text', v: str[i:] }]
       else
-        i,
+        /*
+                  0 1 2 3 4 5
+                  a   { { - a
+          i     = 0
+          j     =     2
+          j - 1 =   1
+          j + 2 =         4
+          j + 3 =           5
+          k     = 0
+          k + 1 =   1
+        */
+        local j = actions[nextAction];
+        assert j + 2 < std.length(str) : 'lexText: unexpected {{';
+        if str[j + 2] == '-' then
+          local k = findNonSpace(str, j - 1, -1);
+          lexInsideAction(
+            j + 3,
+            str,
+            nextAction + 1,
+            actions,
+            (if i >= k + 1 then out else out + [{ t: 'text', v: str[i:k + 1] }]) + [{ t: '{{' }]
+          ) tailstrict
+        else
+          lexInsideAction(
+            j + 2,
+            str,
+            nextAction + 1,
+            actions,
+            (if i >= j then out else out + [{ t: 'text', v: str[i:j] }]) + [{ t: '{{' }]
+          ) tailstrict,
 
-    local lexText(str, i0, out, skipLeadingSpaces) =
+    local lexTextOld(str, i0, out, skipLeadingSpaces) =
       assert i0 < std.length(str) : 'lexText: unexpected eof';
       local i =
         if skipLeadingSpaces then findNonSpace(str, i0, 1)
@@ -1551,17 +1613,6 @@ local tpl_(templates) =
               j + 2,
               (if i >= j then out else out + [{ t: 'text', v: str[i:j] }]) + [{ t: '{{' }]
             ) tailstrict,
-
-    local isAlphanumeric(ch) =
-      local c = std.codepoint(ch);
-      ch == '_' ||
-      std.codepoint('a') <= c && c <= std.codepoint('z') ||
-      std.codepoint('A') <= c && c <= std.codepoint('Z') ||
-      std.codepoint('0') <= c && c <= std.codepoint('9'),
-
-    local isNumeric(ch) =
-      local c = std.codepoint(ch);
-      std.codepoint('0') <= c && c <= std.codepoint('9'),
 
     // lexFieldOrVariable scans a field or variable: [.$]Alphanumeric.
     // The . or $ has been scanned.
@@ -1604,7 +1655,51 @@ local tpl_(templates) =
         j2 = res[1];
       [j1, str[i + 1:j2]],
 
-    local lexInsideAction(str, i, out) =
+    local lexInsideAction(i, str, nextAction, actions, out) =
+      if i + 2 < std.length(str) && str[i] == '-' && str[i + 1] == '}' && str[i + 2] == '}' then
+        lex(i + 3, str, nextAction, actions, out + [{ t: '}}' }], skipLeadingSpaces=true)
+      else if i + 1 < std.length(str) && str[i] == '}' && str[i + 1] == '}' then
+        lex(i + 2, str, nextAction, actions, out + [{ t: '}}' }])
+      else
+        local c = str[i];
+        if c == '.' then
+          local res = lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
+          lexInsideAction(j, str, nextAction, actions, out + [{ t: 'field', v: v }]) tailstrict
+        else if c == '$' then
+          local res = lexFieldOrVariable(str, i + 1), j = res[0], v = res[1];
+          lexInsideAction(j, str, nextAction, actions, out + [{ t: 'var', v: v }]) tailstrict
+        else if c == '|' || c == '(' || c == ')' then
+          lexInsideAction(i + 1, str, nextAction, actions, out + [{ t: c }]) tailstrict
+        else if isSpace(c) then
+          lexInsideAction(findNonSpace(str, i + 1, 1), str, nextAction, actions, out + [{ t: ' ' }]) tailstrict
+        else if c == '=' then
+          lexInsideAction(i + 1, str, nextAction, actions, out + [{ t: '=' }]) tailstrict
+        else if c == ':' && str[i + 1] == '=' then
+          lexInsideAction(i + 2, str, nextAction, actions, out + [{ t: ':=' }]) tailstrict
+        else if c == '\\' && (str[i + 1] == '"' || str[i + 1] == '`') then
+          local res = lexString(str, i + 1, str[i + 1]), j = res[0], v = res[1];
+          lexInsideAction(j, str, nextAction, actions, out + [{ t: 'string', v: v }]) tailstrict
+        else if c == '"' || c == '`' then
+          local res = lexString(str, i, c), j = res[0], v = res[1];
+          lexInsideAction(j, str, nextAction, actions, out + [{ t: 'string', v: v }]) tailstrict
+        else if isNumeric(c) then
+          local res = lexNumber(str, i), j = res[0], v = res[1];
+          lexInsideAction(j, str, nextAction, actions, out + [{ t: 'number', v: v }]) tailstrict
+        else if isAlphanumeric(c) then
+          local res = lexIdentifier(str, i), j = res[0], v = res[1];
+          local token =
+            if v == 'with' then { t: 'with' }
+            else if v == 'if' then { t: 'if' }
+            else if v == 'else' then { t: 'else' }
+            else if v == 'end' then { t: 'end' }
+            else if v == 'true' then { t: 'true' }
+            else if v == 'false' then { t: 'false' }
+            else if v == 'range' then { t: 'range' }
+            else { t: 'id', v: v };
+          lexInsideAction(j, str, nextAction, actions, out + [token]) tailstrict
+        else error ('lexInsideAction: unexpected char: %s' % [c]),
+
+    local lexInsideActionOld(str, i, out) =
       if i + 2 < std.length(str) && str[i] == '-' && str[i + 1] == '}' && str[i + 2] == '}' then
         lex(str, i + 3, out + [{ t: '}}' }], skipLeadingSpaces=true)
       else if i + 1 < std.length(str) && str[i] == '}' && str[i + 1] == '}' then
@@ -1648,11 +1743,11 @@ local tpl_(templates) =
           lexInsideAction(str, j, out + [token]) tailstrict
         else error ('lexInsideAction: unexpected char: %s' % [c]),
 
-    local lex(str, i, out, skipLeadingSpaces=false) =
+    local lex(i, str, nextAction, actions, out, skipLeadingSpaces=false) =
       if i >= std.length(str) then
         out
       else
-        lexText(str, i, out, skipLeadingSpaces),
+        lexText(i, str, nextAction, actions, out, skipLeadingSpaces),
 
     local findNonSpaceToken(toks, i) =
       if toks[i].t == ' ' then i + 1
@@ -1962,7 +2057,7 @@ local tpl_(templates) =
   local evalResult =
     tpl__.eval(
       tpl__.parse(
-        tpl__.lex(src, 0, []),
+        tpl__.lex(0, src, 0, splitActions(src), []),
         0,
       ),
       {
@@ -2273,47 +2368,57 @@ assert index({
 assert trimAll(['ac', 'aabbcc']) == 'bb';
 
 local tpl__ = tpl_({});
+local testLex(input, expected) =
+  std.assertEqual(
+    tpl__.lex(0, input, 0, splitActions(input), []),
+    expected,
+  );
 assert tpl__.findNonSpace(' a', 0, 1) == 1;
 assert tpl__.findNonSpace('a ', 1, -1) == 0;
 assert tpl__.findNonSpace(' ', 0, -1) == -1;
 assert tpl__.findNonSpace(' ', 0, 1) == 1;
-assert tpl__.lex('aa', 0, []) == [{ t: 'text', v: 'aa' }];
-assert tpl__.lex('{{}}', 0, []) == [{ t: '{{' }, { t: '}}' }];
-assert tpl__.lex('a{{}}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: '}}' }];
-assert tpl__.lex('a {{}}', 0, []) == [{ t: 'text', v: 'a ' }, { t: '{{' }, { t: '}}' }];
-assert tpl__.lex('{{- }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('a{{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('a {{- }}', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('{{ -}}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('{{ -}}a', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('{{ -}} a', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('{{- -}}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('a{{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('a {{- -}}a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('a{{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('a {{- -}} a', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }];
-assert tpl__.lex('a{{}}b', 0, []) == [{ t: 'text', v: 'a' }, { t: '{{' }, { t: '}}' }, { t: 'text', v: 'b' }];
-assert tpl__.lex('{{ . }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: '' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('{{ .A }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('{{ .A.b }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.lex('{{ .A.b }}', 0, []) == [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: ' ' }, { t: '}}' }];
-assert tpl__.parse(tpl__.lex('', 0, []), 0) == { t: 'list', v: [] };
-assert tpl__.parse(tpl__.lex('a', 0, []), 0) == { t: 'list', v: [{ t: 'text', v: 'a' }] };
-assert tpl__.parse(tpl__.lex('a{{}}b', 0, []), 0) == {
+assert testLex('aa', [{ t: 'text', v: 'aa' }]);
+assert testLex('{{}}', [{ t: '{{' }, { t: '}}' }]);
+assert testLex('a{{}}', [{ t: 'text', v: 'a' }, { t: '{{' }, { t: '}}' }]);
+assert testLex('a {{}}', [{ t: 'text', v: 'a ' }, { t: '{{' }, { t: '}}' }]);
+assert testLex('{{- }}', [{ t: '{{' }, { t: ' ' }, { t: '}}' }]);
+assert testLex('a{{- }}', [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }]);
+assert testLex('a {{- }}', [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }]);
+assert testLex('{{ -}}', [{ t: '{{' }, { t: ' ' }, { t: '}}' }]);
+assert testLex('{{ -}}a', [{ t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }]);
+assert testLex('{{ -}} a', [{ t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }]);
+assert testLex('{{- -}}', [{ t: '{{' }, { t: ' ' }, { t: '}}' }]);
+assert testLex('a{{- -}}a', [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }]);
+assert testLex('a {{- -}}a', [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }]);
+assert testLex('a{{- -}} a', [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }]);
+assert testLex('a {{- -}} a', [{ t: 'text', v: 'a' }, { t: '{{' }, { t: ' ' }, { t: '}}' }, { t: 'text', v: 'a' }]);
+assert testLex('a{{}}b', [{ t: 'text', v: 'a' }, { t: '{{' }, { t: '}}' }, { t: 'text', v: 'b' }]);
+assert testLex('{{ . }}', [{ t: '{{' }, { t: ' ' }, { t: 'field', v: '' }, { t: ' ' }, { t: '}}' }]);
+assert testLex('{{ .A }}', [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: ' ' }, { t: '}}' }]);
+assert testLex('{{ .A.b }}', [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: ' ' }, { t: '}}' }]);
+assert testLex('{{ .A.b }}', [{ t: '{{' }, { t: ' ' }, { t: 'field', v: 'A' }, { t: 'field', v: 'b' }, { t: ' ' }, { t: '}}' }]);
+local testParse(input, expected) =
+  std.assertEqual(
+    tpl__.parse(tpl__.lex(0, input, 0, splitActions(input), []), 0),
+    expected,
+  );
+assert testParse('', { t: 'list', v: [] });
+assert testParse('a', { t: 'list', v: [{ t: 'text', v: 'a' }] });
+assert testParse('a{{}}b', {
   t: 'list',
   v: [
     { t: 'text', v: 'a' },
     { t: 'action', v: { t: 'pipeline', v: [] } },
     { t: 'text', v: 'b' },
   ],
-};
-assert tpl__.parse(tpl__.lex('a{{.}}b', 0, []), 0) == { t: 'list', v: [
+});
+assert testParse('a{{.}}b', { t: 'list', v: [
   { t: 'text', v: 'a' },
   { t: 'action', v: { t: 'pipeline', v: [
     { t: 'command', v: [{ t: 'field', v: '' }] },
   ] } },
   { t: 'text', v: 'b' },
-] };
+] });
 
 local tpl___(args) =
   local res = fromConst({}, args[1]), heap = res[0], dot = res[1];
@@ -2412,5 +2517,11 @@ assert std.assertEqual(ext_(''), '');
 assert std.assertEqual(base_('/a/b'), 'b');
 assert std.assertEqual(base_('/'), '/');
 assert std.assertEqual(base_(''), '.');
+
+assert std.assertEqual(splitActions(''), []);
+assert std.assertEqual(splitActions('a'), []);
+assert std.assertEqual(splitActions('{{'), [0]);
+assert std.assertEqual(splitActions('a{{'), [1]);
+assert std.assertEqual(splitActions('a{{a{{a'), [1, 4]);
 
 'ok'
